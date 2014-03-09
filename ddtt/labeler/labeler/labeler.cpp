@@ -119,7 +119,7 @@ void Labeler::loadMeshes()
 
 			MyDrawArea * viewer = new MyDrawArea(g);
 			layout->addWidget(viewer, i, j, 1, 1);
-			viewer->setGridIsDrawn();
+            //viewer->setGridIsDrawn();
 			viewer->camera()->setSceneRadius(2);
 			viewer->camera()->setUpVector(qglviewer::Vec(0,0,1));
 			viewer->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
