@@ -16,6 +16,7 @@ struct Node
 	// Properties
 	QString id;
 	PropertyMap property;
+    PropertyMap meta;
     virtual QString type() = 0;
     virtual Eigen::AlignedBox3d bbox(double scaling = 1.0) = 0;
 

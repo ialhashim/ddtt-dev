@@ -911,6 +911,12 @@ void Graph::saveToFile( QString fileName, bool isOutParts /*= true*/ ) const
 			out << QString::number(w) + " ";
 		out << "</weights>\n";
 
+		// Meta data
+        foreach(QString key, n->meta.keys()){
+            QString value = n->meta[key].toString();
+            out << "\n\t<meta><key>" << key << "</key><value>" << value << "</value></meta>\n";
+		}
+
 		out << "</node>\n\n";
 	}
 
@@ -1024,6 +1030,20 @@ void Graph::loadFromFile( QString fileName )
 
             new_node = addNode( new Sheet( NURBS::NURBSRectangled(cp, cw, degree, degree, false, false, true, true), id ) );
 		}
+
+		// Load meta data
+        PropertyMap meta_values;
+		QDomNodeList meta_list = node.toElement().elementsByTagName("meta");
+		int meta_nodes = meta_list.count();
+		for(int m = 0; m < meta_nodes; m++)
+		{
+			QDomNode meta = meta_list.at(m);
+			QDomNode key = meta.firstChildElement("key");
+            QDomNode v = meta.firstChildElement("value");
+
+            meta_values[ key.toElement().text() ] = v.toElement().text();
+		}
+        new_node->meta = meta_values;
 
 		// Mesh file path
 		new_node->property["mesh_filename"].setValue( mesh_filename );

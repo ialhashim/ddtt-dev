@@ -162,8 +162,8 @@ void TaskSheet::executeGrowShrinkSheet(double t)
 		Array2D_Vector3 deltas = property["deltas"].value<Array2D_Vector3>();
 
 		// Grow sheet
-		for(int u = 0; u < structure_sheet->surface.mNumUCtrlPoints; u++)
-			for(int v = 0; v < structure_sheet->surface.mNumVCtrlPoints; v++)
+		for(size_t u = 0; u < structure_sheet->surface.mNumUCtrlPoints; u++)
+			for(size_t v = 0; v < structure_sheet->surface.mNumVCtrlPoints; v++)
 				structure_sheet->surface.mCtrlPoint[u][v] = cpts[u][v] + (deltas[u][v] * t);
 	}
 

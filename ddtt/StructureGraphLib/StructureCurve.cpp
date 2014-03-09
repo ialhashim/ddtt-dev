@@ -189,7 +189,7 @@ std::vector<Vector3d> Curve::foldTo( Vector4d & foldPoint, bool isApply)
 
 	std::vector<Vector3d> deltas;
 
-	for(int i = 0; i < curve.mNumCtrlPoints; i++)
+	for(size_t i = 0; i < curve.mNumCtrlPoints; i++)
 	{
 		deltas.push_back(curve.mCtrlPoint[i] - cp);
 		if( isApply ) curve.mCtrlPoint[i] -= deltas.back();
@@ -293,7 +293,7 @@ void Curve::drawWithNames( int nID, int pointIDRange )
 	int pID = nID * pointIDRange;
 
 	glPointSize(20.0f);
-	for(int i = 0; i < curve.mNumCtrlPoints; i++)
+	for(size_t i = 0; i < curve.mNumCtrlPoints; i++)
 	{
 		glPushName(pID++);
 

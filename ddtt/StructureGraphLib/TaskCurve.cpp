@@ -471,7 +471,7 @@ void TaskCurve::foldCurve( double t )
 	Array1D_Vector3 deltas = property["deltas"].value<Array1D_Vector3>();
 
 	if(cpts.size() != deltas.size()) return;
-	for(int u = 0; u < structure_curve->curve.mNumCtrlPoints; u++)
+	for(size_t u = 0; u < structure_curve->curve.mNumCtrlPoints; u++)
 		structure_curve->curve.mCtrlPoint[u] = cpts[u] + (deltas[u] * t);
 
 	// Placement

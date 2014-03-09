@@ -72,9 +72,9 @@ std::vector<Vector3> Sheet::controlPoints()
 {
 	std::vector<Vector3> cpoints;
 
-	for(int u = 0; u < surface.mNumUCtrlPoints; u++)
+	for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
 	{
-		for(int v = 0; v < surface.mNumVCtrlPoints; v++)
+		for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
 		{
 			cpoints.push_back( surface.mCtrlPoint[u][v] );
 		}
@@ -89,8 +89,8 @@ void Sheet::setControlPoints( const std::vector<Vector3> & newPositions )
 
 	assert(newPositions.size() == surface.mCtrlPoint.size() * surface.mCtrlPoint.front().size());
 
-	for(int u = 0; u < surface.mNumUCtrlPoints; u++)
-		for(int v = 0; v < surface.mNumVCtrlPoints; v++)
+	for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
+		for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
 			surface.mCtrlPoint[u][v] = newPositions[i++];
 }
 
@@ -98,8 +98,8 @@ std::vector<Scalar> Sheet::controlWeights()
 {
 	std::vector<Scalar> cpoints;
 
-	for(int v = 0; v < surface.mNumVCtrlPoints; v++)
-		for(int u = 0; u < surface.mNumUCtrlPoints; u++)
+	for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
+		for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
 			cpoints.push_back( surface.mCtrlWeight[u][v] );
 
 	return cpoints;
@@ -256,9 +256,9 @@ void Sheet::drawWithNames( int nID, int pointIDRange )
     //float radius = 1.0f;
 	glPointSize(20.0f);
 
-	for(int u = 0; u < surface.mNumUCtrlPoints; u++)
+	for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
 	{
-		for(int v = 0; v < surface.mNumVCtrlPoints; v++)
+		for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
 		{
 			glPushName(pID++);
 
@@ -292,9 +292,9 @@ std::vector< std::vector<Vector3d> > Sheet::foldTo( const Array1D_Vector4d & cur
 	Vector3d mp = PCA::mainAxis(coords);
 	//int midIdx = curve.size() * 0.5;
 
-	for(int u = 0; u < surface.mNumUCtrlPoints; u++)
+	for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
 	{
-		for(int v = 0; v < surface.mNumVCtrlPoints; v++)
+		for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
 		{
 			Vector4d currCoord(double(u) / (surface.mNumUCtrlPoints-1), double(v) / (surface.mNumVCtrlPoints-1),0,0);
 
@@ -325,9 +325,9 @@ std::vector< std::vector<Vector3d> > Sheet::foldTo( const Array1D_Vector4d & cur
 
 	if(isApply)
 	{
-		for(int u = 0; u < surface.mNumUCtrlPoints; u++)
+		for(size_t u = 0; u < surface.mNumUCtrlPoints; u++)
 		{
-			for(int v = 0; v < surface.mNumVCtrlPoints; v++)
+			for(size_t v = 0; v < surface.mNumVCtrlPoints; v++)
 			{
 				surface.mCtrlPoint[u][v] += -deltas[u][v];
 			}
