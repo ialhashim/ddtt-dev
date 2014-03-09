@@ -20,5 +20,5 @@ INCLUDEPATH += ../NURBS
 LIBS += -L$$PWD/../StructureGraphLib/$$CFG/lib -lStructureGraphLib
 INCLUDEPATH += ../StructureGraphLib
 
-HEADERS += functional.h
-SOURCES += functional.cpp
+HEADERS += functional.h PhysicalSystem.h
+SOURCES += functional.cpp PhysicalSystem.cpp

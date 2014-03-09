@@ -10,6 +10,8 @@
 #include "area3D_Polygon.h"
 #include "Octree.h"
 #include "GenericGraph.h"
+#include "PhysicalSystem.h"
+#include "PhysicsHelper.h"
 
 using namespace Structure;
 
@@ -341,7 +343,7 @@ void functional::measure_area_volume_ratio(Structure::Graph * graph)
 	{
 		if(!n->property.contains("mesh")) continue;
 		QSharedPointer<SurfaceMeshModel> nodeMesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
-		
+
 		totalArea += meshArea(nodeMesh.data());
 		totalVolume += meshVolume(nodeMesh.data());
 	}
@@ -512,6 +514,38 @@ void functional::measure_graph_agd(Structure::Graph * graph)
 	drawArea()->addRenderObject( ls );
 }
 
+void functional::measure_physical_system(Structure::Graph * graph)
+{
+	QVector<RenderObject::Base*> debug;
+	PropertyMap result = physicalSystem( graph, debug );
+
+	drawArea()->addRenderObject(debug.front());
+}
+
+void functional::measure_position(Structure::Graph * graph)
+{
+	starlab::LineSegments * ls = new starlab::LineSegments;
+
+	Eigen::AlignedBox3d bbox = graph->bbox();
+	Vector3 bbox_min = bbox.min();
+	Vector3 bbox_max = bbox.max();
+
+	foreach(Node * n, graph->nodes)
+	{
+		Vector3 p = n->bbox().center();
+		std::vector<Vector3> curve = n->discretizedAsCurve( 0.01 );
+
+		double r = (p[0] - bbox_min[0]) / (bbox_max[0] - bbox_min[0]);
+		double g = (p[1] - bbox_min[1]) / (bbox_max[1] - bbox_min[1]);
+		double b = (p[2] - bbox_min[2]) / (bbox_max[2] - bbox_min[2]);
+
+		QColor color = QColor::fromRgbF(r,g,b);
+		ls->addLines(curve, color);
+	}
+
+	drawArea()->addRenderObject( ls );
+}
+
 void functional::applyFilter(RichParameterSet *pars)
 {
 	// Default view
@@ -525,7 +559,9 @@ void functional::applyFilter(RichParameterSet *pars)
 		drawArea()->updateGL();
 	}
 
-	QString datasetPath = QFileDialog::getExistingDirectory();
+	QString datasetPath = QFileDialog::getExistingDirectory(0, "Dataset", settings()->getString("lastUsedDirectory"));
+
+	settings()->set("lastUsedDirectory", datasetPath);
 
 	QDir datasetDir(datasetPath);
 	QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
@@ -550,7 +586,9 @@ void functional::applyFilter(RichParameterSet *pars)
 		//measure_curvyness( graph );
 		//measure_area_volume_ratio( graph );
 		//measure_access( graph );
-		measure_graph_agd( graph );
+		//measure_graph_agd( graph );
+		//measure_physical_system( graph );
+		measure_position( graph );
 
 		bool isDrawMesh = true;
 		if( isDrawMesh ){
