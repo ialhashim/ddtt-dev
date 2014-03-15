@@ -65,6 +65,35 @@ inline double meshVolume( SurfaceMeshModel * mesh ){
 	return volume;
 }
 
+SurfaceMeshModel * singleMesh(Structure::Graph * graph){
+	SurfaceMeshModel * m = new SurfaceMeshModel;
+	SurfaceMeshModel::Face_property<Node*> nodes = m->face_property<Node*>("f:node", NULL);
+
+	{
+		int offset = 0;
+		foreach(Node * n, graph->nodes)	{
+			if(!n->property.contains("mesh")) continue;
+			QSharedPointer<SurfaceMeshModel> nodeMesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+			Vector3VertexProperty nodePoints = nodeMesh->vertex_coordinates();
+			for(auto v : nodeMesh->vertices()) m->add_vertex(nodePoints[v]);
+			for(auto f : nodeMesh->faces()){
+				std::vector<SurfaceMeshModel::Vertex> verts;
+				for(Vertex v : nodeMesh->vertices(f)) verts.push_back( Vertex(v.idx() + offset) );
+				Face ff = m->add_face(verts);
+
+				nodes[ff] = n;
+			}
+			offset += nodeMesh->n_vertices();
+		}
+		m->updateBoundingBox();
+		m->update_face_normals();
+		m->update_vertex_normals();
+
+	}
+
+	return m;
+}
+
 void functional::initParameters(RichParameterSet *pars)
 {
 	pars->addParam(new RichBool("Visualize", true, "Visualize"));
@@ -184,6 +213,11 @@ void functional::measure_direction(Structure::Graph * graph)
 			foreach(Vertex v, nodeMesh->vertices(f)) pts.push_back(points[v]);
 			drawArea()->drawTriangle(pts[0], pts[1], pts[2], color[best_idx]);
 		}
+
+		QStringList dnames;
+		dnames << "vertical" << "horizantal" << "flat" << "horizantal2";
+
+		n->meta["geo_direction"] = dnames[best_idx];
 	}
 }
 
@@ -223,7 +257,8 @@ void functional::measure_ground(Structure::Graph * graph)
 
 	for(size_t i = 0; i < gd.allPoints.size(); i++)
 	{
-		ps->addPoint(gd.allPoints[i], starlab::qtJetColor(gd.min_distance[i], min_dist, max_dist));
+		double val = (gd.min_distance[i] - min_dist) / (max_dist - min_dist);
+		ps->addPoint( gd.allPoints[i], starlab::qtJetColor(val) );
 	}
 
 	drawArea()->addRenderObject( ps );
@@ -282,7 +317,11 @@ void functional::measure_ground_parts(Structure::Graph * graph)
 
 		foreach(Node * n, graph->nodes){
 			std::vector<Vector3> curve = n->discretizedAsCurve( 0.01 );
-			ls->addLines(curve, starlab::qtJetColor(dists[n], dists_sorted.front(), dists_sorted.back()));
+
+			double val = (dists[n] - dists_sorted.front()) / (dists_sorted.back() - dists_sorted.front());
+			ls->addLines( curve, starlab::qtJetColor(val) );
+
+			n->meta["structure_ground"] = QString::number(val);
 		}
 	}
 
@@ -298,8 +337,13 @@ void functional::measure_height(Structure::Graph * graph)
 
 	foreach(Node * n, graph->nodes){
 		std::vector<Vector3> curve = n->discretizedAsCurve( 0.01 );
-		for(auto p : curve)
+		for(auto p : curve){
 			ps->addPoint( p, starlab::qtJetColor(p.z(), min_z, max_z) );
+
+		}
+
+		double val = (n->bbox().center().z() - min_z) / (max_z - min_z);
+		n->meta["geo_height"] = QString::number(val);
 	}
 
 	drawArea()->addRenderObject( ps );
@@ -327,7 +371,10 @@ void functional::measure_curvyness(Structure::Graph * graph)
 		
 		double sum_angle = signedAngle( (curve.front() - center).normalized(), (curve.back() - center).normalized(), axis );
 
-		ls->addLines( curve, starlab::qtJetColor(abs(sum_angle), 0, M_PI) );
+		double val = abs(sum_angle) / M_PI;
+		ls->addLines( curve, starlab::qtJetColor(val) );
+
+		n->meta["geo_curvy"] = val;
 	}
 
 	drawArea()->addRenderObject(ls);
@@ -375,30 +422,9 @@ void functional::measure_area_volume_ratio(Structure::Graph * graph)
 			foreach(Vertex v, nodeMesh->vertices(f)) pts.push_back(points[v]);
 			drawArea()->drawTriangle(pts[0], pts[1], pts[2], starlab::qtJetColor( vals[n] ));
 		}
-	}
-}
 
-SurfaceMeshModel * singleMesh(Structure::Graph * graph){
-	SurfaceMeshModel * m = new SurfaceMeshModel;
-	{
-		int offset = 0;
-		foreach(Node * n, graph->nodes)	{
-			if(!n->property.contains("mesh")) continue;
-			QSharedPointer<SurfaceMeshModel> nodeMesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
-			Vector3VertexProperty nodePoints = nodeMesh->vertex_coordinates();
-			for(auto v : nodeMesh->vertices()) m->add_vertex(nodePoints[v]);
-			for(auto f : nodeMesh->faces()){
-				std::vector<SurfaceMeshModel::Vertex> verts;
-				for(Vertex v : nodeMesh->vertices(f)) verts.push_back( Vertex(v.idx() + offset) );
-				m->add_face(verts);
-			}
-			offset += nodeMesh->n_vertices();
-		}
-		m->updateBoundingBox();
-		m->update_face_normals();
-		m->update_vertex_normals();
+		n->meta["geo_areaVolume"] = QString::number(vals[n]);
 	}
-	return m;
 }
 
 void functional::measure_access(Structure::Graph * graph)
@@ -453,6 +479,9 @@ void functional::measure_access(Structure::Graph * graph)
 	Vector3 direction(0,0,1);
 	double max_dist = m->bbox().sizes().z();
 
+	SurfaceMeshModel::Face_property<Node*> nodes = m->face_property<Node*>("f:node", NULL);
+	QMap<Node*,double> nodeAccess;
+
 	/// Shoot rays
 	double dot_threshold = 0.7;
 	for(SamplePoint sp : samples)
@@ -462,7 +491,9 @@ void functional::measure_access(Structure::Graph * graph)
 		int faceIndex = -1;
 		Vector3 isect = octree.closestIntersectionPoint(Ray(sp.pos + direction * (max_dist * 0.0001), direction), &faceIndex);
 		if(faceIndex < 0) 
+		{
 			isect = sp.pos + direction * max_dist;
+		}
 		else
 		{
 			// Ignore back face intersections
@@ -472,6 +503,21 @@ void functional::measure_access(Structure::Graph * graph)
 		double dist = (isect - sp.pos).norm();
 
 		ls->addLine(sp.pos, Vector3(sp.pos + (direction * (max_dist * 0.04))), starlab::qtJetColor(dist, 0, max_dist) );
+
+		// Record result
+		if( faceIndex < 0 ) continue;
+		
+		Node * n = nodes[Face(faceIndex)];
+		nodeAccess[n] += 1;
+	}
+
+	double min_val = nodeAccess.values().front();
+	double max_val = nodeAccess.values().back();
+
+	for(Node * n : graph->nodes){
+		double range = (max_val - min_val);
+		double val = (range == 0) ? 0 : (nodeAccess[n] - min_val) / range;
+		n->meta["geo_access"] = QString::number(val);
 	}
 
 	drawArea()->addRenderObject( ls );
@@ -508,7 +554,11 @@ void functional::measure_graph_agd(Structure::Graph * graph)
 
 	foreach(Node * n, graph->nodes){
 		std::vector<Vector3> curve = n->discretizedAsCurve( 0.01 );
-		ls->addLines(curve, starlab::qtJetColor(node_dists[n], dists_sorted.front(), dists_sorted.back()));
+
+		double val = (node_dists[n] - dists_sorted.front()) / (dists_sorted.back() - dists_sorted.front());
+		ls->addLines( curve, starlab::qtJetColor(val) );
+
+		n->meta["structure_agd"] = val;
 	}
 
 	drawArea()->addRenderObject( ls );
@@ -518,6 +568,19 @@ void functional::measure_physical_system(Structure::Graph * graph)
 {
 	QVector<RenderObject::Base*> debug;
 	PropertyMap result = physicalSystem( graph, debug );
+
+	QMap<Structure::Node*, double> forces;
+
+	foreach(Structure::Node * n, graph->nodes)	
+		forces[n] = n->property["totalForce"].toDouble();
+
+	QList<double> forces_sorted = forces.values();
+	qSort(forces_sorted);
+
+	foreach(Structure::Node * n, graph->nodes){
+		double val = (forces[n] - forces_sorted.front()) / (forces_sorted.back() - forces_sorted.front());
+		n->meta["structure_physical"] = val;
+	}
 
 	drawArea()->addRenderObject(debug.front());
 }
@@ -541,6 +604,10 @@ void functional::measure_position(Structure::Graph * graph)
 
 		QColor color = QColor::fromRgbF(r,g,b);
 		ls->addLines(curve, color);
+
+		n->meta["geo_x"] = r;
+		n->meta["geo_y"] = g;
+		n->meta["geo_z"] = b;
 	}
 
 	drawArea()->addRenderObject( ls );
@@ -566,6 +633,8 @@ void functional::applyFilter(RichParameterSet *pars)
 	QDir datasetDir(datasetPath);
 	QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
 
+	QVector< QMap<QString,QString> > graphMetas;
+
 	foreach(QString subdir, subdirs)
 	{
 		// Special folders
@@ -579,15 +648,15 @@ void functional::applyFilter(RichParameterSet *pars)
 		document()->clear();
 
 		/* Apply measure */
-		//measure_direction( graph );
-		//measure_ground( graph );
-		//measure_ground_parts( graph );
+		measure_direction( graph );
+		measure_ground( graph );
+		measure_ground_parts( graph );
 		//measure_height( graph );
-		//measure_curvyness( graph );
-		//measure_area_volume_ratio( graph );
-		//measure_access( graph );
-		//measure_graph_agd( graph );
-		//measure_physical_system( graph );
+		measure_curvyness( graph );
+		measure_area_volume_ratio( graph );
+		measure_access( graph );
+		measure_graph_agd( graph );
+		measure_physical_system( graph );
 		measure_position( graph );
 
 		bool isDrawMesh = true;
@@ -595,6 +664,18 @@ void functional::applyFilter(RichParameterSet *pars)
 			SurfaceMeshModel * m = singleMesh(graph);
 			document()->addModel(m);
 			drawArea()->setRenderer(m, "Transparent");
+		}
+
+		foreach(Node * n, graph->nodes)
+		{
+			QMap<QString,QString> nodeMeta;
+			foreach(QString key, n->meta.keys()) 
+				nodeMeta[key] = n->meta[key].toString();
+
+			nodeMeta["id"] = n->id;
+			nodeMeta["graph"] = QFileInfo(graph->property["name"].toString()).baseName();
+
+			graphMetas.push_back(nodeMeta);
 		}
 
 		drawArea()->updateGL();
@@ -608,4 +689,33 @@ void functional::applyFilter(RichParameterSet *pars)
 			drawArea()->clear();
 		}
 	}
+
+	QString filename = "dataset_functional.csv";
+	QFile file(filename); file.open(QIODevice::WriteOnly | QIODevice::Text);
+	QTextStream out(&file);
+	
+	typedef QMap<QString,QString> StringMap;
+	QList<QString> keys = graphMetas.front().keys();
+	
+	QStringList allkeys;
+	foreach(QString key, keys) 
+	{
+		allkeys << key;
+	}
+	out << allkeys.join(",") << "\n";
+
+	foreach(StringMap meta, graphMetas){
+		QStringList data;
+		foreach(QString key, keys) 
+		{
+			QString value = meta[key];
+			if(key == "label" && value.trimmed().isEmpty()){
+				value = "none";
+			}
+			data << value;
+		}
+		out << data.join(",") << "\n";
+	}
+
+	file.close();
 }
