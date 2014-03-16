@@ -3,29 +3,105 @@
 
 #include <qglviewer/qglviewer.h>
 #include "SurfaceMeshModel.h"
+#include "RenderObjectExt.h"
 
 extern QString curLabel;
 extern QStringList AllLabels;
 extern QVector<QColor> UniqueColors;
 extern QVector<QString> labelNames;
 
-static QString meshOps[] = {"rotateleft", "rotateright", "flip", "invertpart"};
-enum MeshOperation{ ROTATE_LEFT, ROTATE_RIGHT, FLIP, INVERT_PART };
+static QString meshOps[] = {"none", "rotateleft", "rotateright", 
+	"rotateup", "flip", "invertpart", "unifyorientation", "removesmallest", "removelargest", 
+	"removeselected", "closeholes", "mergevertices", "UNDO", "COMPONENTS"};
+
+enum MeshOperation{ NONE_OP, ROTATE_LEFT, ROTATE_RIGHT, ROTATE_UP, FLIP, INVERT_PART, UNIFY,
+	REMOVE_SMALL, REMOVE_LARGE, REMOVE_SELECTED, CLOSE_HOLES, MERGE_VERTICES, UNDO, COMPONENTS };
+
 extern MeshOperation curOp;
 
 class MyDrawArea : public QGLViewer
 {
+	Q_OBJECT
 public:
-    MyDrawArea(SurfaceMesh::SurfaceMeshModel * mesh, QString filename) : m(mesh), filename(filename){}
+    MyDrawArea(SurfaceMesh::SurfaceMeshModel * mesh, QString filename) : m(mesh), filename(filename)
+		{ isDeleted = false; isDrawWireframe = true; }
 	~MyDrawArea();
 
 	void draw();
 
 	void postSelection(const QPoint& point);
 	void mousePressEvent(QMouseEvent * event);
+	void focusInEvent(QFocusEvent * event);
 
     SurfaceMesh::SurfaceMeshModel * m;
     QString filename;
+	bool isDeleted;
+
+	bool isDrawWireframe;
+
+	// Undo
+	std::vector< SurfaceMesh::Vector3 > oldVertices;
+	std::vector< std::vector<SurfaceMesh::Vertex> > oldFaces;
+
+	// Debug:
+	QVector<RenderObject::Base*> debugItems;
+
+signals:
+	void gotFocus(MyDrawArea *);
 };
+
+extern MyDrawArea * lastSelected;
+
+#pragma warning(disable:4309)
+#pragma warning(disable:4267)
+
+#include "weld.h"
+inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m){
+	std::vector<SurfaceMesh::Vector3> vertices;
+	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
+	for(auto v: m->vertices()) vertices.push_back(points[v]);
+
+	std::vector<size_t> xrefs;
+	weld(vertices, xrefs, std::hash_Vector3d(), std::equal_to<Eigen::Vector3d>());
+
+	std::vector< std::vector<SurfaceMesh::Vertex> > faces;
+	for(auto f: m->faces()){
+		std::vector<SurfaceMesh::Vertex> face;
+		for(auto v: m->vertices(f)) face.push_back( SurfaceMesh::Vertex(xrefs[v.idx()]) );
+		faces.push_back(face);
+	}
+
+	m->clear();
+
+	for(auto v: vertices) m->add_vertex(v);
+	for(auto face: faces) m->add_face(face);
+}
+
+inline void cleanUp(SurfaceMesh::SurfaceMeshModel * m){
+	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
+
+	// Center to zero point
+	SurfaceMesh::Vector3 mean(0,0,0);
+	foreach(SurfaceMesh::Vertex v, m->vertices()) mean += points[v];
+	mean /= m->n_vertices();
+	foreach(SurfaceMesh::Vertex v, m->vertices()) points[v] -= mean;
+
+	// Scale maximum dimension to 1.0
+	m->updateBoundingBox();
+	Eigen::AlignedBox3d orig_bbox = m->bbox();
+	SurfaceMesh::Vector3 d = orig_bbox.sizes();
+	double s = (d.x() > d.y())? d.x():d.y();
+	s = (s>d.z())? s : d.z();
+	foreach(SurfaceMesh::Vertex v, m->vertices()) points[v] /= s;
+
+	// Move above floor
+	double minZ = DBL_MAX;
+	foreach(SurfaceMesh::Vertex v, m->vertices()) minZ = qMin(minZ, points[v].z());
+	foreach(SurfaceMesh::Vertex v, m->vertices()) points[v] -= SurfaceMesh::Vector3(0,0,minZ);
+
+	m->updateBoundingBox();
+	m->update_face_normals();
+	m->update_vertex_normals();
+}
 
 #endif // MYDRAWAREA_H

@@ -5,9 +5,12 @@
 #include <QFileDialog>
 
 #include "mydrawarea.h"
-MeshOperation curOp = ROTATE_LEFT;
+MeshOperation curOp = NONE_OP;
 
 using namespace SurfaceMesh;
+MyDrawArea * lastSelected = NULL;
+
+QVector<MyDrawArea*> activeViewers;
 
 MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrowser)
 {
@@ -32,11 +35,25 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 		}
 	}
 
+	// Settings
+	{
+		// Use local file
+		QString path = QDir(qApp->applicationDirPath()).absoluteFilePath("meshbrowser.ini");
+		QSettings qsettings(path, QSettings::IniFormat);
+
+		// Defaults  
+		if(!qsettings.allKeys().contains("nV")){
+			qsettings.setValue("nV", 3);
+			qsettings.setValue("nU", 2);
+			qsettings.sync();
+		}
+ 
+		nV = qsettings.value("nV", 3).toInt();
+		nU = qsettings.value("nU", 2).toInt();
+	}
+
 	// Create viewers
 	{
-		nU = 2;
-		nV = 3;
-
 		// Scroll bars
 		int numPages = ceil(double(database.size()) / double(nU * nV)) - 1;
 		ui->viewersScroll->setValue(0);
@@ -48,21 +65,59 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 	}
 
     // Connections
+	connect(ui->noneButton, &QPushButton::released, [=]() {curOp = MeshOperation::NONE_OP; ui->curLabel->setText(meshOps[curOp]);});
     connect(ui->rotateLeft, &QPushButton::released, [=]() {curOp = MeshOperation::ROTATE_LEFT; ui->curLabel->setText(meshOps[curOp]);});
     connect(ui->rotateRight, &QPushButton::released, [=]() {curOp = MeshOperation::ROTATE_RIGHT; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->rotateUp, &QPushButton::released, [=]() {curOp = MeshOperation::ROTATE_UP; ui->curLabel->setText(meshOps[curOp]);});
     connect(ui->flipNormals, &QPushButton::released, [=]() {curOp = MeshOperation::FLIP; ui->curLabel->setText(meshOps[curOp]);});
     connect(ui->invertPart, &QPushButton::released, [=]() {curOp = MeshOperation::INVERT_PART; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->removeSmallest, &QPushButton::released, [=]() {curOp = MeshOperation::REMOVE_SMALL; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->removeLargest, &QPushButton::released, [=]() {curOp = MeshOperation::REMOVE_LARGE; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->removeSelected, &QPushButton::released, [=]() {curOp = MeshOperation::REMOVE_SELECTED; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->closeHoles, &QPushButton::released, [=]() {curOp = MeshOperation::CLOSE_HOLES; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->mergeVertices, &QPushButton::released, [=]() {curOp = MeshOperation::MERGE_VERTICES; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->undoButton, &QPushButton::released, [=]() {curOp = MeshOperation::UNDO; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->unifyOrientation, &QPushButton::released, [=]() {curOp = MeshOperation::UNIFY; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->componentsButton, &QPushButton::released, [=]() {curOp = MeshOperation::COMPONENTS; ui->curLabel->setText(meshOps[curOp]);});
+
+	connect(ui->addDelete, &QPushButton::released, [=](){ 
+		if(lastSelected && deletedItems().contains(lastSelected->filename)){
+			for(auto i : ui->deleteList->findItems(lastSelected->filename, Qt::MatchExactly))
+				delete ui->deleteList->takeItem( ui->deleteList->row(i) );
+			refreshViewers();
+			return;
+		}
+		if(lastSelected) ui->deleteList->insertItem(0, lastSelected->filename); 
+	});
+}
+
+QStringList MeshBrowser::deletedItems(){
+	QStringList items;
+	for(int i = 0; i < ui->deleteList->count(); ++i){
+		QListWidgetItem* item = ui->deleteList->item(i);
+		items << item->text();
+	}
+	return items;
 }
 
 void MeshBrowser::loadMeshes()
 {
+	lastSelected = NULL;
+
 	QGridLayout * layout = (QGridLayout *)ui->viewersFrame->layout();
 	QLayoutItem* item;
 	while ( ( item = layout->takeAt( 0 ) ) != NULL ){
 		delete item->widget(); delete item;
 	}
+	layout->setMargin(0);
+	layout->setSpacing(0);
 
 	int offset = ui->viewersScroll->value() * (nU * nV);
+	int numPages = (database.size()-1) / (nU * nV);
+	int pageID = (double(offset) / (database.size()-1)) * numPages;
+	ui->curPage->setText(QString("Page: %1 / %2").arg(pageID).arg(numPages));
+	
+	activeViewers.clear();
 
 	for(int i = 0; i < nU; i++){
 		for(int j = 0; j < nV; j++){
@@ -80,34 +135,22 @@ void MeshBrowser::loadMeshes()
             Vector3VertexProperty points = m->vertex_coordinates();
 
             /// Normalize, center, and move to base
-
-            // Center to zero point
-            Vector3 mean(0,0,0);
-            foreach(Vertex v, m->vertices()) mean += points[v];
-            mean /= m->n_vertices();
-            foreach(Vertex v, m->vertices()) points[v] -= mean;
-
-            // Scale maximum dimension to 1.0
-            m->updateBoundingBox();
-            Eigen::AlignedBox3d orig_bbox = m->bbox();
-            Vector3 d = orig_bbox.sizes();
-            double s = (d.x() > d.y())? d.x():d.y();
-            s = (s>d.z())? s : d.z();
-            foreach(Vertex v, m->vertices()) points[v] /= s;
-
-            // Move to floor
-            double minZ = DBL_MAX;
-            foreach(Vertex v, m->vertices()) minZ = qMin(minZ, points[v].z());
-            foreach(Vertex v, m->vertices()) points[v] -= Vector3(0,0,minZ);
-
-            m->updateBoundingBox();
-            m->update_face_normals();
-            m->update_vertex_normals();
+			cleanUp(m);
 
             MyDrawArea * viewer = new MyDrawArea(m, filename);
-			layout->addWidget(viewer, i, j, 1, 1);
 
-			viewer->setGridIsDrawn();
+			QFrame * frame = new QFrame;
+			QHBoxLayout * ll = new QHBoxLayout;
+			frame->setLayout(ll);
+			ll->addWidget(viewer);
+			layout->setMargin(2);
+			layout->setSpacing(2);
+			layout->addWidget(frame, i, j, 1, 1);
+
+			activeViewers.push_back(viewer);
+
+			viewer->setGridIsDrawn(ui->showGrids->isChecked());
+			viewer->isDrawWireframe = ui->drawWireframe->isChecked();
 
 			Eigen::AlignedBox3d bbox = m->bbox();
 
@@ -125,12 +168,34 @@ void MeshBrowser::loadMeshes()
             viewer->camera()->setRevolveAroundPoint(qglviewer::Vec(bbox.center()));
             viewer->camera()->setSceneCenter(qglviewer::Vec(bbox.center()));
 			viewer->camera()->fitBoundingBox(qglviewer::Vec(bbox.min().data()),qglviewer::Vec(bbox.max().data()));
+
+			connect(viewer, &MyDrawArea::gotFocus, [=](MyDrawArea * caller) {
+				lastSelected = caller; 
+				refreshViewers();
+			});
 		}
 	}
+
+	refreshViewers();
 
 	this->activateWindow();
 	this->setFocus();
 	this->raise();
+}
+
+void MeshBrowser::refreshViewers(){
+	for(auto viewer : activeViewers)
+	{
+		viewer->parentWidget()->setStyleSheet("border: 2px solid #232323;");
+		if(deletedItems().contains(viewer->filename))
+			viewer->parentWidget()->setStyleSheet("border: 2px solid red;");
+	}
+
+	if(lastSelected)
+	{
+		lastSelected->parentWidget()->setStyleSheet("border: 2px solid rgb(255,100,100);");
+		ui->selectedMesh->setText( QFileInfo(lastSelected->filename).baseName() );
+	}
 }
 
 MeshBrowser::~MeshBrowser()

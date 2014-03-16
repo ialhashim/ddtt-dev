@@ -20,8 +20,11 @@ public:
 	QStringList database;
 	int nU, nV;
 
+	QStringList deletedItems();
+
 public slots:
 	void loadMeshes();
+	void refreshViewers();
 };
 
 #endif // MeshBrowser_H
