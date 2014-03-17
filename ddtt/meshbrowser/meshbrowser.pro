@@ -10,3 +10,5 @@ TARGET = meshbrowser
 HEADERS += meshbrowser.h mydrawarea.h
 SOURCES += meshbrowser.cpp main.cpp  mydrawarea.cpp
 FORMS += meshbrowser.ui
+
+RC_FILE = meshbrowser.rc

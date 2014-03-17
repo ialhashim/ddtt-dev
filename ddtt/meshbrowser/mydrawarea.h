@@ -12,10 +12,10 @@ extern QVector<QString> labelNames;
 
 static QString meshOps[] = {"none", "rotateleft", "rotateright", 
 	"rotateup", "flip", "invertpart", "unifyorientation", "removesmallest", "removelargest", 
-	"removeselected", "closeholes", "mergevertices", "UNDO", "COMPONENTS"};
+	"removeselected", "closeholes", "mergevertices", "UNDO", "undoAll", "COMPONENTS"};
 
 enum MeshOperation{ NONE_OP, ROTATE_LEFT, ROTATE_RIGHT, ROTATE_UP, FLIP, INVERT_PART, UNIFY,
-	REMOVE_SMALL, REMOVE_LARGE, REMOVE_SELECTED, CLOSE_HOLES, MERGE_VERTICES, UNDO, COMPONENTS };
+	REMOVE_SMALL, REMOVE_LARGE, REMOVE_SELECTED, CLOSE_HOLES, MERGE_VERTICES, UNDO, UNDO_ALL, COMPONENTS };
 
 extern MeshOperation curOp;
 
@@ -43,6 +43,10 @@ public:
 	std::vector< SurfaceMesh::Vector3 > oldVertices;
 	std::vector< std::vector<SurfaceMesh::Vertex> > oldFaces;
 
+	// Original
+	std::vector< SurfaceMesh::Vector3 > originalVertices;
+	std::vector< std::vector<SurfaceMesh::Vertex> > originalFaces;
+
 	// Debug:
 	QVector<RenderObject::Base*> debugItems;
 
@@ -51,31 +55,6 @@ signals:
 };
 
 extern MyDrawArea * lastSelected;
-
-#pragma warning(disable:4309)
-#pragma warning(disable:4267)
-
-#include "weld.h"
-inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m){
-	std::vector<SurfaceMesh::Vector3> vertices;
-	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
-	for(auto v: m->vertices()) vertices.push_back(points[v]);
-
-	std::vector<size_t> xrefs;
-	weld(vertices, xrefs, std::hash_Vector3d(), std::equal_to<Eigen::Vector3d>());
-
-	std::vector< std::vector<SurfaceMesh::Vertex> > faces;
-	for(auto f: m->faces()){
-		std::vector<SurfaceMesh::Vertex> face;
-		for(auto v: m->vertices(f)) face.push_back( SurfaceMesh::Vertex(xrefs[v.idx()]) );
-		faces.push_back(face);
-	}
-
-	m->clear();
-
-	for(auto v: vertices) m->add_vertex(v);
-	for(auto face: faces) m->add_face(face);
-}
 
 inline void cleanUp(SurfaceMesh::SurfaceMeshModel * m){
 	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();

@@ -18,6 +18,32 @@ using namespace SurfaceMesh;
 
 Q_DECLARE_METATYPE(std::vector< std::vector<double> >)
 
+
+#pragma warning(disable:4309)
+#pragma warning(disable:4267)
+
+#include "weld.h"
+inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m){
+		std::vector<SurfaceMesh::Vector3> vertices;
+		SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
+		for(auto v: m->vertices()) vertices.push_back(points[v]);
+
+		std::vector<size_t> xrefs;
+		weld(vertices, xrefs, std::hash_Vector3d(), std::equal_to<Eigen::Vector3d>());
+
+		std::vector< std::vector<SurfaceMesh::Vertex> > faces;
+		for(auto f: m->faces()){
+			std::vector<SurfaceMesh::Vertex> face;
+			for(auto v: m->vertices(f)) face.push_back( SurfaceMesh::Vertex(xrefs[v.idx()]) );
+			faces.push_back(face);
+		}
+
+		m->clear();
+
+		for(auto v: vertices) m->add_vertex(v);
+		for(auto face: faces) m->add_face(face);
+}
+
 void MyDrawArea::draw()
 {
 	SurfaceMesh::SurfaceMeshModel * mesh = m;
@@ -130,6 +156,8 @@ std::vector< SurfaceMesh::SurfaceMeshModel* > connectedPieces(SurfaceMesh::Surfa
 		{
 			Face curFace = unprocessed.top();
 			unprocessed.pop();
+			if(fvisisted[curFace]) continue;
+
 			fvisisted[curFace] = true;
 
 			for(auto v : mesh->vertices(curFace))
@@ -147,7 +175,12 @@ std::vector< SurfaceMesh::SurfaceMeshModel* > connectedPieces(SurfaceMesh::Surfa
 		}
 
 		SurfaceMesh::SurfaceMeshModel * piece = new SurfaceMesh::SurfaceMeshModel;
-		for(auto v : mesh->vertices()) piece->add_vertex(points[v]);
+		piece->reserve( pieceFaces.back().size() * 3, pieceFaces.back().size() * 6, pieceFaces.back().size() );
+
+		for(auto v : mesh->vertices()) 
+		{
+			piece->add_vertex( points[v] );
+		}
 
 		for(auto f : pieceFaces.back()){
 			std::vector<Vertex> face;
@@ -251,6 +284,12 @@ void MyDrawArea::mousePressEvent(QMouseEvent * event)
     if(!(event->buttons() & Qt::RightButton)) return;
 
     Surface_mesh::Vertex_property<Vector3> points = m->vertex_property<Vector3>("v:point");
+
+	if(curOp == MeshOperation::UNDO_ALL){
+		m->clear();
+		for(auto p: originalVertices) m->add_vertex(p);
+		for(auto face: originalFaces) m->add_face(face);
+	}
 
 	if(curOp == MeshOperation::UNDO){
 		m->clear();
@@ -648,6 +687,8 @@ static void saveOBJ(SurfaceMesh::Model * mesh, QString filename)
 
 MyDrawArea::~MyDrawArea()
 {
+	if(isDeleted) return;
+
 	saveOBJ(m, filename);
 }
 

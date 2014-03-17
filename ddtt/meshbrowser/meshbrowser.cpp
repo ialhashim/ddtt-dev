@@ -77,6 +77,7 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 	connect(ui->closeHoles, &QPushButton::released, [=]() {curOp = MeshOperation::CLOSE_HOLES; ui->curLabel->setText(meshOps[curOp]);});
 	connect(ui->mergeVertices, &QPushButton::released, [=]() {curOp = MeshOperation::MERGE_VERTICES; ui->curLabel->setText(meshOps[curOp]);});
 	connect(ui->undoButton, &QPushButton::released, [=]() {curOp = MeshOperation::UNDO; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->undoAll, &QPushButton::released, [=]() {curOp = MeshOperation::UNDO_ALL; ui->curLabel->setText(meshOps[curOp]);});
 	connect(ui->unifyOrientation, &QPushButton::released, [=]() {curOp = MeshOperation::UNIFY; ui->curLabel->setText(meshOps[curOp]);});
 	connect(ui->componentsButton, &QPushButton::released, [=]() {curOp = MeshOperation::COMPONENTS; ui->curLabel->setText(meshOps[curOp]);});
 
@@ -88,6 +89,21 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 			return;
 		}
 		if(lastSelected) ui->deleteList->insertItem(0, lastSelected->filename); 
+	});
+
+	connect(ui->deleteButton, &QPushButton::released, [=](){
+		for(auto filename : deletedItems()){
+			QFile::remove(filename);
+			for(int i = 0; i < ui->deleteList->count(); ++i){
+				for(auto viewer: activeViewers){
+					if(viewer->filename == filename){
+						viewer->isDeleted = true;
+						break;
+					}
+				}
+			}
+		}
+		ui->deleteList->clear();
 	});
 }
 
@@ -129,6 +145,7 @@ void MeshBrowser::loadMeshes()
             //Structure::Graph * g = new Structure::Graph( filename );
             //g->property["showNodes"] = false;
 
+
             SurfaceMesh::SurfaceMeshModel * m = new SurfaceMeshModel(filename, QFileInfo(filename).baseName());
             m->read( qPrintable(filename) );
 
@@ -138,6 +155,20 @@ void MeshBrowser::loadMeshes()
 			cleanUp(m);
 
             MyDrawArea * viewer = new MyDrawArea(m, filename);
+
+			if( !QFileInfo(filename).exists() ){
+				viewer->isDeleted = true;
+				continue;
+			}
+
+			// Save original
+			Vector3VertexProperty origPnts = m->vertex_coordinates();
+			for(auto v: m->vertices()) viewer->originalVertices.push_back(origPnts[v]);
+			for(auto f: m->faces()){
+				std::vector<Vertex> face;
+				for(auto v: m->vertices(f)) face.push_back(v);
+				viewer->originalFaces.push_back(face);
+			}
 
 			QFrame * frame = new QFrame;
 			QHBoxLayout * ll = new QHBoxLayout;
