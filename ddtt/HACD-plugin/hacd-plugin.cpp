@@ -1,5 +1,6 @@
 #include "hacd-plugin.h"
 #include "hacdlib.h"
+#include "RenderObjectExt.h"
 
 void hacd::initParameters(RichParameterSet *pars)
 {
@@ -32,5 +33,8 @@ void hacd::applyFilter(RichParameterSet *pars)
 		pars->getBool("NormalizeInputMesh"), pars->getBool("RemoveDuplicateVertices"), pars->getBool("UseFastVersion"));
 
     for(auto m : pieces)
+	{
+		m->color = starlab::qRandomColor2();
         document()->addModel(m);
+	}
 }

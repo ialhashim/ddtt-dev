@@ -3308,9 +3308,36 @@ namespace MinOBB{
 			}
 		};
 
+		double inline uniformRand(double a = 0.0, double b = 1.0){
+			double len = b - a;
+			return ((double)rand()/RAND_MAX) * len + a;
+		}
+
 		template <typename Vector3>
-		OBB(const std::vector<Vector3> & all_points)
+		OBB(std::vector<Vector3> all_points, bool isAddJitter = false)
 		{
+			if( isAddJitter )
+			{
+				// Get center
+				Vector3 mean(0,0,0);
+				for(size_t i = 0; i < all_points.size(); i++) mean += all_points[i];
+				mean /= all_points.size();
+
+				// Get maximum dist to center
+				double maxDist = -DBL_MAX;
+				for(size_t i = 0; i < all_points.size(); i++)
+					maxDist = std::max(maxDist, (all_points[i] - mean).norm());
+				
+				// Add salt
+				double eps = maxDist * 1e-5;
+				for(size_t i = 0; i < all_points.size(); i++){
+					for(int j = 0; j < 3; j++){
+						double delta = (uniformRand() - 0.5) * eps;
+						all_points[i][j] += delta;
+					}
+				}
+			}
+
 			int num = all_points.size();
 
 			// Copy to a consecutive memory block

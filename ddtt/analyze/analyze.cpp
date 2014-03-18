@@ -1,4 +1,6 @@
 #include <stack>
+#include <omp.h>
+#include <QApplication>
 #include "analyze.h"
 
 #include "MinOBB.h"
@@ -70,6 +72,7 @@ std::vector< SurfaceMesh::SurfaceMeshModel* > connectedPieces(SurfaceMesh::Surfa
 
 void analyze::initParameters(RichParameterSet *pars)
 {
+	pars->addParam(new RichBool("IsParallel", false, "IsParallel"));
 	pars->addParam(new RichBool("Visualize", true, "Visualize"));
 	pars->addParam(new RichBool("VisualizeBoxes", false, "VisualizeBoxes"));
 	pars->addParam(new RichBool("VisualizeGraph", true, "VisualizeGraph"));
@@ -82,47 +85,71 @@ void analyze::applyFilter(RichParameterSet* pars)
 	starlab::PolygonSoup * ps = new starlab::PolygonSoup;
 	std::vector< std::vector<double> > colors = starlab::randomColors(12);
 
+	mainWindow()->setStatusBarMessage("Finding connected pieces..");
+	QApplication::processEvents();
 	std::vector< SurfaceMesh::SurfaceMeshModel* > pieces = connectedPieces( mesh() );
 	std::vector<Vector3> all_points;
 
 	std::vector<MinOBB::OBB> obb( pieces.size() );
 
-	for(size_t pi = 0; pi < pieces.size(); pi++)
+	mainWindow()->setStatusBarMessage("Finding OBBs..");
+	QApplication::processEvents();
+	QElapsedTimer timer; timer.start();
+
+	if( pars->getBool("IsParallel") )
 	{
-		auto piece = pieces[pi];
+		int N = pieces.size();
 
-		Vector3VertexProperty points = piece->vertex_coordinates();
-		std::vector<Vector3> all_points;
-		for(auto v: piece->vertices()) all_points.push_back( points[v] );
+		#pragma omp parallel for
+		for(int i = 0; i < N; i++)
+		{
+			Vector3VertexProperty points = pieces[i]->vertex_coordinates();
+			std::vector<Vector3> all_points;
+			for(auto v: pieces[i]->vertices()) all_points.push_back( points[v] );
 
-		obb[pi] = MinOBB::OBB( all_points );
-
-		std::vector<Vector3> dir(3);
-		for(int i = 0; i < 3; i++){
-			dir[0][i] = obb[pi].bb.dir_1[i];
-			dir[1][i] = obb[pi].bb.dir_2[i];
-			dir[2][i] = obb[pi].bb.dir_3[i];
+			obb[i] = MinOBB::OBB( all_points, true );
 		}
+	}
+	else
+	{
+		for(size_t pi = 0; pi < pieces.size(); pi++)
+		{
+			auto piece = pieces[pi];
 
-		std::vector<Vector3> c = obb[pi].corners<Vector3>();
+			Vector3VertexProperty points = piece->vertex_coordinates();
+			std::vector<Vector3> all_points;
+			for(auto v: piece->vertices()) all_points.push_back( points[v] );
 
-		bbox_lines->addLines( (QVector<Vector3>() << c[0] << c[1] << c[5] << c[4] << c[0]).toStdVector(), Qt::black );
-		bbox_lines->addLines( (QVector<Vector3>() << c[0] << c[1] << c[3] << c[2] << c[0]).toStdVector(), Qt::black );
-		bbox_lines->addLines( (QVector<Vector3>() << c[6] << c[7] << c[3] << c[2] << c[6]).toStdVector(), Qt::black );
-		bbox_lines->addLines( (QVector<Vector3>() << c[6] << c[7] << c[5] << c[4] << c[6]).toStdVector(), Qt::black );
+			bool isAddJitter = true;
+			obb[pi] = MinOBB::OBB( all_points, isAddJitter );
 
-		Vector3 mean(0,0,0);
-		for(auto p: c) mean += p;
-		mean /= c.size();
+			std::vector<Vector3> dir(3);
+			for(int i = 0; i < 3; i++){
+				dir[0][i] = obb[pi].bb.dir_1[i];
+				dir[1][i] = obb[pi].bb.dir_2[i];
+				dir[2][i] = obb[pi].bb.dir_3[i];
+			}
 
-		dir_lines[0]->addLine(mean, Vector3(mean + dir[0] * 0.5 * obb[pi].bb.length(0)), Qt::red);
-		dir_lines[1]->addLine(mean, Vector3(mean + dir[1] * 0.5 * obb[pi].bb.length(1)), Qt::green);
-		dir_lines[2]->addLine(mean, Vector3(mean + dir[2] * 0.5 * obb[pi].bb.length(2)), Qt::blue);
+			std::vector<Vector3> c = obb[pi].corners<Vector3>();
 
-		if( pars->getBool("VisualizeBoxes") ){
-			std::vector< std::vector<Vector3> > face = obb[pi].faces<Vector3>();
-			for(size_t i = 0; i < face.size(); i++){
-				ps->addPoly((QVector<starlab::QVector3>() << face[i][2] << face[i][1] << face[i][0]), QColor::fromRgbF(colors[i][0],colors[i][1],colors[i][2], 0.1));
+			bbox_lines->addLines( (QVector<Vector3>() << c[0] << c[1] << c[5] << c[4] << c[0]).toStdVector(), Qt::black );
+			bbox_lines->addLines( (QVector<Vector3>() << c[0] << c[1] << c[3] << c[2] << c[0]).toStdVector(), Qt::black );
+			bbox_lines->addLines( (QVector<Vector3>() << c[6] << c[7] << c[3] << c[2] << c[6]).toStdVector(), Qt::black );
+			bbox_lines->addLines( (QVector<Vector3>() << c[6] << c[7] << c[5] << c[4] << c[6]).toStdVector(), Qt::black );
+
+			Vector3 mean(0,0,0);
+			for(auto p: c) mean += p;
+			mean /= c.size();
+
+			dir_lines[0]->addLine(mean, Vector3(mean + dir[0] * 0.5 * obb[pi].bb.length(0)), Qt::red);
+			dir_lines[1]->addLine(mean, Vector3(mean + dir[1] * 0.5 * obb[pi].bb.length(1)), Qt::green);
+			dir_lines[2]->addLine(mean, Vector3(mean + dir[2] * 0.5 * obb[pi].bb.length(2)), Qt::blue);
+
+			if( pars->getBool("VisualizeBoxes") ){
+				std::vector< std::vector<Vector3> > face = obb[pi].faces<Vector3>();
+				for(size_t i = 0; i < face.size(); i++){
+					ps->addPoly((QVector<starlab::QVector3>() << face[i][2] << face[i][1] << face[i][0]), QColor::fromRgbF(colors[i][0],colors[i][1],colors[i][2], 0.1));
+				}
 			}
 		}
 	}
@@ -133,6 +160,9 @@ void analyze::applyFilter(RichParameterSet* pars)
 		for(size_t i = 0; i < dir_lines.size(); i++) drawArea()->addRenderObject( dir_lines[i] );
 		drawArea()->addRenderObject(ps);
 	}
+
+	mainWindow()->setStatusBarMessage( QString("Done finding OBBs. (%1 ms)").arg(timer.elapsed()));
+	QApplication::processEvents();
 
 	Structure::Graph * graph = new Structure::Graph();
 
@@ -157,6 +187,9 @@ void analyze::applyFilter(RichParameterSet* pars)
 
 		graph->addNode( n );
 	}
+
+	mainWindow()->setStatusBarMessage("Now finding edges..");
+	QApplication::processEvents();
 
 	starlab::LineSegments * graphLines = new starlab::LineSegments(4);
 	for(size_t i = 0; i < obb.size(); i++){
