@@ -19,8 +19,8 @@ INCLUDEPATH += ../NURBS
 LIBS += -L$$PWD/../StructureGraphLib/$$CFG/lib -lStructureGraphLib
 INCLUDEPATH += ../StructureGraphLib
 
-HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h
-SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp
+HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h
+SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp
 
 RESOURCES += ddtt-plugin.qrc
 FORMS += ddtt_widget.ui

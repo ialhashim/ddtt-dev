@@ -60,11 +60,11 @@ template<typename T>
 std::vector< std::vector<T> > chunks(const std::vector<T> & data, int num_chunks){
 	std::vector< std::vector<T> > chunks;
 	if(num_chunks <= 1) { chunks.push_back(data); return chunks; }
-	int k = data.size() / num_chunks;
+	size_t k = data.size() / num_chunks;
 	std::vector<T>::const_iterator chunk_begin = data.begin(), chunk_end = chunk_begin;
 	std::vector<T>::const_iterator end = data.end();
 	do{
-		if(std::distance(chunk_end, end) < k) chunk_end = end;
+		if(std::distance(chunk_end, end) < (int)k) chunk_end = end;
 		else std::advance(chunk_end, k);
 		chunks.push_back( std::vector<T>(chunk_begin,chunk_end) );
 		chunk_begin = chunk_end;
@@ -164,7 +164,7 @@ void Corresponder::compute( PropertyMap prop )
 				{
 					closeness.back().push_back( g->nodes[i]->property["ClosenessCenter"].toDouble() );
 				}
-			}*/
+			}
 
 			GraphDistance gd(g);
 			std::vector<double> agd = gd.averageGeodesicDistance(RES);
@@ -179,7 +179,7 @@ void Corresponder::compute( PropertyMap prop )
 
 				double val = agd[ gd.closestPointIndex( V ) ];
 				agdVals.back().push_back( (val - agd_min) / (agd_max-agd_min) );
-			}
+			}*/
 
 			// Debug AGD
 			/*if( false ){
