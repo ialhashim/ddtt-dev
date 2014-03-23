@@ -2,7 +2,7 @@
 #include "BipartiteGraph.h"
 using namespace AssignmentLib;
 
-double Edge::WORST_WEIGHT = POS_INF;
+double Edge::WORST_WEIGHT = NEG_INF;
 
 Edge
 BipartiteGraph::GetMaxWeightEdge(Vertex& agent){

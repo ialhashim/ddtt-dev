@@ -11,6 +11,10 @@ namespace Structure{ struct Graph; }
 typedef QMap<QString,QVariant> PropertyMap;
 typedef QPair<QStringList,QStringList> Pairing;
 
+#include "Hungarian.h"
+#undef max
+#undef min
+
 struct ShapeCorresponder{
 	Structure::Graph * source;
 	Structure::Graph * target;
@@ -18,7 +22,7 @@ struct ShapeCorresponder{
 
 	ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2);
 
-	QVector<Pairing> findPairing( QVector<Pairing> fixedPairs = QVector<Pairing>() );
+	QVector<Pairing> findPairing( mat m, QVector<Pairing> fixedPairs = QVector<Pairing>() );
 
 	QVector<RenderObject::Base *> debug;
 };

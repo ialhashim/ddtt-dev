@@ -1,9 +1,5 @@
 #pragma warning(disable:4267)
 
-#include "Hungarian.h"
-#undef max
-#undef min
-
 #include <QDebug>
 #include "next_combination.h"
 #include "ShapeCorresponder.h"
@@ -27,6 +23,7 @@ struct DeformationPath{
 	double weight;
 	DeformationPath(){ source = target = NULL; gcorr = NULL; weight = 0.0; }
 };
+bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }
 
 void measure_position(Structure::Graph * graph)
 {
@@ -134,41 +131,57 @@ double partDifference(QString sid, QString tid, Structure::Graph * source, Struc
 	return (Vs - Vt).norm();
 }
 
-QVector<Pairing> ShapeCorresponder::findPairing( QVector<Pairing> fixedPairs )
+mat buildDifferenceMatrix( Structure::Graph * source, Structure::Graph * target )
 {
-	QVector<Pairing> result;
-
 	int N = source->nodes.size();
 	int M = target->nodes.size();
 
 	int extra_N = (M > N) ? M-N : 0;
 	int extra_M = (N > M) ? N-M : 0;
 
-	//QVector< QPair< QPair<QString,QString>, double > > debug;
-
-	/// Build weights matrix
 	mat m( N + extra_N, mat_row(M + extra_M, AssignmentLib::Edge::WORST_WEIGHT) );
-	AssignmentLib::Matrix mm( N + extra_N, std::vector<AssignmentLib::Edge>( M + extra_M ));
 
 	for(int i = 0; i < N; i++)
-	{
 		for(int j = 0; j < M; j++)
-		{
 			m[i][j] = -partDifference( source->nodes[i]->id, target->nodes[j]->id, source, target );
-			mm[i][j] = AssignmentLib::Edge( pair<size_t, size_t>(i,j), m[i][j] );
 
-			//debug.push_back( qMakePair(qMakePair(source->nodes[i]->id, target->nodes[j]->id), m[i][j]) );
+	return m;
+}
+
+QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPairs )
+{
+	QVector<Pairing> result;
+
+	/// Build weights matrix
+	AssignmentLib::Matrix mm( m.size(), std::vector<AssignmentLib::Edge>( m.front().size() ));
+	
+	int N = source->nodes.size();
+	int M = target->nodes.size();
+
+	/// Fixed weights
+	QMap<QString, int> sindices, tindices;
+	for(auto n : source->nodes) sindices[n->id] = n->property["index"].toUInt();
+	for(auto n : target->nodes) tindices[n->id] = n->property["index"].toUInt();
+
+	for(auto pairs : fixedPairs){
+		for(auto sid : pairs.first)
+		{
+			int i = sindices[sid];
+
+			// Block assignment to all
+			for(int j = 0; j < M; j++)
+				m[i][j] = AssignmentLib::Edge::WORST_WEIGHT;
+			
+			// Only allow assignment to fixed set
+			for(auto tid : pairs.second)
+				m[i][ tindices[tid] ] = 0.0;
 		}
 	}
 
-	/// Fixed weights
-	for(auto pairs : fixedPairs)
-	{
-		QStringList sids = pairs.first;
-		QStringList tids = pairs.second;
-
-
-	}
+	/// Setup bipartite graph matrix
+	for(int i = 0; i < N; i++)
+		for(int j = 0; j < M; j++)
+			mm[i][j] = AssignmentLib::Edge( pair<size_t, size_t>(i,j), m[i][j] );
 
 	AssignmentLib::BipartiteGraph bg( mm );
 	AssignmentLib::Hungarian h(bg);
@@ -198,38 +211,65 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	graphs << source << target;
 
 	/// Graphs preprocessing
+	for(auto g : graphs) compute_part_measures( g );
+
+	mat m = buildDifferenceMatrix(source, target);
+
+	QMap< QString, QVector< QPair<double, QString> > > candidates;
+	for(size_t i = 0; i < source->nodes.size(); i++)
 	{
-		for(auto g : graphs) compute_part_measures( g );
+		Node * sn = source->nodes[i];
+
+		// Collect candidates
+		QVector< QPair<double, QString> > diffs;
+		for(size_t j = 0; j < target->nodes.size(); j++)
+			diffs.push_back( qMakePair( m[i][j], target->nodes[j]->id ) );
+		
+		std::sort(diffs.begin(), diffs.end());
+		std::reverse(diffs.begin(), diffs.end());
+
+		candidates[sn->id] = diffs;
 	}
 
 	/// Build set of candidate correspondences
-	/// Evaluate candidates
 	std::vector<DeformationPath> paths;
 	{
-		paths.push_back(DeformationPath());
-		DeformationPath & path = paths.back();
-
-		// Set correspondence
+		for(auto sourceNode : source->nodes)
 		{
-			path.pairs = findPairing();
+			int k = 3;
 
-			path.gcorr = new GraphCorresponder(source, target);
+			for(int i = 0; i < k; i++)
+			{
+				QVector<Pairing> fixedSet;
 
-			for(auto p : path.pairs){
-				QStringList sourceNodes = p.first;
-				QStringList targetNodes = p.second;
+				fixedSet.push_back( Pairing(QStringList() << sourceNode->id, QStringList() << candidates[sourceNode->id][i].second ) );
 
-				path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
+				paths.push_back( DeformationPath() );
+				DeformationPath & path = paths.back();
+
+				// Set correspondence
+				{
+					path.pairs = findPairing( m, fixedSet );
+
+					path.gcorr = new GraphCorresponder(source, target);
+
+					for(auto p : path.pairs){
+						QStringList sourceNodes = p.first;
+						QStringList targetNodes = p.second;
+
+						path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
+					}
+
+					path.gcorr->isReady = true;
+					path.gcorr->correspondAllNodes();
+				}
+
+				// Prepare blending
+				{
+					path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
+					path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
+				}
 			}
-
-			path.gcorr->isReady = true;
-			path.gcorr->correspondAllNodes();
-		}
-
-		// Prepare blending
-		{
-			path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
-			path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
 		}
 	}
 
@@ -239,6 +279,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 		for(auto & path : paths)
 		{
 			// Deform
+			path.scheduler->timeStep = 0.1;
 			path.scheduler->property["isDisableGrow"] = true;
 			path.scheduler->executeAll();
 
@@ -261,5 +302,9 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			// Record error
 			path.weight = error;
 		}
+
+		std::sort(paths.begin(), paths.end(), DeformationPathCompare);
+
+		DeformationPath & bestPath = paths.front();
 	}
 }

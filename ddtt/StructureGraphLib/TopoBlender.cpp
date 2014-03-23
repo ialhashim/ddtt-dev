@@ -802,7 +802,7 @@ void TopoBlender::equalizeSuperNodeTypes()
 	// convert sheet to curve if corresponded to curve
 	// iteratively determine the orientation and location of the new curves
 	while(!diffPairs.isEmpty())
-	{
+    {
 		foreach(QString snodeID, diffPairs.keys())
 		{
 			QString tnodeID = diffPairs[snodeID];
@@ -822,7 +822,7 @@ void TopoBlender::equalizeSuperNodeTypes()
 
 			// check if success
 			if (converted)  diffPairs.remove(snodeID);
-		}
+        }
 
 	}
 
@@ -855,7 +855,8 @@ bool TopoBlender::convertSheetToCurve( QString nodeID1, QString nodeID2, Structu
 		Structure::Node* other2 = link2->otherNode(nodeID2);
 
 		// choose type-equalized neighbours
-		if (other2->property["type_equalized"].toBool()){
+        //if (other2->property["type_equalized"].toBool())
+        {
 			QString otherID1 = other2->property["correspond"].toString();
 
 			Structure::Node* other1 = superG1->getNode(otherID1);
