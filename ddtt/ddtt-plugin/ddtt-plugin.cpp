@@ -6,8 +6,11 @@
 #include "ddtt_widget.h"
 
 #include "StructureGraph.h"
+#include "GraphExplorer.h"
 
 #include "Corresponder.h"
+
+#include "ShapeCorresponder.h"
 
 #define BBOX_WIDTH(box) (box.max().x()-box.min().x())
 #define PADDING_FACTOR 1.0
@@ -25,6 +28,8 @@ void ddtt::create()
 
 		connect(w->ui->testButton, SIGNAL(clicked()), SLOT(execute()));
 		connect(w->ui->clearButton, SIGNAL(clicked()), SLOT(clear()));
+
+		connect(w->ui->correspondButton, SIGNAL(clicked()), SLOT(correspond()));
 
 		dockwidget->setWidget(w);
 		dockwidget->setWindowTitle(w->windowTitle());
@@ -61,7 +66,7 @@ void ddtt::decorate()
 
 		// store for later use
 		graphs[g]->property["posX"] = posX;
-		//graphs[g]->draw();
+		graphs[g]->draw();
 		//drawBBox( curbox );
 
 		glPopMatrix();
@@ -137,13 +142,25 @@ void ddtt::loadModels(QStringList fileNames)
 	setSceneBounds();
 }
 
-void ddtt::execute()
+void ddtt::loadGraphs()
 {
 	if( graphs.isEmpty() )
 	{
 		loadModels(QFileDialog::getOpenFileNames(0, "Open Model", 
 			mainWindow()->settings()->getString("lastUsedDirectory"), "Model Files (*.xml)"));
 	}
+}
+
+void ddtt::clear()
+{
+	drawArea()->clear();
+	graphs.clear();
+	drawArea()->updateGL();
+}
+
+void ddtt::execute()
+{
+	loadGraphs();
 
 	int nidx = w->ui->nodeIndex->value();
 	int metric = w->ui->metricBox->currentIndex();
@@ -163,9 +180,27 @@ void ddtt::execute()
 	drawArea()->updateGL();
 }
 
-void ddtt::clear()
+void ddtt::correspond()
 {
-	drawArea()->clear();
-	graphs.clear();
-	drawArea()->updateGL();
+	loadGraphs();
+
+	ShapeCorresponder sc(graphs.front(), graphs.back());
+
+	
+
+	for(auto r : sc.debug) drawArea()->addRenderObject(r);
+}
+
+bool ddtt::keyPressEvent(QKeyEvent* event)
+{
+	if(event->key() == Qt::Key_I)
+	{
+		GraphExplorer * ge = new GraphExplorer;
+		ge->update( graphs.back() );
+		ge->show();
+
+		return true;
+	}
+
+	return false;
 }

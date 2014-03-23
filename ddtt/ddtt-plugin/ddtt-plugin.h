@@ -23,6 +23,8 @@ public:
     void decorate();
 	void setSceneBounds();
 
+	bool keyPressEvent( QKeyEvent* event );
+
     QWidget * widget;
 
 	QVector<Structure::Graph*> graphs;
@@ -32,4 +34,7 @@ public slots:
 	void execute();
 	void loadModels(QStringList fileNames);
 	void clear();
+	void loadGraphs();
+
+	void correspond();
 };

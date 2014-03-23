@@ -79,7 +79,7 @@ QVector<QString> TopoBlender::cloneGraphNode( Structure::Graph *g, QString nodeI
 		Structure::Node * n = node->clone();
 		n->id = nodeID + "_" + QString::number(i);
 
-		g->addNode(n);
+        g->addNode(n)->property["original_ID"] = nodeID;
 
 		cloned_node_IDs.push_back(n->id);
 		cloned_nodes.push_back(n);
@@ -150,7 +150,7 @@ void TopoBlender::correspondSuperNodes()
 		ctnode->id = snodeID + "_null";
 
 		assert(!super_tg->getNode(ctnode->id));
-		super_tg->addNode(ctnode);
+        super_tg->addNode(ctnode)->property["original_ID"] = QString("FromSource-%1").arg(snodeID);
 
 		superNodeCorr[snodeID] = ctnode->id;
 	}
@@ -163,7 +163,7 @@ void TopoBlender::correspondSuperNodes()
 		csnode->id = tnodeID + "_null";
 
 		assert(!super_sg->getNode(csnode->id));
-		super_sg->addNode(csnode);
+        super_sg->addNode(csnode)->property["original_ID"] = QString("FromTarget-%1").arg(tnodeID);
 
 		superNodeCorr[csnode->id] = tnodeID;
 	}
@@ -885,7 +885,7 @@ bool TopoBlender::convertSheetToCurve( QString nodeID1, QString nodeID2, Structu
 	if(!newCurve) return false;
 
 	// Add the new node
-	superG1->addNode( newCurve );
+    superG1->addNode( newCurve )->property["original_ID"] = nodeID1;
 	newCurve->property["correspond"] = curve2->id;
 
 	// Copy the edges

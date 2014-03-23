@@ -492,6 +492,12 @@ void Scheduler::reset()
 
 void Scheduler::executeAll()
 {
+    if( property["isDisableGrow"].toBool() ){
+        foreach (Task* task, tasks)
+            if(task->type == Task::GROW)
+                tasks.remove( tasks.indexOf(task) );
+    }
+
 	int totalTime = totalExecutionTime();
 	QVector<Task*> allTasks = tasksSortedByStart();
 

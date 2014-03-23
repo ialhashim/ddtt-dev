@@ -14,7 +14,10 @@ class GraphCorresponder : public QObject
 	Q_OBJECT
 
 public:
+    GraphCorresponder();
     GraphCorresponder(Structure::Graph *source, Structure::Graph *target);
+    void init(Structure::Graph *source, Structure::Graph *target);
+    void defaults();
 
 	// Source and target
 	Structure::Graph *sg, *tg;

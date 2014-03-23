@@ -12,6 +12,44 @@
 
 #include "ExportDynamicGraph.h"
 
+// Executing system commands and returning output
+#ifdef Q_OS_WIN
+#ifndef popen
+#define popen _popen
+#define pclose _pclose
+#endif
+#else
+#endif
+static inline std::string exec(char* cmd) {
+	FILE* pipe = popen(cmd, "r");
+	if (!pipe) return "ERROR";
+	char buffer[512];
+	std::string result = "";
+	while(!feof(pipe)) {
+		if(fgets(buffer, 128, pipe) != NULL)
+			result += buffer;
+	}
+	pclose(pipe);
+	return result;
+}
+
+#include <fstream>
+std::string ssystem (const char *command) {
+	char tmpname [L_tmpnam];
+	std::tmpnam ( tmpname );
+	std::string scommand = command;
+	std::string cmd = scommand + " >> " + tmpname;
+	std::system(cmd.c_str());
+	std::ifstream file(tmpname, std::ios::in );
+	std::string result;
+	if (file) {
+		while (!file.eof()) result.push_back(file.get());
+		file.close();
+	}
+	remove(tmpname);
+	return result;
+}
+
 GraphExplorer::GraphExplorer(QWidget *parent): QWidget(parent), ui(new Ui::GraphExplorer), p(NULL), svgViewer(NULL)
 {
 	//setAttribute(Qt::WA_DeleteOnClose);
@@ -96,19 +134,25 @@ void GraphExplorer::storeOldValues()
 
 void GraphExplorer::drawGraph()
 {
+    dotPath = "dot";
+
 	if(!dotPath.size()){
 		#ifdef Q_OS_WIN
-		dotPath = "\"" + QString(exec("where dot").c_str()).replace("\\","/").trimmed() + "\"";
-		#else
-		dotPath = QString(exec("which dot").c_str());
-		#endif
-
+        std::string whereReturn = exec("where dot");
+		dotPath = QString(whereReturn.c_str()).replace("\\","/").trimmed();
 		if(!dotPath.size())
 		{
 			// Ask user for help
 			dotPath = QFileDialog::getOpenFileName(0, "Graphviz dot application", "dot", tr("Application (*.*)"));
 			if(dotPath == "") dotPath = "-";
 		}
+		else
+		{
+			dotPath = "\"" + dotPath + "\"";
+		}
+		#else
+		dotPath = QString(exec("which dot").c_str());
+		#endif
 	}
 	if(dotPath == "-") return;
 

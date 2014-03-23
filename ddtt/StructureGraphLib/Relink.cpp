@@ -54,7 +54,7 @@ void Relink::execute()
 
 				Structure::Node * other = link->otherNode(task->nodeID);
 				Task * otherTask = s->getTaskFromNodeID(other->id);
-				if (otherTask->property["propagated"].toBool()) continue;
+				if (!otherTask || otherTask->property["propagated"].toBool()) continue;
 
 				if(!curLevel.contains(otherTask)) curLevel.push_back( otherTask );
 

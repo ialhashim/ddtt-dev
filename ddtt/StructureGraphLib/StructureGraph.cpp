@@ -115,8 +115,11 @@ Eigen::AlignedBox3d Graph::bbox(bool isSkipUnready)
 			if(getEdges(n->id).isEmpty()) continue;
 			
 			Task * t = n->property["task"].value<Task*>();
-			if(t->type == Task::GROW && !t->isReady) continue;
-			if(t->type == Task::SHRINK && !t->isDone) continue;
+			if( t )
+			{
+				if(t->type == Task::GROW && !t->isReady) continue;
+				if(t->type == Task::SHRINK && !t->isDone) continue;
+			}
 		}
 
         box = box.merged( n->bbox() );
@@ -135,6 +138,8 @@ Node *Graph::addNode(Node * n)
 
 	// Add property : id
 	n->property["index"] = nodes.size() - 1;
+    n->property["groupID"] = -1;
+    n->property["original_ID"] = n->id;
 
     return n;
 }
@@ -1820,7 +1825,14 @@ void Graph::normalize()
 void Graph::addGroup(QVector<QString> newGroup)
 {
     if(!newGroup.size()) return;
+
+    int gid = groups.size();
     groups.push_back( newGroup );
+
+    // Tell nodes they belong to group
+    foreach (QString nid, newGroup){
+        getNode(nid)->property["groupID"] = gid;
+    }
 }
 
 void Graph::removeGroup( QVector<QString> groupElements )

@@ -8,25 +8,41 @@
 
 #define INVALID_VALUE -1
 
+GraphCorresponder::GraphCorresponder()
+{
+    defaults();
+    sg = tg = NULL;
+}
+
 GraphCorresponder::GraphCorresponder( Structure::Graph *source, Structure::Graph *target )
 {
-	this->sg = source;
-	this->tg = target;
+    defaults();
+    init( source, target );
+}
 
-	spactialW = 0.5;
-	structuralW = 1.0;
-	sizeW = 0.0;
-	orientationW = 0.0;
+void GraphCorresponder::defaults()
+{
+    spactialW = 0.5;
+    structuralW = 1.0;
+    sizeW = 0.0;
+    orientationW = 0.0;
+    scoreThreshold = 0.4f;
+    isReady = false;
+}
 
-	scoreThreshold = 0.4f;
+void GraphCorresponder::init( Structure::Graph *source, Structure::Graph *target )
+{
+    this->sg = source;
+    this->tg = target;
 
-	// Useful for testing
-	if( qMin(source->nodes.size(), target->nodes.size()) < 3 ) scoreThreshold = 1.0f;
+    // Useful for testing
+    if( qMin(source->nodes.size(), target->nodes.size()) < 3 ) scoreThreshold = 1.0f;
 
-	sIsLandmark.resize(sg->nodes.size(), false);
-	tIsLandmark.resize(tg->nodes.size(), false);
+    sIsLandmark.resize(sg->nodes.size(), false);
+    tIsLandmark.resize(tg->nodes.size(), false);
 
-	isReady = false;
+    sIsCorresponded.resize(sg->nodes.size(), false);
+    tIsCorresponded.resize(tg->nodes.size(), false);
 }
 
 // Helper functions
