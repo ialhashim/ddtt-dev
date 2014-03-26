@@ -9,21 +9,24 @@
 #include "GraphDistance.h"
 using namespace Structure;
 
-#include "GraphCorresponder.h"
-#include "Task.h"
-#include "Scheduler.h"
-#include "TopoBlender.h"
+#include <QStack>
+QStack<double> nurbsQuality;
+static void inline beginFastNURBS(){
+	nurbsQuality.clear();
+	nurbsQuality.push(TIME_ITERATIONS);
+	nurbsQuality.push(CURVE_TOLERANCE);
+	nurbsQuality.push(RombergIntegralOrder);
 
-struct DeformationPath{
-	Structure::Graph *source, *target;
-	QVector<Pairing> pairs;
-	GraphCorresponder * gcorr;
-	QSharedPointer<Scheduler> scheduler;
-	QSharedPointer<TopoBlender> blender;
-	double weight;
-	DeformationPath(){ source = target = NULL; gcorr = NULL; weight = 0.0; }
-};
-bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }
+	TIME_ITERATIONS			= 6;
+	CURVE_TOLERANCE			= 1e-05;
+	RombergIntegralOrder	= 5;
+}
+static void inline endFastNURBS(){
+	if(nurbsQuality.size() < 3) return;
+	RombergIntegralOrder = nurbsQuality.pop();
+	CURVE_TOLERANCE = nurbsQuality.pop();
+	TIME_ITERATIONS = nurbsQuality.pop();
+}
 
 void measure_position(Structure::Graph * graph)
 {
@@ -41,7 +44,7 @@ void measure_position(Structure::Graph * graph)
 		n->meta["geo_x"] = (p[0] - bbox_min[0]) / (bbox_max[0] - bbox_min[0]);
 		n->meta["geo_y"] = (p[1] - bbox_min[1]) / (bbox_max[1] - bbox_min[1]);
 		n->meta["geo_z"] = (p[2] - bbox_min[2]) / (bbox_max[2] - bbox_min[2]);
-	}
+	} 
 }
 
 void measure_ground_parts(Structure::Graph * graph)
@@ -96,8 +99,13 @@ void measure_ground_parts(Structure::Graph * graph)
 			if(n->property.contains("taskType") && n->property["taskType"].toInt() == Task::GROW) continue;
 
 			std::vector<Vector3> curve = n->discretizedAsCurve( DIST_RESOLUTION );
-			double val = (dists[n] - dists_sorted.front()) / (dists_sorted.back() - dists_sorted.front());
-			n->meta["structure_ground"] = QString::number(val);
+
+			double range = (dists_sorted.back() - dists_sorted.front());
+			double val = (dists[n] - dists_sorted.front()) / range;
+
+			if(range == 0.0) val = 0;
+
+			n->meta["structure_ground"] = val;
 		}
 	}
 }
@@ -163,9 +171,13 @@ QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPa
 	for(auto n : source->nodes) sindices[n->id] = n->property["index"].toUInt();
 	for(auto n : target->nodes) tindices[n->id] = n->property["index"].toUInt();
 
+	QSet<QString> toNothingPairs;
+
 	for(auto pairs : fixedPairs){
 		for(auto sid : pairs.first)
 		{
+			if(!sindices.contains(sid)) continue;
+
 			int i = sindices[sid];
 
 			// Block assignment to all
@@ -174,7 +186,15 @@ QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPa
 			
 			// Only allow assignment to fixed set
 			for(auto tid : pairs.second)
+			{
+				if(!tindices.contains(tid)) 
+				{
+					toNothingPairs.insert(sid);
+					continue;
+				}
+
 				m[i][ tindices[tid] ] = 0.0;
+			}
 		}
 	}
 
@@ -188,9 +208,19 @@ QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPa
 	h.HungarianAlgo();
 
 	QVector< QPair< QPair<QString,QString>, double > > assignments;
-	for( auto p : h.M ){
+	for(size_t i = 0; i < h.M.size(); i++)
+	{
+		auto p = h.M[i];
+
 		if(p.first >= N || p.second >= M) continue;
-		assignments.push_back( qMakePair( qMakePair(source->nodes[p.first]->id, target->nodes[p.second]->id), m[p.first][p.second] ) );
+
+		QString sid = source->nodes[p.first]->id;
+		QString tid = target->nodes[p.second]->id;
+
+		if( toNothingPairs.contains(sid) )
+			tid = "NOTHING";
+		
+		assignments.push_back( qMakePair( qMakePair(sid, tid), m[p.first][p.second] ) );
 	}
 
 	// Record found pairings
@@ -205,8 +235,19 @@ QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPa
 	return result;
 }
 
+VectorPairStrings pairsDebugging( QVector<Pairing> pairs )
+{
+	VectorPairStrings result;
+	for(auto p : pairs) result.push_back( qMakePair(p.first.join(","), p.second.join(",")) );
+	return result;
+}
+
 ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2) : source(g1), target(g2)
 {
+	// Set of random colors
+	QVector<QColor> colors;
+	for(int i = 0; i < (int)source->nodes.size() * 2; i++) colors.push_back(starlab::qRandomColor2());
+
 	QVector<Structure::Graph*> graphs;
 	graphs << source << target;
 
@@ -232,56 +273,73 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	}
 
 	/// Build set of candidate correspondences
-	std::vector<DeformationPath> paths;
 	{
 		for(auto sourceNode : source->nodes)
 		{
-			int k = 3;
+			QVector<Pairing> fixedSets;
 
-			for(int i = 0; i < k; i++)
+			// K-nearest neighbors
 			{
-				QVector<Pairing> fixedSet;
+				int k = 3;
 
-				fixedSet.push_back( Pairing(QStringList() << sourceNode->id, QStringList() << candidates[sourceNode->id][i].second ) );
+				for(int i = 0; i < k; i++)
+					fixedSets.push_back( Pairing(QStringList() << sourceNode->id, QStringList() << candidates[sourceNode->id][i].second ) );
+			}
 
+			// To nothing
+			{
+				fixedSets.push_back( Pairing(QStringList() << sourceNode->id, QStringList() << "NOTHING" ) );
+			}
+
+			// Prepare deformation paths
+			for( auto fixedSet : fixedSets )
+			{
 				paths.push_back( DeformationPath() );
 				DeformationPath & path = paths.back();
 
-				// Set correspondence
-				{
-					path.pairs = findPairing( m, fixedSet );
+				QVector<Pairing> curSet;
+				curSet.push_back( fixedSet );
 
-					path.gcorr = new GraphCorresponder(source, target);
+				path.pairs = findPairing( m, curSet );
+				path.pairsDebug = pairsDebugging( path.pairs );
 
-					for(auto p : path.pairs){
-						QStringList sourceNodes = p.first;
-						QStringList targetNodes = p.second;
+				path.gcorr = new GraphCorresponder(source, target);
 
-						path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
-					}
+				for(auto p : path.pairs){
+					QStringList sourceNodes = p.first;
+					QStringList targetNodes = p.second;
 
-					path.gcorr->isReady = true;
-					path.gcorr->correspondAllNodes();
+					path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
 				}
 
-				// Prepare blending
-				{
-					path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
-					path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
-				}
+				path.gcorr->isReady = true;
+				path.gcorr->correspondAllNodes();
 			}
 		}
 	}
 
 	/// Find best correspondence
+	DeformationPath bestPath;
 	{
 		// Evaluate deformations
-		for(auto & path : paths)
+		#pragma omp parallel for
+		for(int pi = 0; pi < (int)paths.size(); pi++)
 		{
+			auto & path = paths[pi];
+
+			// Prepare blending
+			path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
+			path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
+
 			// Deform
-			path.scheduler->timeStep = 0.1;
+			path.scheduler->timeStep = 0.2;
 			path.scheduler->property["isDisableGrow"] = true;
+
+			beginFastNURBS();
+
 			path.scheduler->executeAll();
+
+			endFastNURBS();
 
 			// Collect error
 			double error = 0;
@@ -292,19 +350,42 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 				for(auto n_orig : source->nodes)
 				{
-					auto n = g->nodesWithProperty("original_ID", n_orig->id).front();
-					if(n == NULL) continue;
+					QVector<Node*> nodesWithID = g->nodesWithProperty("original_ID", n_orig->id);
+					if(nodesWithID.size() < 1) continue;
 
-					error += partDifference(n_orig->id, n->id, source, g);
+					auto n = nodesWithID.front();
+					
+					double partDiff = partDifference(n_orig->id, n->id, source, g);
+					if( !std::isfinite(partDiff) ) partDiff = 1e20;
+
+					path.errors.push_back( partDiff );
+
+					error += partDiff;
 				}
 			}
 
 			// Record error
 			path.weight = error;
+
+			path.colors = colors;
 		}
 
+		// Best = lowest error
 		std::sort(paths.begin(), paths.end(), DeformationPathCompare);
+		bestPath = paths.front();
 
-		DeformationPath & bestPath = paths.front();
+		// set indices
+		int j = 0;
+		for( auto & p : paths )	p.idx = j++;
+
+		source->setColorAll(Qt::black);
+		target->setColorAll(Qt::black);
+
+		for( auto p : bestPath.pairs )
+		{
+			QColor c = starlab::qRandomColor2();
+			for( auto sid : p.first ) source->setColorFor(sid, c);
+			for( auto tid : p.second ) target->setColorFor(tid, c);
+		}
 	}
 }

@@ -1,3 +1,5 @@
+#pragma warning(disable:4267)
+
 #include <QFileDialog>
 
 #include "ddtt-plugin.h"
@@ -12,10 +14,13 @@
 
 #include "ShapeCorresponder.h"
 
+#include "DeformScene.h"
+
 #define BBOX_WIDTH(box) (box.max().x()-box.min().x())
 #define PADDING_FACTOR 1.0
 
 ddtt_widget * w = NULL;
+ShapeCorresponder * sc = NULL;
 
 void ddtt::create()
 {
@@ -184,11 +189,21 @@ void ddtt::correspond()
 {
 	loadGraphs();
 
-	ShapeCorresponder sc(graphs.front(), graphs.back());
+	QElapsedTimer timer; timer.start();
 
-	
+	sc = new ShapeCorresponder(graphs.front(), graphs.back());
+	for(auto r : sc->debug) drawArea()->addRenderObject(r);
+	drawArea()->update();
 
-	for(auto r : sc.debug) drawArea()->addRenderObject(r);
+	mainWindow()->setStatusBarMessage( QString("Correspondence search time ( %1 ms ).").arg(timer.elapsed()) );
+
+	// View correspondences
+	DeformScene * ds = new DeformScene;
+
+	for(auto & path : sc->paths)
+	{
+		ds->addDeformationPath( &path );
+	}
 }
 
 bool ddtt::keyPressEvent(QKeyEvent* event)

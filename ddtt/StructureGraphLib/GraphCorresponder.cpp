@@ -291,6 +291,16 @@ void GraphCorresponder::addLandmarks( QVector<QString> sParts, QVector<QString> 
 
 void GraphCorresponder::addCorrespondences( QVector<QString> sParts, QVector<QString> tParts, float presetScore )
 {
+    if( tParts.contains("NOTHING") ){
+        foreach(QString sid, sParts) setNonCorresSource(sid);
+        return;
+    }
+
+    if( sParts.contains("NOTHING") ){
+        foreach(QString tid, tParts) setNonCorresTarget(tid);
+        return;
+    }
+
 	if(!sParts.size() && !tParts.size()) return;
 
 	// Check if those parts are available
@@ -837,7 +847,7 @@ void GraphCorresponder::correspondTwoNodes( Structure::Node *sNode, Structure::N
 {
 	if (sNode->type() != tNode->type())
 	{
-		qDebug() << "Two nodes with different types cannot be corresponded. ";
+        qDebug() << "Two nodes with different types cannot be point-to-point corresponded. ";
 		return;
 	}
 

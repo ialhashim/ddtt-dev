@@ -103,6 +103,11 @@ Array1D_Vector3 Curve::discretizedAsCurve(Scalar resolution)
 {
     Array1D_Vector3 result;
     Scalar curveLength = curve.GetLength(0,1);
+
+	// Degenerate cases
+	if( !std::isfinite(curveLength) ) return curve.mCtrlPoint;
+	if(curveLength < resolution) return curve.mCtrlPoint;
+
     int np = 1 + (curveLength / resolution);
     curve.SubdivideByLength(np, result);
     return result;

@@ -43,7 +43,7 @@ public:
 
 	void equalizeSuperNodeResolutions();
 	void equalizeSuperNodeTypes();
-	bool convertSheetToCurve(QString sheetID, QString curveID, Structure::Graph* sheetG, Structure::Graph* curveG);
+    bool convertSheetToCurve(QString sheetID, QString curveID, Structure::Graph* sheetG, Structure::Graph* curveG, bool isForce = false);
 
 	/// Helper functions:
 	QVector<QString> cloneGraphNode(Structure::Graph *g, QString nodeID, int N);

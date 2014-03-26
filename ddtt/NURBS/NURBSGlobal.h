@@ -14,6 +14,13 @@ typedef Scalar Real;
 #define MAX_REAL std::numeric_limits<SurfaceMesh::Scalar>::max()
 #define REAL_ZERO_TOLERANCE 1e-6
 
+#ifdef WIN32
+namespace std{  static inline bool isnan(double x){ return _isnan(x); } }
+namespace std{  static inline bool isfinite(double x){ return _finite(x); } }
+#else
+#include <cmath>
+#endif
+
 typedef std::vector< Vector3d > Array1D_Vector3;
 typedef std::vector< Array1D_Vector3 > Array2D_Vector3;
 typedef std::vector< Scalar > Array1D_Real;
@@ -328,11 +335,20 @@ static inline std::vector< std::vector<T> > new2(int y, int x, const T& defaultV
     return std::vector< std::vector<T> >( y, std::vector<T>(x, defaultValue) );
 }
 
+struct NURBSException : public std::exception
+{
+   std::string s;
+   NURBSException(std::string ss) : s(ss) {}
+   ~NURBSException() throw () {} // Updated
+   const char* what() const throw() { return s.c_str(); }
+};
+
 /// Quick Assertion
 #ifndef NDEBUG
 #   define assertion(condition, message) \
     do { \
         if (! (condition)) { \
+            throw NURBSException("NURBS assertion failed"); \
             std::cerr << "Assertion `" #condition "` failed in " << __FILE__ \
                       << " line " << __LINE__ << ": " << message << std::endl; \
             std::exit(EXIT_FAILURE); \

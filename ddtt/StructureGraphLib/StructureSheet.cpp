@@ -158,6 +158,10 @@ Array1D_Vector3 Sheet::discretizedAsCurve(Scalar resolution)
 
     Array1D_Vector3 result;
     Scalar curveLength = curve.GetLength(0,1);
+
+	if( !std::isfinite(curveLength) || curveLength < 1e-12 )
+		return curve.mCtrlPoint;
+
     int np = 1 + (curveLength / resolution);
     curve.SubdivideByLength(np, result);
     return result;

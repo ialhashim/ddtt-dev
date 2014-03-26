@@ -803,6 +803,8 @@ void TopoBlender::equalizeSuperNodeTypes()
 	// iteratively determine the orientation and location of the new curves
 	while(!diffPairs.isEmpty())
     {
+        size_t numBefore = diffPairs.size();
+
 		foreach(QString snodeID, diffPairs.keys())
 		{
 			QString tnodeID = diffPairs[snodeID];
@@ -824,6 +826,23 @@ void TopoBlender::equalizeSuperNodeTypes()
 			if (converted)  diffPairs.remove(snodeID);
         }
 
+        if(numBefore == diffPairs.size())
+        {
+            QString snodeID = diffPairs.keys().front();
+            QString tnodeID = diffPairs[snodeID];
+            Structure::Node* snode = super_sg->getNode(snodeID);
+
+            if (snode->type() == Structure::SHEET)
+            {
+                convertSheetToCurve(snodeID, tnodeID, super_sg, super_tg, true);
+            }
+            else
+            {
+                convertSheetToCurve(tnodeID, snodeID, super_tg, super_sg, true);
+            }
+
+            diffPairs.remove(snodeID);
+        }
 	}
 
 	// remove tags
@@ -835,7 +854,7 @@ void TopoBlender::equalizeSuperNodeTypes()
 // which implies the curve(s) lay within the BB of the sheet
 // some of the curves maintain the same connections to others
 // we can relink the new curves (converted sheet) in the same way as the curve
-bool TopoBlender::convertSheetToCurve( QString nodeID1, QString nodeID2, Structure::Graph* superG1, Structure::Graph* superG2 )
+bool TopoBlender::convertSheetToCurve( QString nodeID1, QString nodeID2, Structure::Graph* superG1, Structure::Graph* superG2, bool isForce )
 {
 	Structure::Node* node1 = superG1->getNode(nodeID1);
 	Structure::Node* node2 = superG2->getNode(nodeID2);
@@ -843,47 +862,69 @@ bool TopoBlender::convertSheetToCurve( QString nodeID1, QString nodeID2, Structu
 	Structure::Sheet *oldSheet = (Structure::Sheet*)node1;
 	Structure::Curve *curve2 = (Structure::Curve*)node2;
 
-	// Find a for-sure link (links with corresponded ends) to determine the new curve skeleton
-	QVector<Structure::Link*> edges = superG2->getEdges(nodeID2);
+    Structure::Curve * newCurve = NULL;
 
-	bool converted = false;
+    bool converted = false;
 
-	Structure::Curve * newCurve = NULL;
+    if( isForce )
+    {
+        double res = (oldSheet->surface.mCtrlPoint[0][1] - oldSheet->surface.mCtrlPoint[0][0]).norm() * 0.8;
 
-	// Convert the sheet into a curve
-	foreach(Structure::Link* link2, edges){
-		Structure::Node* other2 = link2->otherNode(nodeID2);
+        NURBS::NURBSCurved new_curve = NURBS::NURBSCurved::createCurveFromPoints(oldSheet->discretizedAsCurve( res ));
 
-		// choose type-equalized neighbours
-        //if (other2->property["type_equalized"].toBool())
-        {
-			QString otherID1 = other2->property["correspond"].toString();
+        // create new curve node with the same id
+        newCurve = new Structure::Curve(new_curve, nodeID1 + "TEMP");
 
-			Structure::Node* other1 = superG1->getNode(otherID1);
-			Vector4d otherCoord = link2->getCoordOther(nodeID2).front();
-			Vector3d linkOtherPos1 = other1->position(otherCoord);
+        // copy properties
+        newCurve->property = node1->property;
+        newCurve->property["original_sheet"].setValue( oldSheet );
 
-			Vector3d direction2 = curve2->direction();
-			NURBS::NURBSCurved new_curve = oldSheet->convertToNURBSCurve(linkOtherPos1, direction2);
+        // mark the tag
+        newCurve->property["type_equalized"] = true;
+        node2->property["type_equalized"] = true;
 
-			// create new curve node with the same id
-			newCurve = new Structure::Curve(new_curve, nodeID1 + "TEMP");
+        converted = true;
+    }
+    else
+    {
+        // Find a for-sure link (links with corresponded ends) to determine the new curve skeleton
+        QVector<Structure::Link*> edges = superG2->getEdges(nodeID2);
 
-			// copy properties
-			newCurve->property = node1->property;
-			newCurve->property["original_sheet"].setValue( oldSheet );
+        // Convert the sheet into a curve
+        foreach(Structure::Link* link2, edges){
+            Structure::Node* other2 = link2->otherNode(nodeID2);
 
-			// mark the tag
-			newCurve->property["type_equalized"] = true;
-			node2->property["type_equalized"] = true;
+            // choose type-equalized neighbours
+            if (other2->property["type_equalized"].toBool())
+            {
+                QString otherID1 = other2->property["correspond"].toString();
 
-			converted = true;
+                Structure::Node* other1 = superG1->getNode(otherID1);
+                Vector4d otherCoord = link2->getCoordOther(nodeID2).front();
+                Vector3d linkOtherPos1 = other1->position(otherCoord);
 
-			break;
-		}
-	}
+                Vector3d direction2 = curve2->direction();
+                NURBS::NURBSCurved new_curve = oldSheet->convertToNURBSCurve(linkOtherPos1, direction2);
 
-	if(!newCurve) return false;
+                // create new curve node with the same id
+                newCurve = new Structure::Curve(new_curve, nodeID1 + "TEMP");
+
+                // copy properties
+                newCurve->property = node1->property;
+                newCurve->property["original_sheet"].setValue( oldSheet );
+
+                // mark the tag
+                newCurve->property["type_equalized"] = true;
+                node2->property["type_equalized"] = true;
+
+                converted = true;
+
+                break;
+            }
+        }
+
+        if(!newCurve) return false;
+    }
 
 	// Add the new node
     superG1->addNode( newCurve )->property["original_ID"] = nodeID1;

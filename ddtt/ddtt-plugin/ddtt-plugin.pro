@@ -23,8 +23,14 @@ INCLUDEPATH += ../StructureGraphLib
 LIBS += -L$$PWD/../AuctionLIB/$$CFG/lib -lAuctionLib
 INCLUDEPATH += ../AuctionLIB
 
-HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h
-SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp
+HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h \
+    DeformPathItem.h \
+    DeformPathItemWidget.h \
+    DeformScene.h
+SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp \
+    DeformPathItem.cpp \
+    DeformPathItemWidget.cpp \
+    DeformScene.cpp
 
 RESOURCES += ddtt-plugin.qrc
 FORMS += ddtt_widget.ui

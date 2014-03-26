@@ -4,13 +4,6 @@
 #include <QString>
 #include <QStringList>
 
-#ifdef WIN32
-namespace std{  static inline bool isnan(double x){ return _isnan(x); } }
-#else
-#include <cmath>
-#endif
-
-
 struct SimpleMesh{
 	std::vector< std::vector<float> > vertices;
 	std::vector< std::vector<int> > faces;
@@ -34,7 +27,11 @@ static inline std::vector< std::vector<float> > pointCloudf( std::vector<Vector3
 	std::vector< std::vector<float> > cloud(points.size(), std::vector<float>(3,0));
 	for(int i = 0; i < (int)points.size(); i++)
 	{
+#ifdef WIN32
+        if( _isnan(cloud[i][0]) || _isnan(cloud[i][1]) || _isnan(cloud[i][2]) ) continue;
+#else
         if( std::isnan(cloud[i][0]) || std::isnan(cloud[i][1]) || std::isnan(cloud[i][2]) ) continue;
+#endif
 
 		cloud[i][0] = points[i][0];
 		cloud[i][1] = points[i][1];

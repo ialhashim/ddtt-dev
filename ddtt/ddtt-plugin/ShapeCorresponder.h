@@ -1,3 +1,5 @@
+#pragma warning(disable:4267)
+
 #pragma once
 #include <QVector>
 #include <QVariant>
@@ -15,10 +17,35 @@ typedef QPair<QStringList,QStringList> Pairing;
 #undef max
 #undef min
 
+
+#include "GraphCorresponder.h"
+#include "Task.h"
+#include "Scheduler.h"
+#include "TopoBlender.h"
+
+typedef QVector< QPair<QString,QString> > VectorPairStrings;
+struct DeformationPath{
+	double weight;
+	VectorPairStrings pairsDebug;
+	QVector<Pairing> pairs;
+	QVector<double> errors;
+	QVector<QColor> colors;
+	int idx;
+
+	GraphCorresponder * gcorr;
+	QSharedPointer<Scheduler> scheduler;
+	QSharedPointer<TopoBlender> blender;
+	DeformationPath(){ gcorr = NULL; weight = 0.0; }
+};
+static inline bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }
+
+
 struct ShapeCorresponder{
 	Structure::Graph * source;
 	Structure::Graph * target;
 	PropertyMap property;
+
+	std::vector<DeformationPath> paths;
 
 	ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2);
 

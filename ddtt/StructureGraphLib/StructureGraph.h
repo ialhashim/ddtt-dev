@@ -75,7 +75,7 @@ namespace Structure{
 		void renameNode( QString oldNodeID, QString newNodeID );
 
 		// Accessors
-		Node* getNode(QString nodeID);
+        Node* getNode(QString nodeID);
 		Link* getEdge(int edgeUID);
 		Link* getEdge(QString id1, QString id2);
 		Curve* getCurve(Link * l);

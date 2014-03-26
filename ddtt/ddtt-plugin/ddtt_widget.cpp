@@ -1,3 +1,5 @@
+#pragma warning(disable:4267)
+
 #include "ddtt_widget.h"
 #include "ui_ddtt_widget.h"
 
