@@ -305,11 +305,18 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 				path.gcorr = new GraphCorresponder(source, target);
 
+				int i = 0;
+
 				for(auto p : path.pairs){
 					QStringList sourceNodes = p.first;
 					QStringList targetNodes = p.second;
 
 					path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
+
+					// Nodes coloring
+					for(auto sid : sourceNodes) path.scolors[sid] = colors[i];
+					for(auto tid : targetNodes) path.tcolors[tid] = colors[i];
+					i++;
 				}
 
 				path.gcorr->isReady = true;
@@ -321,6 +328,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	/// Find best correspondence
 	DeformationPath bestPath;
 	{
+		beginFastNURBS();
+
 		// Evaluate deformations
 		#pragma omp parallel for
 		for(int pi = 0; pi < (int)paths.size(); pi++)
@@ -332,14 +341,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
 
 			// Deform
-			path.scheduler->timeStep = 0.2;
-			path.scheduler->property["isDisableGrow"] = true;
-
-			beginFastNURBS();
-
 			path.scheduler->executeAll();
-
-			endFastNURBS();
 
 			// Collect error
 			double error = 0;
@@ -366,8 +368,6 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 			// Record error
 			path.weight = error;
-
-			path.colors = colors;
 		}
 
 		// Best = lowest error

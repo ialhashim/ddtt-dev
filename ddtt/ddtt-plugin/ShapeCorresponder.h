@@ -29,13 +29,17 @@ struct DeformationPath{
 	VectorPairStrings pairsDebug;
 	QVector<Pairing> pairs;
 	QVector<double> errors;
-	QVector<QColor> colors;
+
+	QMap<QString, QColor> scolors;
+	QMap<QString, QColor> tcolors;
+
 	int idx;
+    int i;
 
 	GraphCorresponder * gcorr;
 	QSharedPointer<Scheduler> scheduler;
 	QSharedPointer<TopoBlender> blender;
-	DeformationPath(){ gcorr = NULL; weight = 0.0; }
+    DeformationPath(){ gcorr = NULL; weight = 0.0; idx = i = 0; }
 };
 static inline bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }
 

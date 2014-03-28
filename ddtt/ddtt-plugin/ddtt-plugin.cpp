@@ -43,6 +43,8 @@ void ddtt::create()
 
 		drawArea()->setShortcut(QGLViewer::DRAW_AXIS, Qt::Key_A);
 		drawArea()->setShortcut(QGLViewer::DRAW_GRID, Qt::Key_G);
+
+		w->ui->correspondButton->click();
 	}
 }
 

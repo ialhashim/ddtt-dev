@@ -5,7 +5,7 @@ void AbsoluteOrientation::compute( Eigen::Vector3d Xa,Eigen::Vector3d Ya,Eigen::
 	std::vector<Eigen::Vector3d> A,B;
 	A.push_back(Xa); A.push_back(Ya); A.push_back(Za);
 	B.push_back(Xb); B.push_back(Yb); B.push_back(Zb);
-	compute(A,B,result);
+    compute(A,B,result);
 }
 
 void AbsoluteOrientation::compute( std::vector<Eigen::Vector3d> &left, std::vector<Eigen::Vector3d> &right, Eigen::Quaterniond &result )

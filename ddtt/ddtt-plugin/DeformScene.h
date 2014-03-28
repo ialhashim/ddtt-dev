@@ -1,18 +1,31 @@
 #pragma once
 
 #include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QGraphicsSceneWheelEvent>
 struct DeformationPath;
 
 class DeformScene : public QGraphicsScene
 {
+	Q_OBJECT
 public:
     DeformScene();
 
 	void addDeformationPath( DeformationPath * path );
 
+	QGraphicsView * gview;
+
 protected:
     void drawBackground ( QPainter * painter, const QRectF & rect );
     void drawForeground ( QPainter * painter, const QRectF & rect );
+
+    void wheelEvent(QGraphicsSceneWheelEvent *event);
+
+public slots:
+	void init();
+
+signals:
+	void viewPortReady();
 };
 
 // Utility: Trackball code

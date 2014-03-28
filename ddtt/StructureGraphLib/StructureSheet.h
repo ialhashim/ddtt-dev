@@ -62,7 +62,7 @@ struct Sheet : public Node
     // Connections
 
     // Visualization
-    void draw(bool isShowCtrlPts = false);
+    void draw(bool isShowCtrlPts = false, bool isColorOverride = false);
 	void drawWithNames(int nID, int pointIDRange);
 };
 

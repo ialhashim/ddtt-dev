@@ -1908,6 +1908,7 @@ void Graph::setColorAll( QColor newNodesColor )
 void Graph::setColorFor( QString nodeID, QColor newColor )
 {
 	Node * n = getNode(nodeID);
+    if(!n) return;
 
 	n->vis_property["color"] = newColor;
 

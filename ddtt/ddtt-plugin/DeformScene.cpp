@@ -4,52 +4,43 @@
 #include <QHBoxLayout>
 #include <QDesktopWidget>
 #include <QApplication>
+#include <QSlider>
+#include <QLabel>
 
 #include "DeformPathItem.h"
 #include "DeformPathItemWidget.h"
 
 DeformScene::DeformScene()
 {
-	// Anti-aliasing when using QGLWidget or subclasses
-	{
-		QGLFormat glf = QGLFormat::defaultFormat();
-		glf.setSamples(8);
-		QGLFormat::setDefaultFormat(glf);
-	}
-
-	QGLWidget * viewport = new QGLWidget;
-	viewport->makeCurrent();
-
-	QGraphicsView * gview = new QGraphicsView;
-
-	gview->setViewport( viewport );
-	gview->setViewportUpdateMode( QGraphicsView::FullViewportUpdate );
-	gview->setScene( this );
+	gview = new QGraphicsView(this);
+    gview->setViewport(new QGLWidget);
+    gview->setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 	gview->setAlignment(Qt::AlignLeft | Qt::AlignTop);
 	gview->setRenderHint(QPainter::HighQualityAntialiasing, true);
 	gview->setRenderHint(QPainter::SmoothPixmapTransform, true);
 	gview->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 	gview->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    gview->setDragMode(QGraphicsView::RubberBandDrag);
 
-	// Show the widget
-	QWidget * mainwidget = new QWidget;
-	QHBoxLayout * layout = new QHBoxLayout;
-	layout->addWidget(viewport);
-	mainwidget->setLayout(layout);
+	connect(this, SIGNAL(viewPortReady()), SLOT(init()));
+	emit( viewPortReady() );
+}
 
-	gview->resize(800,600);
+void DeformScene::init()
+{
+	gview->resize(1280,720);
 
 	// Center to screen
 	QDesktopWidget* m = QApplication::desktop();
 	QRect desk_rect = m->screenGeometry(m->screenNumber(QCursor::pos()));
 	int desk_x = desk_rect.width();
 	int desk_y = desk_rect.height();
-	int x = this->width();
-	int y = this->height();
+	int x = gview->width();
+	int y = gview->height();
 
-	mainwidget->move(desk_x / 2 - x / 2 + desk_rect.left(), desk_y / 2 - y / 2 + desk_rect.top());
-	mainwidget->show();
-	mainwidget->raise();
+	gview->move(desk_x / 2 - x / 2 + desk_rect.left(), desk_y / 2 - y / 2 + desk_rect.top());
+	gview->show();
+	gview->raise();
 }
 
 void DeformScene::drawBackground(QPainter *painter, const QRectF &rect)
@@ -69,15 +60,33 @@ void DeformScene::addDeformationPath(DeformationPath * path)
 	DeformPathItem * ditem = new DeformPathItem(path);
 	DeformPathItemWidget * dwidget = new DeformPathItemWidget(path);
 	
-	//addItem( ditem );
 	QGraphicsItemGroup * group = new QGraphicsItemGroup;
+
 	group->addToGroup(ditem);
 	group->addToGroup(dwidget);
-
 	group->setPos(0, path->idx * 600);
-
 	group->setAcceptHoverEvents(true);
 	group->setFlags( QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable );
+	group->setHandlesChildEvents(false); // items in group get user inputs
 
-	addItem(group);
+	addItem(group); 
+}
+
+void DeformScene::wheelEvent( QGraphicsSceneWheelEvent *e )
+{
+    // zoom only when CTRL key pressed
+    if (e->modifiers().testFlag(Qt::ControlModifier))
+    {
+        int numSteps = e->delta() / 15 / 8;
+        if (numSteps == 0) {
+            e->ignore();
+            return;
+        }
+
+        qreal sc = pow(1.25, numSteps); // I use scale factor 1.25
+        QGraphicsView * view = views().front();
+        view->scale(sc, sc);
+        view->centerOn(view->mapToScene(e->pos().toPoint()));
+        e->accept();
+    }
 }

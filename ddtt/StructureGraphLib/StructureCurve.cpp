@@ -254,16 +254,18 @@ SurfaceMesh::Vector3 Curve::center()
 	return pos;
 }
 
-void Curve::draw(bool isShowCtrlPts)
+void Curve::draw(bool isShowCtrlPts, bool isColorOverride)
 {
 	if(vis_property["glow"].toBool())
 	{
-		NURBS::CurveDraw::draw( &curve, Qt::yellow, isShowCtrlPts, 2.5 );
+        NURBS::CurveDraw::draw( &curve, Qt::yellow, isShowCtrlPts, isColorOverride, 2.5 );
 	}
 	else
 	{
-		NURBS::CurveDraw::draw( &curve, vis_property["color"].value<QColor>(), isShowCtrlPts );
+        NURBS::CurveDraw::draw( &curve, vis_property["color"].value<QColor>(), isShowCtrlPts, isColorOverride );
 	}
+
+    if(isColorOverride) return;
 
 	glPointSize(10);
 	glColor3d(1,0,1);

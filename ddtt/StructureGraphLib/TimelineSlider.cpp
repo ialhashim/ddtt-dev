@@ -8,7 +8,7 @@ TimelineSlider::TimelineSlider()
     icon = QImage(":/images/tick.png");
 	setFlags(ItemIsMovable | ItemSendsGeometryChanges);
 
-	isEnabled = false;
+    isEnabled = false;
 }
 
 QRectF TimelineSlider::boundingRect() const

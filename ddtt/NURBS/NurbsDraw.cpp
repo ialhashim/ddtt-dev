@@ -3,36 +3,16 @@
 
 using namespace NURBS;
 
-void CurveDraw::draw( NURBSCurved * nc, QColor curve_color, bool drawControl, double scaling)
+void CurveDraw::draw( NURBSCurved * nc, QColor curve_color, bool drawControl, bool isColorOverRide, double scaling)
 {
 	if(!nc || nc->GetNumCtrlPoints() == 0) return;
 
-	glDisable(GL_LIGHTING);
-	glEnable(GL_BLEND);
-
-    if(drawControl)
-    {
-        glEnable( GL_POINT_SMOOTH );
-
-        // Draw control points
-        glPointSize(6.0f * scaling);
-        glColor3d(1,1,1);
-        glBegin(GL_POINTS);
-        foreach(Vector3d p, nc->getControlPoints())
-            glVertex3d(p.x(), p.y(), p.z());
-        glEnd();
-
-        // Draw connections of control points
-        glLineWidth(2.0f * scaling);
-        glColor3d(0,0,0);
-        glBegin(GL_LINE_STRIP);
-        foreach(Vector3d p, nc->getControlPoints())
-            glVertex3d(p.x(), p.y(), p.z());
-        glEnd();
-    }
+    glDisable( GL_LIGHTING );
+    glEnable( GL_BLEND );
+    glEnable( GL_POINT_SMOOTH );
 
     // Draw actual curve
-    glColor4d(curve_color.redF(),curve_color.greenF(),curve_color.blueF(),curve_color.alphaF());
+    if(!isColorOverRide) glColor4d(curve_color.redF(),curve_color.greenF(),curve_color.blueF(),curve_color.alphaF());
 
     Array1D_Vector3 points;
 
@@ -60,10 +40,29 @@ void CurveDraw::draw( NURBSCurved * nc, QColor curve_color, bool drawControl, do
     foreach(Vector3d p, points) glVertex3d(p.x(), p.y(), p.z());
     glEnd();
 
+    if(drawControl)
+    {
+        // Draw control points
+        glPointSize(6.0f * scaling);
+        glColor3d(1,1,1);
+        glBegin(GL_POINTS);
+        foreach(Vector3d p, nc->getControlPoints())
+            glVertex3d(p.x(), p.y(), p.z());
+        glEnd();
+
+        // Draw connections of control points
+        /*glLineWidth(2.0f * scaling);
+        glColor3d(0,0,0);
+        glBegin(GL_LINE_STRIP);
+        foreach(Vector3d p, nc->getControlPoints())
+            glVertex3d(p.x(), p.y(), p.z());
+        glEnd();*/
+    }
+
     glEnable(GL_LIGHTING);
 }
 
-void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawControl, double scaling, QColor wireframe_color)
+void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawControl, bool isColorOverRide, double scaling, QColor wireframe_color)
 {
 	if(!nc || nc->GetNumCtrlPoints(0) == 0 || nc->GetNumCtrlPoints(1) == 0) return;
 
@@ -71,6 +70,63 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
 
     int width = nc->GetNumCtrlPoints(0);
     int length = nc->GetNumCtrlPoints(1);
+
+    // Draw actual surface
+    if(nc->quads.empty())
+    {
+        double resolution = (nc->mCtrlPoint.front().front() - nc->mCtrlPoint.back().back()).norm() * 0.05;
+        nc->generateSurfaceQuads( resolution );
+    }
+
+    glEnable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    if(!isColorOverRide) glColor4d(sheet_color.redF(),sheet_color.greenF(),sheet_color.blueF(),sheet_color.alphaF());
+
+    glBegin(GL_QUADS);
+    foreach(SurfaceQuad quad, nc->quads){
+        for(int i = 0; i < 4; i++){
+            glNormal3(quad.n[i]);
+            glVector3(quad.p[i]);
+        }
+    }
+    glEnd();
+
+    if(isColorOverRide) return;
+
+	// Wireframe
+	glDisable(GL_LIGHTING);
+	glColor4d(wireframe_color.redF(),wireframe_color.greenF(),wireframe_color.blueF(),wireframe_color.alphaF());
+	glLineWidth(1.0 * scaling);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glBegin(GL_QUADS);
+	foreach(SurfaceQuad quad, nc->quads){
+		for(int i = 0; i < 4; i++){
+			glNormal3(quad.n[i]);
+			glVector3(quad.p[i]);
+		}
+	}
+	glEnd();
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glEnable(GL_LIGHTING);
+
+    // Draw UV indicator
+    if(!nc->quads.empty())
+    {
+        SurfaceQuad quad = nc->quads.front();
+
+        glLineWidth(3);
+
+        glColor3d(1,0,0);
+        glBegin(GL_LINES);
+        glVector3(quad.p[0]); glVector3(quad.p[1]);
+        glEnd();
+
+        glColor3d(0,1,0);
+        glBegin(GL_LINES);
+        glVector3(quad.p[0]); glVector3(quad.p[3]);
+        glEnd();
+    }
+
 
     if(drawControl)
     {
@@ -130,60 +186,6 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
             glVector3(tri[2]);
         }
         glEnd();*/
-    }
-
-    // Draw actual surface
-    if(nc->quads.empty())
-    {
-        double resolution = (nc->mCtrlPoint.front().front() - nc->mCtrlPoint.back().back()).norm() * 0.05;
-        nc->generateSurfaceQuads( resolution );
-    }
-
-    glEnable(GL_LIGHTING);
-    glEnable(GL_BLEND);
-    glColor4d(sheet_color.redF(),sheet_color.greenF(),sheet_color.blueF(),sheet_color.alphaF());
-
-    glBegin(GL_QUADS);
-    foreach(SurfaceQuad quad, nc->quads){
-        for(int i = 0; i < 4; i++){
-            glNormal3(quad.n[i]);
-            glVector3(quad.p[i]);
-        }
-    }
-    glEnd();
-
-	// Wireframe
-	glDisable(GL_LIGHTING);
-	glColor4d(wireframe_color.redF(),wireframe_color.greenF(),wireframe_color.blueF(),wireframe_color.alphaF());
-	glLineWidth(1.0 * scaling);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	glBegin(GL_QUADS);
-	foreach(SurfaceQuad quad, nc->quads){
-		for(int i = 0; i < 4; i++){
-			glNormal3(quad.n[i]);
-			glVector3(quad.p[i]);
-		}
-	}
-	glEnd();
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	glEnable(GL_LIGHTING);
-
-    // Draw UV indicator
-    if(!nc->quads.empty())
-    {
-        SurfaceQuad quad = nc->quads.front();
-
-        glLineWidth(3);
-
-        glColor3d(1,0,0);
-        glBegin(GL_LINES);
-        glVector3(quad.p[0]); glVector3(quad.p[1]);
-        glEnd();
-
-        glColor3d(0,1,0);
-        glBegin(GL_LINES);
-        glVector3(quad.p[0]); glVector3(quad.p[3]);
-        glEnd();
     }
 
     glEnable(GL_LIGHTING);

@@ -7,6 +7,7 @@ typedef QMap<QString,QVariant> PropertyMap;
 
 class DeformPathItem : public QGraphicsObject
 {
+	Q_OBJECT
 public:
     DeformPathItem(DeformationPath * usedPath = NULL);
     PropertyMap property;
