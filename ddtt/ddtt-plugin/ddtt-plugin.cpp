@@ -193,7 +193,9 @@ void ddtt::correspond()
 
 	QElapsedTimer timer; timer.start();
 
-	sc = new ShapeCorresponder(graphs.front(), graphs.back());
+	sc = new ShapeCorresponder( graphs.front(), graphs.back(), !w->ui->bestAssign->isChecked() );
+
+	drawArea()->clear();
 	for(auto r : sc->debug) drawArea()->addRenderObject(r);
 	drawArea()->update();
 

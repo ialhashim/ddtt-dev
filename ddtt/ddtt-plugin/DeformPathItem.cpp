@@ -104,22 +104,24 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
     QRectF trect(width - smallWidth,smallWidth,smallWidth,smallWidth);
     QRectF inbetween(0, tinyWidth, width - smallWidth, height - tinyWidth);
 
-	painter->drawText(QPoint(10,200), QString("IDX %3  = %1, %2, dy = %4").arg(viewP.x()).arg(viewP.y()).arg(path->idx).arg(dy));
+	// DEBUG:
+	if( false ){
+		painter->drawText(QPoint(10,200), QString("IDX %3  = %1, %2, dy = %4").arg(viewP.x()).arg(viewP.y()).arg(path->idx).arg(dy));
+		painter->setPen( QPen(Qt::green, 2) );	painter->drawRect( srect );
+		painter->setPen( QPen(Qt::blue, 2) );	painter->drawRect( trect );
+		painter->setPen( QPen(Qt::black, 2) );	painter->drawRect( inbetween );
+	}
 
-    /*
-    painter->setPen( QPen(Qt::green, 2) );
-    painter->drawRect( srect );
-    painter->setPen( QPen(Qt::blue, 2) );
-    painter->drawRect( trect );
-    painter->setPen( QPen(Qt::black, 2) );
-    painter->drawRect( inbetween );
-    */
-    painter->setPen(QPen(Qt::gray, 2));
-    if(this->parentItem()->isSelected()) painter->setPen(QPen(Qt::blue, 10));
+	// Draw score
+	painter->drawText( QPoint(10,inbetween.top() + 20), QString("%1").arg(path->weight) );
+
+	// Draw border
+    painter->setPen(QPen(Qt::gray, 1));
+    if(this->parentItem()->isSelected()) painter->setPen(QPen(Qt::blue, 5));
     painter->drawRect(boundingRect());
 
+	// Draw 3D parts
 	painter->beginNativePainting();
-
 	setLights();
 	setCamera2(srect, path->gcorr->sg);
 
@@ -169,6 +171,35 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	}
 
 	glViewport(viewport[0],viewport[1],viewport[2],viewport[3]);
-
 	painter->endNativePainting();
+
+	// Draw graph
+	{
+		QRectF graphRect = inbetween;
+		graphRect.setHeight( inbetween.height() * 0.10 );
+
+		QPainterPath graph;
+
+		painter->save();
+		painter->translate( graphRect.topLeft() );
+
+		double sum = 0;
+
+		for(int i = 0; i < path->errors.size(); i++)
+		{
+			double dx = (double(i) / (path->errors.size()-1));
+			double dy = (sum += path->errors[i]) / path->weight;
+
+			double x = dx * graphRect.width();
+			double y = graphRect.height() - (dy * graphRect.height());
+
+			if( i == 0 ) graph.moveTo(x,y);
+			else graph.lineTo(x,y);
+		}
+
+		painter->setPen( QPen(QColor(0,128,0), 2) );
+		painter->drawPath(graph);
+
+		painter->restore();
+	}
 }

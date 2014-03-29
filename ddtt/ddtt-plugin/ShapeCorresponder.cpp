@@ -242,7 +242,7 @@ VectorPairStrings pairsDebugging( QVector<Pairing> pairs )
 	return result;
 }
 
-ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2) : source(g1), target(g2)
+ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool isFullSet) : source(g1), target(g2)
 {
 	// Set of random colors
 	QVector<QColor> colors;
@@ -273,6 +273,26 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	}
 
 	/// Build set of candidate correspondences
+	if( !isFullSet )
+	{
+		paths.push_back( DeformationPath() );
+		DeformationPath & path = paths.back();
+		path.pairs = findPairing(m);
+		path.pairsDebug = pairsDebugging( path.pairs );
+		path.gcorr = new GraphCorresponder(source, target);
+		int i = 0;
+		for(auto p : path.pairs){
+			QStringList sourceNodes = p.first;
+			QStringList targetNodes = p.second;
+			path.gcorr->addCorrespondences( sourceNodes.toVector() , targetNodes.toVector(), -1 );
+			for(auto sid : sourceNodes) path.scolors[sid] = colors[i];
+			for(auto tid : targetNodes) path.tcolors[tid] = colors[i];
+			i++;
+		}
+		path.gcorr->isReady = true;
+		path.gcorr->correspondAllNodes();
+	}
+	else
 	{
 		for(auto sourceNode : source->nodes)
 		{
@@ -348,6 +368,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 			for(auto g : path.scheduler->allGraphs)
 			{
+				g->moveBottomCenterToOrigin();
+
 				compute_part_measures( g );
 
 				for(auto n_orig : source->nodes)
@@ -370,22 +392,25 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.weight = error;
 		}
 
-		// Best = lowest error
-		std::sort(paths.begin(), paths.end(), DeformationPathCompare);
-		bestPath = paths.front();
-
-		// set indices
-		int j = 0;
-		for( auto & p : paths )	p.idx = j++;
-
-		source->setColorAll(Qt::black);
-		target->setColorAll(Qt::black);
-
-		for( auto p : bestPath.pairs )
+		if( paths.size() )
 		{
-			QColor c = starlab::qRandomColor2();
-			for( auto sid : p.first ) source->setColorFor(sid, c);
-			for( auto tid : p.second ) target->setColorFor(tid, c);
+			// Best = lowest error
+			std::sort(paths.begin(), paths.end(), DeformationPathCompare);
+			bestPath = paths.front();
+
+			// set indices
+			int j = 0;
+			for( auto & p : paths )	p.idx = j++;
+
+			source->setColorAll(Qt::black);
+			target->setColorAll(Qt::black);
+
+			for( auto p : bestPath.pairs )
+			{
+				QColor c = starlab::qRandomColor2();
+				for( auto sid : p.first ) source->setColorFor(sid, c);
+				for( auto tid : p.second ) target->setColorFor(tid, c);
+			}
 		}
 	}
 }

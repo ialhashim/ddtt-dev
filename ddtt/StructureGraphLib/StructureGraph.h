@@ -54,6 +54,7 @@ namespace Structure{
 		void removeGroup(int groupIDX);
 		void removeGroup(QVector<QString> groupElements);
 		QVector< QVector<QString> > groupsOf( QString nodeID );
+        QVector< QVector<QString> > nodesAsGroups();
 
 		QString linkName( QString n1_id, QString n2_id );
 		QString linkName( Node * n1, Node * n2 );

@@ -134,7 +134,7 @@ public:
 			U[i].center = point[i];
 	}
 
-	inline uint count() { return point.size(); }
+	inline size_t count() { return point.size(); }
 
 	class Frame{ 
 	public:

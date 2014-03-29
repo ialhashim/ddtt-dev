@@ -91,7 +91,7 @@ SOURCES += StructureGraph.cpp \
 SOURCES += QGraphViz/svgview.cpp
 HEADERS += QGraphViz/svgview.h
 
-FORMS +=  SchedulerWidget.ui GraphModifyWidget.ui GraphExplorer.ui
+FORMS += SchedulerWidget.ui GraphModifyWidget.ui GraphExplorer.ui
 
 mac:QMAKE_CXXFLAGS += -fopenmp
 mac:QMAKE_LFLAGS += -fopenmp
@@ -99,4 +99,7 @@ mac:QMAKE_LFLAGS += -fopenmp
 unix:!mac:QMAKE_CXXFLAGS = $$QMAKE_CFLAGS -fpermissive
 unix:!mac:LIBS += -lGLU
 
-win32:QMAKE_CXXFLAGS += /wd4267 /wd4005
+win32:QMAKE_CXXFLAGS *= /wd4267 /wd4005
+win32:QMAKE_CXXFLAGS_RELEASE *= /Zi
+#win32:QMAKE_CXXFLAGS_RELEASE *= /Od
+win32:QMAKE_LFLAGS_RELEASE *= /DEBUG

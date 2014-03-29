@@ -1662,7 +1662,7 @@ SurfaceMesh::Model* Graph::getMesh( QString nodeID )
 {
 	Node * node = getNode(nodeID);
 
-	if(node) return node->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+    if(node && node->property.contains("mesh")) return node->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
 
 	return NULL;
 }
@@ -1682,8 +1682,12 @@ void Graph::translate( Vector3 delta, bool isKeepMeshes )
 		{
 			if(!node->property.contains("mesh")) continue;
 			SurfaceMesh::Model* model = getMesh(node->id);
-			Vector3VertexProperty points = model->vertex_property<Vector3d>("v:point");
-			foreach(Vertex v, model->vertices()) points[v] += delta;
+
+            if(model)
+            {
+                Vector3VertexProperty points = model->vertex_property<Vector3d>("v:point");
+                foreach(Vertex v, model->vertices()) points[v] += delta;
+            }
 		}
 	}
 
@@ -1869,7 +1873,25 @@ QVector< QVector<QString> > Graph::groupsOf( QString nodeID )
 
 	if(result.isEmpty()) result.push_back( QVector<QString>() );
 
-	return result;
+    return result;
+}
+
+QVector< QVector<QString> > Graph::nodesAsGroups()
+{
+    QVector< QVector<QString> > asgroups;
+
+    QSet<QString> nodeSet;
+    foreach(Node * n, nodes) nodeSet.insert(n->id);
+
+    foreach(QVector<QString> group, groups){
+        foreach(QString nid, group) nodeSet.remove(nid);
+        asgroups.push_back(group);
+    }
+
+    foreach(QString nid, nodeSet)
+        asgroups.push_back( QVector<QString>() << nid );
+
+    return asgroups;
 }
 
 QVector<POINT_ID> Graph::selectedControlPointsByColor(QColor color)

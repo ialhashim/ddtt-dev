@@ -4,7 +4,7 @@
 #include <QSlider>
 #include <QLabel>
 
-struct DeformationPath;
+class DeformationPath;
 
 class DeformPathItemWidget : public QGraphicsProxyWidget
 {

@@ -3,7 +3,8 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include <QGraphicsSceneWheelEvent>
-struct DeformationPath;
+
+class DeformationPath;
 
 class DeformScene : public QGraphicsScene
 {

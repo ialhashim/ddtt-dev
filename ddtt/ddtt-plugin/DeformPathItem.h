@@ -2,7 +2,7 @@
 
 #include <QGraphicsObject>
 
-struct DeformationPath;
+class DeformationPath;
 typedef QMap<QString,QVariant> PropertyMap;
 
 class DeformPathItem : public QGraphicsObject
