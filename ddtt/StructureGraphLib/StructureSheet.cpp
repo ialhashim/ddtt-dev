@@ -162,7 +162,8 @@ Array1D_Vector3 Sheet::discretizedAsCurve(Scalar resolution)
 	if( !std::isfinite(curveLength) || curveLength < 1e-12 )
 		return curve.mCtrlPoint;
 
-    int np = 1 + (curveLength / resolution);
+    int np = qMax(2.0, 1.0 + (curveLength / resolution));
+
     curve.SubdivideByLength(np, result);
     return result;
 }

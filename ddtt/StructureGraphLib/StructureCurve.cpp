@@ -108,7 +108,7 @@ Array1D_Vector3 Curve::discretizedAsCurve(Scalar resolution)
 	if( !std::isfinite(curveLength) ) return curve.mCtrlPoint;
 	if(curveLength < resolution) return curve.mCtrlPoint;
 
-    int np = 1 + (curveLength / resolution);
+    int np = qMax(2.0, 1.0 + (curveLength / resolution));
     curve.SubdivideByLength(np, result);
     return result;
 }
@@ -141,7 +141,7 @@ Array2D_Vector4d Curve::discretizedPoints( Scalar resolution )
 		return result;
 	}
 
-	int np = 1 + (curveLength / resolution);
+    int np = qMax(2.0, 1.0 + (curveLength / resolution));
 	std::vector<Scalar> ptsTimes;
 
 	curve.SubdivideByLengthTime(np, ptsTimes);

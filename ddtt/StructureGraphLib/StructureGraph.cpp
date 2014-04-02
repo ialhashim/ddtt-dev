@@ -385,7 +385,7 @@ QVector<Node*> Graph::nodesWithProperty( QString propertyName, QVariant value )
 	QVector<Node*> nodesWithProp = nodesWithProperty(propertyName);
 	
 	foreach(Node* n, nodesWithProp){
-		if( n->property[propertyName] == value )
+        if( n->hasProperty(propertyName) && n->property.value(propertyName) == value )
 			result.push_back(n);
 	}
 

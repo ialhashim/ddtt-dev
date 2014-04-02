@@ -199,15 +199,23 @@ void ddtt::correspond()
 	for(auto r : sc->debug) drawArea()->addRenderObject(r);
 	drawArea()->update();
 
-	mainWindow()->setStatusBarMessage( QString("Correspondence search time ( %1 ms ).").arg(timer.elapsed()) );
+	// Stats
+	QStringList message;
+	message << QString("Number of paths ( %1 ).").arg( sc->property["pathsCount"].toInt() );
+	message << QString("Prepare time ( %1 ms ).").arg( sc->property["prepareTime"].toInt() );
+	message << QString("Compute time ( %1 ms ).").arg( sc->property["computeTime"].toInt() );
+	message << QString("Total correspondence search time ( %1 ms ).").arg(timer.elapsed());
+	mainWindow()->setStatusBarMessage( message.join("\n") );
 
 	// View correspondences
 	DeformScene * ds = new DeformScene;
 
 	for(auto & path : sc->paths)
 	{
-		ds->addDeformationPath( &path );
+		if( !path.scheduler.isNull() ) ds->addDeformationPath( &path );
 	}
+
+
 }
 
 bool ddtt::keyPressEvent(QKeyEvent* event)
