@@ -7,6 +7,7 @@
 
 #include "myimagearea.h"
 
+ImageOperation curOp = NONE_OP;
 MyImageArea * lastSelected = NULL;
 QVector<MyImageArea*> activeViewers;
 
@@ -36,18 +37,18 @@ ImageBrowser::ImageBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::ImageB
 	// Settings
 	{
 		// Use local file
-		QString path = QDir(qApp->applicationDirPath()).absoluteFilePath("meshbrowser.ini");
+		QString path = QDir(qApp->applicationDirPath()).absoluteFilePath("imagebrowser.ini");
 		QSettings qsettings(path, QSettings::IniFormat);
 
 		// Defaults  
 		if(!qsettings.allKeys().contains("nV")){
-			qsettings.setValue("nV", 3);
-			qsettings.setValue("nU", 2);
+			qsettings.setValue("nV", 6);
+			qsettings.setValue("nU", 3);
 			qsettings.sync();
 		}
  
-		nV = qsettings.value("nV", 3).toInt();
-		nU = qsettings.value("nU", 2).toInt();
+		nV = qsettings.value("nV", 6).toInt();
+		nU = qsettings.value("nU", 3).toInt();
 	}
 
 	// Create viewers
@@ -63,7 +64,11 @@ ImageBrowser::ImageBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::ImageB
 	}
 
     // Connections
-	//connect(ui->noneButton, &QPushButton::released, [=]() {curOp = MeshOperation::NONE_OP; ui->curLabel->setText(meshOps[curOp]);});
+	connect(ui->flipImage, &QPushButton::released, [=]() {curOp = ImageOperation::FLIP; ui->curLabel->setText(imageOps[curOp]);});
+	connect(ui->cropImg, &QPushButton::released, [=]() {curOp = ImageOperation::CROP; ui->curLabel->setText(imageOps[curOp]);});
+	connect(ui->undoAll, &QPushButton::released, [=]() {curOp = ImageOperation::UNDO_ALL; ui->curLabel->setText(imageOps[curOp]);});
+	connect(ui->thresholdButton, &QPushButton::released, [=]() {curOp = ImageOperation::THRESHOLD; ui->curLabel->setText(imageOps[curOp]);});
+	connect(ui->clickDelete, &QPushButton::released, [=]() {curOp = ImageOperation::CLICK_DELETE; ui->curLabel->setText(imageOps[curOp]);});
 
 	connect(ui->addDelete, &QPushButton::released, [=](){ 
 		if(lastSelected && deletedItems().contains(lastSelected->filename)){
@@ -89,6 +94,35 @@ ImageBrowser::ImageBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::ImageB
 		}
 		ui->deleteList->clear();
 	});
+
+	// Background removal
+	{
+		connect(ui->beginBackground, &QPushButton::released, [=](){curOp = ImageOperation::BACK_REMOVE; ui->curLabel->setText(imageOps[curOp]);  
+			if(!lastSelected) return; lastSelected->isBackground = true; } );
+		connect(ui->beginForeground, &QPushButton::released, [=](){curOp = ImageOperation::BACK_REMOVE; ui->curLabel->setText(imageOps[curOp]);  
+			if(!lastSelected) return; lastSelected->isBackground = false; } );
+		connect(ui->clearStrokes, &QPushButton::released, [=](){ if(!lastSelected) return; lastSelected->fg.clear(); lastSelected->bg.clear(); lastSelected->update(); } );
+
+		connect(ui->removeBackground, &QPushButton::released, [=](){
+			lastSelected->removeBackground( ui->paramSigma->value() );
+			update();
+		});
+
+		connect(ui->thresholdToStrokesButton, &QPushButton::released, [=](){
+			lastSelected->strokesFromThreshold( ui->thresholdVal->value() );
+			update();
+		});
+
+		connect(ui->autoRemove1, &QPushButton::released, [=](){
+			lastSelected->autoRemoveBack1();
+			update();
+		});
+
+		connect(ui->autoRemove2, &QPushButton::released, [=](){
+			lastSelected->autoRemoveBack2();
+			update();
+		});
+	}
 }
 
 QStringList ImageBrowser::deletedItems(){
@@ -126,10 +160,31 @@ void ImageBrowser::loadImages()
 			if(idx + 1 > database.size()) continue;
 			QString filename = database[idx];
 
-            //connect(viewer, &MyDrawArea::gotFocus, [=](MyDrawArea * caller) {
-            //	lastSelected = caller;
-            //	refreshViewers();
-            //});
+            MyImageArea * viewer = new MyImageArea( filename, ui );
+
+            if( !QFileInfo(filename).exists() ){
+                viewer->isDeleted = true;
+                continue;
+            }
+
+            QFrame * frame = new QFrame;
+            QHBoxLayout * ll = new QHBoxLayout;
+            frame->setLayout(ll);
+            ll->addWidget(viewer);
+            layout->setMargin(2);
+            layout->setSpacing(2);
+            layout->addWidget(frame, i, j, 1, 1);
+
+            activeViewers.push_back(viewer);
+
+            connect(viewer, &MyImageArea::gotFocus, [=](MyImageArea * caller) {
+                lastSelected = caller;
+                refreshViewers();
+            });
+
+			connect(viewer, &MyImageArea::deleteMe, [=](QString filename) {
+				ui->addDelete->click();
+			});
 		}
 	}
 
@@ -151,7 +206,7 @@ void ImageBrowser::refreshViewers(){
 	if(lastSelected)
 	{
 		lastSelected->parentWidget()->setStyleSheet("border: 2px solid rgb(255,100,100);");
-		ui->selectedMesh->setText( QFileInfo(lastSelected->filename).baseName() );
+        ui->selectedImage->setText( QFileInfo(lastSelected->filename).baseName() );
 	}
 }
 
