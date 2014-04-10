@@ -3,6 +3,7 @@
 #include <QGraphicsProxyWidget>
 #include <QSlider>
 #include <QLabel>
+#include <QPushButton>
 
 class DeformationPath;
 
@@ -16,6 +17,7 @@ public:
 
     QSlider * slider;
     QLabel * label;
+	QPushButton * executeButton;
 
 public slots:
 	void init();

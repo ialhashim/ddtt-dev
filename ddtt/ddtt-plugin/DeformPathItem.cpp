@@ -80,6 +80,11 @@ void setLights()
 	glMaterialf(GL_FRONT, GL_SHININESS, high_shininess);
 }
 
+QString shortName(QString name){
+	if(name.length() < 3) return name;
+	return QString("%1%2%3").arg(name.at(0)).arg(name.at(1)).arg(name.at(name.length()-1));
+}
+
 void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
 {
 	int viewport[4];
@@ -114,6 +119,15 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 	// Draw score
 	painter->drawText( QPoint(10,inbetween.top() + 20), QString("%1").arg(path->weight) );
+
+	// Draw assignments
+	{
+		QFont font("Monospace", 7); font.setStyleHint(QFont::TypeWriter);
+		painter->setFont(font);
+		//painter->drawText( QPoint(10,inbetween.top() + 30), "TestingAssignment");
+
+
+	}
 
 	// Draw border
     painter->setPen(QPen(Qt::gray, 1));
@@ -154,6 +168,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	}
 
 	// Draw in between
+	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() && path->property["isReady"].toBool() )
 	{ 
         Structure::Graph * g = path->scheduler->allGraphs[path->i];
 

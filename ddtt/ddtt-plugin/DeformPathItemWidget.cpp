@@ -2,6 +2,7 @@
 
 #include <QWidget>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QSlider>
 #include <QLabel>
 #include <QLineEdit>
@@ -31,17 +32,32 @@ void DeformPathItemWidget::init()
 {
 	QVBoxLayout * layout = new QVBoxLayout;
 
-    slider = new QSlider(Qt::Horizontal);
-	slider->setTickPosition(QSlider::TicksBothSides);
-    slider->setMinimum(0);
-    slider->setMaximum(path->scheduler->allGraphs.size()-1);
+	// Sub-layout
+	{
+		QHBoxLayout * sublayout = new QHBoxLayout;
 
-    QString style = "QSlider::groove:horizontal {background: blue;height: 4px;}";
-    style += "QSlider::handle:horizontal {background: #ff0000;width: 20px;margin: -16px 0px -16px 0px;}";
-    slider->setStyleSheet( style );
+		// Slider
+		slider = new QSlider(Qt::Horizontal);
+		slider->setTickPosition(QSlider::TicksBothSides);
+		slider->setMinimum(0);
+		slider->setMaximum(100);
+		QString style = "QSlider::groove:horizontal {background: blue;height: 4px;}";
+		style += "QSlider::handle:horizontal {background: #ff0000;width: 20px;margin: -16px 0px -16px 0px;}";
+		slider->setStyleSheet( style );
+		sublayout->addWidget(slider);
 
-	layout->addWidget(slider);
-    layout->addWidget(label = new QLabel("label"));
+		// Execute button
+		executeButton = new QPushButton("Execute..");
+		sublayout->addWidget(executeButton);
+		connect(executeButton, &QPushButton::clicked, [=](){ 
+			path->execute(); 
+		});
+
+		layout->addLayout(sublayout);
+	}
+    
+	// Messages
+	layout->addWidget(label = new QLabel("label"));
 	//QLineEdit *numberEdit = new QLineEdit;layout->addWidget(numberEdit);
 
 	widget()->setLayout(layout);
@@ -53,5 +69,7 @@ void DeformPathItemWidget::init()
 void DeformPathItemWidget::sliderValueChanged(int val)
 {
     label->setText( QString("In between: %1").arg(val) );
-    path->i = val;
+
+	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() )
+		path->i = (double(val) / slider->maximum()) * (path->scheduler->allGraphs.size()-1);
 }

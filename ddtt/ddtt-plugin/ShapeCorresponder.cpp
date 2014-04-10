@@ -17,22 +17,6 @@ QStringList toQStringList( const QVector<QString> & v ){
 
 #include "cartesian.h"
 
-// Full cartesian product
-std::vector<std::vector<int> > CartesianProduct(const std::vector<std::vector<int> >& v) {
-	std::vector<std::vector<int> > s(1, std::vector<int>());
-	for (auto& u : v){
-		std::vector<std::vector<int> > r;
-		for (auto& x : s) {
-			for (auto y : u) {
-				r.push_back(x);
-				r.back().push_back(y);
-			}
-		}
-		s.swap(r);
-	}
-	return s;
-}
-
 #include <QStack>
 QStack<double> nurbsQuality;
 static void inline beginFastNURBS(){
@@ -290,14 +274,20 @@ VectorPairings splitMany( QVector<QString> A, QVector<QString> B )
 	return result;
 }
 
-VectorPairings manyToMany(Structure::Graph * sg, Structure::Graph * tg, QVector<QString> snodes, QVector<QString> tnodes)
+QVector<VectorPairings> manyToMany(Structure::Graph * sg, Structure::Graph * tg, QVector<QString> snodes, QVector<QString> tnodes)
 {
-	VectorPairings resolved;
+	QVector<VectorPairings> allResolved;
 
 	// Sort based on 'x' axis
 	QVector< QPair<double, Structure::Node*> > sortedS, sortedT;
-	for(auto nid : snodes) {Structure::Node * n = sg->getNode(nid); sortedS.push_back( qMakePair(n->meta["geo_x"].toDouble(), n) );}
-	for(auto nid : tnodes) {Structure::Node * n = tg->getNode(nid); sortedT.push_back( qMakePair(n->meta["geo_x"].toDouble(), n) );}
+	for(auto nid : snodes) {
+		Structure::Node * n = sg->getNode(nid); 
+		sortedS.push_back( qMakePair(n->meta.contains("geo_x") ? n->meta["geo_x"].toDouble() : sortedS.size(), n) );
+	}
+	for(auto nid : tnodes) {
+		Structure::Node * n = tg->getNode(nid); 
+		sortedT.push_back( qMakePair(n->meta.contains("geo_x") ? n->meta["geo_x"].toDouble() : sortedT.size(), n) );
+	}
 	qSort(sortedS);
 	qSort(sortedT);
 
@@ -307,19 +297,53 @@ VectorPairings manyToMany(Structure::Graph * sg, Structure::Graph * tg, QVector<
 	for(auto nv : sortedS) sortedA.push_back(nv.second->id);
 	for(auto nv : sortedT) sortedB.push_back(nv.second->id);
 
-	if(sortedS.size() > sortedT.size()) 
-	{
+	if(sortedS.size() > sortedT.size()){
 		isReversed = true;
 		std::swap(sortedA, sortedB);
 	}
 
-	VectorPairings split = splitMany(sortedA, sortedB);
+	// Match using 'splitMany'
+	{
+		VectorPairings resolved;
+		VectorPairings split = splitMany(sortedA, sortedB);
+		if( isReversed ) for(auto & s : split) std::swap(s.first, s.second);
+		for(auto p : split) resolved.push_back(p);
+		allResolved.push_back(resolved);
+	}
 
-	if( isReversed ) for(auto & s : split) std::swap(s.first, s.second);
+	// Try a one-to-one
+	if(sortedA.size() == sortedB.size())
+	{
+		VectorPairings resolved;
 
-	for(auto p : split) resolved.push_back(p);
+		for(auto sid: sortedA){
+			//Array1D_Vector3 sPoints = sg->getNode(sid)->controlPoints();
+			
+			Vector3 ps = sg->getNode(sid)->controlPoints().front();
 
-	return resolved;
+			double minDist = DBL_MAX;
+			QString bestID;
+
+			for(auto tid: sortedB){
+				//Array1D_Vector3 tPoints = tg->getNode(tid)->controlPoints();
+				//double dist = HausdorffDistance(sPoints, tPoints);
+				Vector3 pt = tg->getNode(tid)->controlPoints().front();
+				double dist = (ps - pt).norm();
+
+				// Closest
+				if(dist < minDist){
+					minDist = dist;
+					bestID = tid;
+				}
+			}
+
+			resolved.push_back( Pairing( QVector<QString>()<< sid, QVector<QString>()<< bestID ) );
+		}
+
+		allResolved.push_back( resolved );
+	}
+
+	return allResolved;
 }
 
 Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVector<QString> > tgroups, 
@@ -386,31 +410,47 @@ Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVecto
 	for(auto assignment : goodCombs)
 	{
 		VectorPairings paring;
+		QVector<Pairing> manyManyCases;
 
 		for(size_t i = 0; i < assignment.size(); i++)
 		{
 			QVector<QString> snodes = sourceItem[i];
 			QVector<QString> tnodes = targetItem[assignment[i]];
 
-			// Resolve many-to-many
+			// Add all but many-to-many
 			if(snodes.size() > 1 && tnodes.size() > 1)
-			{
-				VectorPairings resolved = manyToMany(sg, tg, snodes, tnodes);
-
-				for(auto pair : resolved) 
-					paring.push_back( pair );
-			}
+				manyManyCases.push_back( qMakePair(snodes, tnodes) );
 			else
 				paring.push_back( qMakePair(snodes,tnodes) );
 		}
 
-		assignments.push_back(paring);
+		// Now resolve many-to-many using different possibilities
+		if( manyManyCases.size() )
+		{
+			QVector< QVector<VectorPairings> > manyManyResolution;
+
+			for(auto candidate : manyManyCases)
+				manyManyResolution.push_back( manyToMany(sg, tg, candidate.first, candidate.second) );
+			
+			blitz::CartesianProduct< QVector<VectorPairings>, QVector<VectorPairings> > product( manyManyResolution );
+
+			for(auto comb : product){
+				VectorPairings curParing = paring;
+				for(auto pairs : comb) 
+					for(auto pair : pairs) 
+						curParing.push_back(pair);
+				
+				assignments.push_back( curParing );
+			}
+		}
+		else
+			assignments.push_back( paring );
 	}
 
 	return assignments;
 }
 
-ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool isFullSet) : source(g1), target(g2)
+ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool) : source(g1), target(g2)
 {
 	// Set of random colors
 	QVector<QColor> colors;
@@ -428,6 +468,39 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	mat m = buildDifferenceMatrix(source, target);
 
 	Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target);
+
+	// Ground-truth
+	{
+		// Check for existing correspondence file
+		QString path = QFileInfo(source->property["name"].toString()).absolutePath() + "/", ext = ".txt";
+		QString g1n = source->name(), g2n = target->name();
+		QStringList files; files << (path+g1n+"_"+g2n+ext) << (path+g2n+"_"+g1n+ext);
+		int fileidx = -1;
+		for(int i = 0; i < 2; i++){
+			QString f = files[i];
+			if(!QFileInfo (f).exists()) continue;
+			fileidx = i;
+		}
+		if( fileidx != -1 ){
+
+			bool corrReversed = (fileidx == 0) ? false : true;
+			GraphCorresponder * bestCorrespond = new GraphCorresponder(source, target);
+			bestCorrespond->loadCorrespondences(files[fileidx], corrReversed);
+			
+			VectorPairings v1;
+			QVector< PART_LANDMARK > vp = bestCorrespond->correspondences;
+			for(auto p : vp) v1.push_back( Pairing(p.first, p.second) );
+
+			bool isFound = false;
+
+			for( VectorPairings v2 : assignments ){
+				if(v1.size() == v2.size() && std::is_permutation(v1.begin(), v1.end(), v2.begin())){
+					isFound = true;
+					break;
+				}
+			}
+		}
+	}
 	
 	// Prepare deformation paths
 	for( auto a : assignments )
@@ -476,7 +549,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
 
 			// Deform
-			path.scheduler->timeStep = 0.2;
+			path.scheduler->timeStep = 0.1;
 			path.scheduler->executeAll();
 
 			// Collect error
@@ -488,23 +561,20 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 				compute_part_measures( g );
 
-				#pragma omp critical
+				for(auto n_orig : source->nodes)
 				{
-					for(auto n_orig : source->nodes)
-					{
-						Structure::Node * n = NULL;
-						for(auto ni : g->nodes)
-							if(ni->property.contains("original_ID") && ni->property.value("original_ID") == n_orig->id)
-								n = ni;
-						if(!n) continue;
+					Structure::Node * n = NULL;
+					for(auto ni : g->nodes)
+						if(ni->property.contains("original_ID") && ni->property.value("original_ID") == n_orig->id)
+							n = ni;
+					if(!n) continue;
 
-						double partDiff = partDifference(n_orig->id, n->id, source, g);
-						if( !std::isfinite(partDiff) ) partDiff = 1e20;
+					double partDiff = partDifference(n_orig->id, n->id, source, g);
+					if( !std::isfinite(partDiff) ) partDiff = 1e20;
 
-						path.errors.push_back( partDiff );
+					path.errors.push_back( partDiff );
 
-						error += partDiff;
-					}
+					error += partDiff;
 				}
 			}
 

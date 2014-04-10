@@ -1778,13 +1778,13 @@ void Graph::transform( QMatrix4x4 mat )
 	}
 }
 
-void Graph::moveBottomCenterToOrigin()
+void Graph::moveBottomCenterToOrigin(bool isKeepMeshes)
 {
 	Eigen::AlignedBox3d aabb = bbox();
 	double height = aabb.max().z() - aabb.min().z();
 	Vector3d bottom_center(aabb.center().x(), aabb.center().y(), aabb.center().z() - height/2);
 
-	translate( -bottom_center );
+    translate( -bottom_center, isKeepMeshes );
 
 	// Update the bounding box
 	property["AABB"].setValue(bbox());
@@ -1918,7 +1918,7 @@ void Graph::clearSelections()
 
 QString Graph::name()
 {
-	return property["name"].toString().section('\\', -1).section('.', 0, 0);
+    return property["name"].toString().section('\\', -1).section('/', -1).section('.', 0, 0);
 }
 
 void Graph::setColorAll( QColor newNodesColor )

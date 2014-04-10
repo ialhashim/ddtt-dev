@@ -129,7 +129,7 @@ namespace Structure{
 		Node * rootByValence();
 
 		// Modifier
-		void moveBottomCenterToOrigin();
+        void moveBottomCenterToOrigin(bool isKeepMeshes = false);
 		void normalize();
 		void translate( Vector3 delta, bool isKeepMeshes = false);
 		void rotate(double angle, Vector3 axis);

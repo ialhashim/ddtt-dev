@@ -212,10 +212,8 @@ void ddtt::correspond()
 
 	for(auto & path : sc->paths)
 	{
-		if( !path.scheduler.isNull() ) ds->addDeformationPath( &path );
+		ds->addDeformationPath( &path );
 	}
-
-
 }
 
 bool ddtt::keyPressEvent(QKeyEvent* event)
