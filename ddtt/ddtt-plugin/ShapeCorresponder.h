@@ -25,7 +25,6 @@ struct ShapeCorresponder{
 	std::vector<DeformationPath> paths;
 
 	ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool isFullSet = true);
-	QVector<Pairing> findPairing( mat m, QVector<Pairing> fixedPairs = QVector<Pairing>() );
 
 	QVector<RenderObject::Base *> debug;
 };

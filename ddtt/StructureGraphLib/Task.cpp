@@ -360,7 +360,7 @@ QVector<Structure::Link*> Task::filterEdges( Structure::Node * n, QVector<Struct
 			Link * tl = target->getEdge( sl->property["correspond"].toInt() );
 
 			// Skip target edges that are not related to current node
-			if(!tl->hasNode(tn->id))
+			if(!tl || !tl->hasNode(tn->id))
 				continue;
 			else
 				keepEdges.push_back(sl);
@@ -758,7 +758,7 @@ void Task::prepareMorphEdges()
 		
 		// Skip edges that will leave me in future
 		Structure::Link* tl = target->getEdge(l->property["correspond"].toInt());
-		if (!tl->hasNode(tn->id)) continue;
+		if (!tl || !tl->hasNode(tn->id)) continue;
 
 		edges.push_back(l);
 	}
@@ -849,6 +849,8 @@ bool Task::isCrossing()
 
 			// check if my neighbor will change
 			Structure::Link* tl = target->getEdge(l->property["correspond"].toInt());
+			if(!tl) continue;
+
 			Structure::Node* sNb = l->otherNode(n->id);
 			QString tNbID = tl->otherNode(tn->id)->id;
 			if (sNb->property["correspond"].toString() != tNbID){

@@ -75,6 +75,8 @@ public:
 
 	void groupStart( Structure::Graph * g, QList<Task*> curTasks, int curStart, int & futureStart );
 
+    static bool shouldNotExist(Structure::Node *n);
+
 	// Task operations
 	void addMorphTask( QString nodeID );
 

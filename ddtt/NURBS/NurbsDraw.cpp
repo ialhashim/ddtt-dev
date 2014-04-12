@@ -78,7 +78,7 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
         nc->generateSurfaceQuads( resolution );
     }
 
-    glEnable(GL_LIGHTING);
+    if(!isColorOverRide) glEnable(GL_LIGHTING);
     glEnable(GL_BLEND);
     if(!isColorOverRide) glColor4d(sheet_color.redF(),sheet_color.greenF(),sheet_color.blueF(),sheet_color.alphaF());
 

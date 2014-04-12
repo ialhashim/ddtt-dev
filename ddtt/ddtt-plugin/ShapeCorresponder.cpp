@@ -1,5 +1,12 @@
 #pragma warning(disable:4267)
 
+#include <random>
+#include <algorithm>
+#include <iterator>
+
+#include <QApplication>
+#include <QTableWidget>
+#include <QHeaderView>
 #include <QDebug>
 #include "next_combination.h"
 #include "ShapeCorresponder.h"
@@ -8,6 +15,11 @@
 #include "StructureGraph.h"
 #include "GraphDistance.h"
 using namespace Structure;
+
+static inline QString shortName(QString name){
+	if(name.length() < 3) return name;
+	return QString("%1%2%3").arg(name.at(0)).arg(name.at(1)).arg(name.at(name.length()-1));
+}
 
 QStringList toQStringList( const QVector<QString> & v ){
 	QStringList l;
@@ -120,7 +132,7 @@ void measure_ground_parts(Structure::Graph * graph)
 
 void compute_part_measures(Structure::Graph * graph)
 {
-	measure_ground_parts( graph );
+	//measure_ground_parts( graph );
 	measure_position( graph );
 }
 
@@ -157,90 +169,64 @@ mat buildDifferenceMatrix( Structure::Graph * source, Structure::Graph * target 
 
 	mat m( N + extra_N, mat_row(M + extra_M, AssignmentLib::Edge::WORST_WEIGHT) );
 
-	for(int i = 0; i < N; i++)
-		for(int j = 0; j < M; j++)
-			m[i][j] = -partDifference( source->nodes[i]->id, target->nodes[j]->id, source, target );
+	double minVal = DBL_MAX, maxVal = -DBL_MAX;
+
+	for(int i = 0; i < N; i++){
+		for(int j = 0; j < M; j++){
+			double val = partDifference( source->nodes[i]->id, target->nodes[j]->id, source, target );
+			m[i][j] = val;
+
+			// Track limits
+			minVal = std::min(minVal, val);
+			maxVal = std::max(maxVal, val);
+		}
+	}
+
+	// Normalize
+	for(int i = 0; i < (int)m.size(); i++){
+		for(int j = 0; j < (int)m.front().size(); j++){
+			if(m[i][j] == AssignmentLib::Edge::WORST_WEIGHT) m[i][j] = maxVal;
+			
+			m[i][j] = (m[i][j] - minVal) / (maxVal - minVal);
+
+			//m[i][j] = 1 - m[i][j]; // Similarity, 1.0 = exact
+
+			m[i][j] *= -m[i][j];
+		}
+	}
 
 	return m;
 }
 
-QVector<Pairing> ShapeCorresponder::findPairing( mat m, QVector<Pairing> fixedPairs )
+void visualizeDifferenceMatrix(mat m, Structure::Graph * sg, Structure::Graph * tg)
 {
-	QVector<Pairing> result;
+	int rows = sg->nodes.size(), cols = tg->nodes.size();
+	QTableWidget * tw = new QTableWidget(rows, cols);
 
-	/// Build weights matrix
-	AssignmentLib::Matrix mm( m.size(), std::vector<AssignmentLib::Edge>( m.front().size() ));
+	// Cells
+	int fixedSize = 40;
+	tw->horizontalHeader()->setDefaultSectionSize(fixedSize);
+	tw->verticalHeader()->setDefaultSectionSize(fixedSize);
+	tw->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+	tw->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+
+	// Labels
+	QStringList hlabels, vlabels;
+	for(auto n : sg->nodes) vlabels << shortName(n->id); tw->setVerticalHeaderLabels(vlabels);
+	for(auto n : tg->nodes) hlabels << shortName(n->id); tw->setHorizontalHeaderLabels(hlabels);
 	
-	int N = source->nodes.size();
-	int M = target->nodes.size();
-
-	/// Fixed weights
-	QMap<QString, int> sindices, tindices;
-	for(auto n : source->nodes) sindices[n->id] = n->property["index"].toUInt();
-	for(auto n : target->nodes) tindices[n->id] = n->property["index"].toUInt();
-
-	QSet<QString> toNothingPairs;
-
-	for(auto pairs : fixedPairs){
-		for(auto sid : pairs.first)
-		{
-			if(!sindices.contains(sid)) continue;
-
-			int i = sindices[sid];
-
-			// Block assignment to all
-			for(int j = 0; j < M; j++)
-				m[i][j] = AssignmentLib::Edge::WORST_WEIGHT;
-			
-			// Only allow assignment to fixed set
-			for(auto tid : pairs.second)
-			{
-				if(!tindices.contains(tid)) 
-				{
-					toNothingPairs.insert(sid);
-					continue;
-				}
-
-				m[i][ tindices[tid] ] = 0.0;
-			}
+	for(int i = 0; i < rows; i++){
+		for(int j = 0; j < cols; j++){
+			double val = abs( m[i][j] );
+			tw->setItem(i, j, new QTableWidgetItem( QString::number(val, 'g', 1) ));
+			QColor c = starlab::qtJetColor( val );
+			tw->item(i,j)->setBackground( starlab::qtJetColor( val ) );
+			tw->item(i,j)->setTextColor( c.lighter() );
 		}
 	}
 
-	/// Setup bipartite graph matrix
-	for(int i = 0; i < N; i++)
-		for(int j = 0; j < M; j++)
-			mm[i][j] = AssignmentLib::Edge( pair<size_t, size_t>(i,j), m[i][j] );
-
-	AssignmentLib::BipartiteGraph bg( mm );
-	AssignmentLib::Hungarian h(bg);
-	h.HungarianAlgo();
-
-	QVector< QPair< QPair<QString,QString>, double > > assignments;
-	for(size_t i = 0; i < h.M.size(); i++)
-	{
-		auto p = h.M[i];
-
-		if(p.first >= N || p.second >= M) continue;
-
-		QString sid = source->nodes[p.first]->id;
-		QString tid = target->nodes[p.second]->id;
-
-		if( toNothingPairs.contains(sid) )
-			tid = "NOTHING";
-		
-		assignments.push_back( qMakePair( qMakePair(sid, tid), m[p.first][p.second] ) );
-	}
-
-	// Record found pairings
-	for(auto a : assignments)
-	{
-		QPair<QString,QString> pair = a.first;
-		//double cost = a.second;
-
-		result.push_back( qMakePair( QVector<QString>() << pair.first, QVector<QString>() << pair.second ) );
-	}
-
-	return result;
+	tw->show();
+	qApp->processEvents();
 }
 
 VectorPairStrings pairsDebugging( QVector<Pairing> pairs )
@@ -347,36 +333,76 @@ QVector<VectorPairings> manyToMany(Structure::Graph * sg, Structure::Graph * tg,
 }
 
 Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVector<QString> > tgroups, 
-						   mat m, Structure::Graph * sg, Structure::Graph * tg )
+						   mat m, Structure::Graph * sg, Structure::Graph * tg, int K)
 {
 	Assignments assignments;
 
 	// Map to index
-	QMap< int, QVector<QString> > sourceItem, targetItem;
+	std::map< int, QVector<QString> > sourceItem, targetItem;
 	for(auto items : sgroups) sourceItem[sourceItem.size()] = items;
 	for(auto items : tgroups) targetItem[targetItem.size()] = items;
 	sourceItem[sourceItem.size()] = nothingSet();
 	targetItem[targetItem.size()] = nothingSet();
 
 	// Record all initial costs
-	QMap< int, QVector< QPair<double, int> > > candidates;
+	std::map< int, QVector< QPair<double, int> > > candidates;
+	std::map< QString, QString > candidates_debug;
 	for(size_t i = 0; i < sgroups.size(); i++)
 	{
 		QVector< QPair<double, int> > diffs;
-		for(size_t j = 0; j < tgroups.size(); j++) diffs.push_back( qMakePair( m[i][j], j ) );
+
+		// Score based on minimum matching of the source and target group
+		for(size_t jj = 0; jj < tgroups.size(); jj++)
+		{
+			double minVal = DBL_MAX;
+			int si = -1;
+			int tj = -1;
+
+			for(auto sid : sgroups[i])
+			{
+				int i = sg->indexOfNode( sg->getNode(sid) );
+
+				for(auto tid : tgroups[jj])
+				{
+					int j = tg->indexOfNode( tg->getNode(tid) );
+					double val = abs(m[i][j]);
+
+					if(val < minVal){
+						si = i;
+						tj = j;
+						minVal = val;
+					}
+				}
+			}
+
+			diffs.push_back( qMakePair( m[si][tj], jj ) );
+		}
+
 		std::sort(diffs.begin(), diffs.end());
 		std::reverse(diffs.begin(), diffs.end());
 		candidates[i] = diffs;
+
+		// DEBUG:
+		QString curGroup = toQStringList(sgroups[i]).join("");
+		for(size_t j = 0; j < tgroups.size(); j++){
+			QString targetGroup = tgroups[diffs[j].second].front();
+			candidates_debug[ curGroup ] += targetGroup + "-";
+		}
 	}
 
 	// Collect only 'k' nearest candidates + nothing
-	int K = 3;
-	
-	std::map< int, std::set<int> > allowed;
+	std::map< int, std::vector<int> > allowed;
 	for(size_t i = 0; i < sgroups.size(); i++){
-		allowed[i] = std::set<int>();
-		for(int j = 0; j < K; j++) allowed[i].insert(candidates[i][j].second); // Good candidates
-		allowed[i].insert( tgroups.size() ); // Nothing
+		allowed[i] = std::vector<int>();
+		for(int j = 0; j < K; j++) allowed[i].push_back(candidates[i][j].second); // Good candidates
+		allowed[i].push_back( tgroups.size() ); // Nothing
+	}
+
+	// DEBUG:
+	std::map<QString, QString> allowed_debug;
+	for(size_t i = 0; i < sgroups.size(); i++){
+		for(int j = 0; j < K; j++)
+			allowed_debug[ toQStringList(sgroups[i]).join("") ] += tgroups[ allowed[i][j] ].front() + "-";
 	}
 
 	// Build full set of good assignments
@@ -455,6 +481,9 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	// Set of random colors
 	QVector<QColor> colors;
 	for(int i = 0; i < (int)source->nodes.size() * 2; i++) colors.push_back(starlab::qRandomColor2());
+	std::random_device rd;
+	std::mt19937 g(rd());
+	std::shuffle(colors.begin(), colors.end(), g);
 
 	QElapsedTimer prepareTimer, computeTimer;
 	prepareTimer.start();
@@ -466,8 +495,12 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	for(auto g : graphs) compute_part_measures( g );
 
 	mat m = buildDifferenceMatrix(source, target);
+	if(true) visualizeDifferenceMatrix(m, source, target);
 
-	Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target);
+	// Considered neighbors
+	int K = 3;
+
+	Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target, K);
 
 	// Ground-truth
 	{
@@ -520,9 +553,13 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.gcorr->addCorrespondences( p.first, p.second, -1 );
 
 			// Nodes coloring
-			for(auto sid : p.first) path.scolors[sid] = colors[i];
-			for(auto tid : p.second) path.tcolors[tid] = colors[i];
-			i++;
+			if( !p.first.contains("NOTHING") && !p.second.contains("NOTHING") )
+			{
+				for(auto sid : p.first) path.scolors[sid] = colors[i];
+				for(auto tid : p.second) path.tcolors[tid] = colors[i];
+
+				i++;
+			}
 		}
 
 		path.gcorr->isReady = true;
@@ -543,6 +580,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 		for(int pi = 0; pi < (int)paths.size(); pi++)
 		{
 			auto & path = paths[pi];
+			path.i = pi;
 
 			// Prepare blending
 			path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
@@ -554,6 +592,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 			// Collect error
 			double error = 0;
+
+			Structure::Graph sourceCopy( *source );
 			
 			for(auto g : path.scheduler->allGraphs)
 			{
@@ -561,12 +601,14 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 				compute_part_measures( g );
 
-				for(auto n_orig : source->nodes)
+				for(auto n_orig : sourceCopy.nodes)
 				{
 					Structure::Node * n = NULL;
-					for(auto ni : g->nodes)
-						if(ni->property.contains("original_ID") && ni->property.value("original_ID") == n_orig->id)
-							n = ni;
+					for(auto ni : g->nodes){
+						if(ni->property.contains("original_ID") && ni->property.value("original_ID") == n_orig->id){
+							n = ni; break;
+						}
+					}
 					if(!n) continue;
 
 					double partDiff = partDifference(n_orig->id, n->id, source, g);
@@ -603,8 +645,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 		int j = 0;
 		for( auto & p : paths )	p.idx = j++;
 
-		source->setColorAll(Qt::black);
-		target->setColorAll(Qt::black);
+		source->setColorAll(Qt::lightGray);
+		target->setColorAll(Qt::lightGray);
 
 		for( auto p : bestPath.pairs )
 		{

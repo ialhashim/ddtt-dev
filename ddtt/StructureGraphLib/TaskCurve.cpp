@@ -513,7 +513,7 @@ void TaskCurve::foldCurve( double t )
 	if(this->type == Task::GROW) 
 	{
 		Link * tl = target->getEdge( l->property["correspond"].toInt() );
-		delta = tl->delta();
+		if(tl) delta = tl->delta();
 	}
 
 	// Delta to me

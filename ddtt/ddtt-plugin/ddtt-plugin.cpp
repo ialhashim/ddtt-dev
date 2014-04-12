@@ -193,6 +193,10 @@ void ddtt::correspond()
 
 	QElapsedTimer timer; timer.start();
 
+	// Make first has smaller number of nodes
+	if(graphs.front()->nodes.size() > graphs.back()->nodes.size())
+		std::swap( graphs.front(), graphs.back() );
+
 	sc = new ShapeCorresponder( graphs.front(), graphs.back(), !w->ui->bestAssign->isChecked() );
 
 	drawArea()->clear();
@@ -210,8 +214,17 @@ void ddtt::correspond()
 	// View correspondences
 	DeformScene * ds = new DeformScene;
 
+	// Subsample paths
+	int MaxNumPaths = 200;
+	std::vector<bool> mask = subsampleMask(MaxNumPaths, sc->paths.size());
+	std::vector<DeformationPath> subsampled;
+	for(auto & path : sc->paths) if(mask[path.i]) subsampled.push_back(path);
+	sc->paths = subsampled;
+
+	int i = 0;
 	for(auto & path : sc->paths)
 	{
+		path.idx = i++;
 		ds->addDeformationPath( &path );
 	}
 }

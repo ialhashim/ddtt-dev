@@ -3,7 +3,7 @@
 DeformationPath::DeformationPath(){
     gcorr = NULL;
     weight = 0.0;
-    idx = i = 0;
+    idx = i = si = 0;
 }
 
 void DeformationPath::normalizeErrors()

@@ -25,6 +25,7 @@ public:
 
     int idx;
     int i;
+	int si;
     PropertyMap property;
 
     GraphCorresponder * gcorr;

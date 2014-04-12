@@ -588,9 +588,7 @@ void Scheduler::executeAll()
 
 	// Execute all tasks
 	for(double globalTime = globalStart; globalTime <= (globalEnd + timeStep); globalTime += timeStep)
-	{
-		QElapsedTimer timer; timer.start();
-
+    {
 		// DEBUG - per pass
 		activeGraph->clearDebug();
 
@@ -640,10 +638,13 @@ void Scheduler::executeAll()
 		// DEBUG:
 		activeGraph->clearDebug();
 
-		// UI - progress visual indicator:
-		int percent = globalTime * 100;
-		property["progress"] = percent;
-		emit( progressChanged(percent) );
+        if( isApplyChangesUI )
+        {
+            // UI - progress visual indicator:
+            int percent = globalTime * 100;
+            property["progress"] = percent;
+            emit( progressChanged(percent) );
+        }
 
 		if( isForceStop ) break;
 	}
@@ -697,6 +698,8 @@ void Scheduler::finalize()
 
 			// Morph nodes
 			foreach(Node * n, activeGraph->nodes){
+                if( Scheduler::shouldNotExist(n) ) continue;
+
 				Node * tn = targetGraph->getNode( n->property["correspond"].toString() );
 				Array1D_Vector3 finalGeometry = tn->controlPoints();
 				Array1D_Vector3 newGeometry;
@@ -719,6 +722,19 @@ void Scheduler::finalize()
 		modfiedTags.insert(totalExecutionTime() - (0.5 * Task::DEFAULT_LENGTH));
 		property["timeTags"].setValue(modfiedTags);
 	}
+}
+
+bool Scheduler::shouldNotExist( Structure::Node * n )
+{
+    bool isZeroGeometry = false;
+    bool isShrunk = false;
+    bool isNonCorrespond = false;
+
+    if(n->property.contains("zeroGeometry") && n->property.value("zeroGeometry").toBool()) isZeroGeometry = true;
+    if(n->property.contains("shrunk") && n->property.value("shrunk").toBool()) isShrunk = true;
+    if(!n->property.contains("correspond")) isNonCorrespond = true;
+
+    return isZeroGeometry || isShrunk || isNonCorrespond;
 }
 
 void Scheduler::drawDebug()

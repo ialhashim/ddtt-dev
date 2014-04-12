@@ -14,9 +14,11 @@ public:
 	DeformPathItemWidget(DeformationPath * usedPath = NULL);
 
 	DeformationPath * path;
+	QWidget * w;
 
     QSlider * slider;
     QLabel * label;
+	QPushButton * saveCorrButton;
 	QPushButton * executeButton;
 
 public slots:

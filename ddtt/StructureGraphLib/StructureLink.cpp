@@ -203,7 +203,16 @@ void Link::invertCoords( QString nodeID )
 
 Vector3d Link::delta()
 {
-	return position(n2->id) - position(n1->id);
+	Vector3d d(0,0,0), p1(0,0,0), p2(0,0,0);
+
+	if(n1 && n2)
+	{
+		p1 = position(n2->id);
+		p2 = position(n1->id);
+	}
+
+	d = p1 - p2;
+	return d;
 }
 
 void Link::pushState()

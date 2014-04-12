@@ -6,6 +6,7 @@
 #include <QSlider>
 #include <QLabel>
 #include <QLineEdit>
+#include <QFileDialog>
 #include "DeformPathItemWidget.h"
 #include "ShapeCorresponder.h"
 
@@ -46,6 +47,17 @@ void DeformPathItemWidget::init()
 		slider->setStyleSheet( style );
 		sublayout->addWidget(slider);
 
+		// Save Correspondence button
+		saveCorrButton = new QPushButton("Save..");
+		sublayout->addWidget(saveCorrButton);
+		connect(saveCorrButton, &QPushButton::clicked, [=](){ 
+			QString dpath = QFileInfo(path->gcorr->sg->property["name"].toString()).absolutePath() + "/";
+			QString g1n = path->gcorr->sg->name(), g2n = path->gcorr->tg->name();
+			QString defaultFilename = g1n+"_"+g2n;
+			QString filename = QFileDialog::getSaveFileName(0, "Save Correspondence", dpath + defaultFilename, "Correspondece files (*.txt)");
+			path->gcorr->saveCorrespondences( filename );
+		});
+
 		// Execute button
 		executeButton = new QPushButton("Execute..");
 		sublayout->addWidget(executeButton);
@@ -57,7 +69,7 @@ void DeformPathItemWidget::init()
 	}
     
 	// Messages
-	layout->addWidget(label = new QLabel("label"));
+	layout->addWidget(label = new QLabel( QString("Path %1 (%2)").arg(path->idx).arg(path->i) ));
 	//QLineEdit *numberEdit = new QLineEdit;layout->addWidget(numberEdit);
 
 	widget()->setLayout(layout);
@@ -68,8 +80,8 @@ void DeformPathItemWidget::init()
 
 void DeformPathItemWidget::sliderValueChanged(int val)
 {
-    label->setText( QString("In between: %1").arg(val) );
+    label->setText( QString("Path %1 (%2) - %3").arg(path->idx).arg(path->i).arg(QString("inbetween: %1").arg(val)) );
 
 	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() )
-		path->i = (double(val) / slider->maximum()) * (path->scheduler->allGraphs.size()-1);
+		path->si = (double(val) / slider->maximum()) * (path->scheduler->allGraphs.size()-1);
 }

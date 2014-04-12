@@ -3,6 +3,11 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 
+static inline QString shortName(QString name){
+	if(name.length() < 3) return name;
+	return QString("%1%2%3").arg(name.at(0)).arg(name.at(1)).arg(name.at(name.length()-1));
+}
+
 DeformPathItem::DeformPathItem(DeformationPath *usedPath) : path(usedPath){
 	m_rect = QRectF(0,0,800,600);
 }
@@ -68,21 +73,19 @@ void setLights()
 	glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
 	glEnable(GL_LIGHT0);
 
-	// Material
-	float mat_ambient[] = {0.1745f, 0.01175f, 0.01175f, 1.0f};
-	float mat_diffuse[] = {0.65f, 0.045f, 0.045f, 1.0f};
-	float mat_specular[] = {0.09f, 0.09f, 0.09f, 1.0f};
-	float high_shininess = 100;
+	if( false )
+	{
+		// Material
+		float mat_ambient[] = {0.15f, 0.15f, 0.15f, 1.0f};
+		float mat_diffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
+		float mat_specular[] = {0.09f, 0.09f, 0.09f, 1.0f};
+		float high_shininess = 100;
 
-	glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
-	glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
-	glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
-	glMaterialf(GL_FRONT, GL_SHININESS, high_shininess);
-}
-
-QString shortName(QString name){
-	if(name.length() < 3) return name;
-	return QString("%1%2%3").arg(name.at(0)).arg(name.at(1)).arg(name.at(name.length()-1));
+		glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
+		glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
+		glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+		glMaterialf(GL_FRONT, GL_SHININESS, high_shininess);
+	}
 }
 
 void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
@@ -121,13 +124,68 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	painter->drawText( QPoint(10,inbetween.top() + 20), QString("%1").arg(path->weight) );
 
 	// Draw assignments
+	painter->save();
 	{
 		QFont font("Monospace", 7); font.setStyleHint(QFont::TypeWriter);
 		painter->setFont(font);
 		//painter->drawText( QPoint(10,inbetween.top() + 30), "TestingAssignment");
 
+		QVector< QPair<double, QString> > ssorted, tsorted;
+		for(auto n : path->gcorr->sg->nodes) ssorted.push_back( qMakePair(n->bbox().center().z(), n->id) ); qSort(ssorted);
+		for(auto n : path->gcorr->tg->nodes) tsorted.push_back( qMakePair(n->bbox().center().z(), n->id) ); qSort(tsorted);
+		
+		QMap<QString,int> sorder, torder;
+		QRectF titleRect(0,0,30,10);
+		QTextOption aligned(Qt::AlignAbsolute|Qt::AlignHCenter|Qt::AlignVCenter);
+		int padding = 3; // px;
 
+		painter->setPen(QPen(Qt::black, 1));
+
+		for(auto n : ssorted){
+			int row = sorder.size();
+			sorder[n.second] = row;
+			titleRect.moveTop( inbetween.top() + (row * (titleRect.height() + padding)) );
+			titleRect.moveRight( srect.left() - (titleRect.width() * 3) );
+			if(path->scolors.contains(n.second)) painter->setBrush(QBrush(path->scolors[n.second])); else painter->setBrush(Qt::NoBrush);
+			painter->drawRoundedRect(titleRect, 3, 3);
+			painter->drawText( titleRect, shortName(n.second), aligned );
+		}
+
+		for(auto n : tsorted){
+			int row = torder.size();
+			torder[n.second] = row;
+			titleRect.moveTop( inbetween.top() + (row * (titleRect.height() + padding)) );
+			titleRect.moveRight( srect.left() );
+			if(path->tcolors.contains(n.second)) painter->setBrush(QBrush(path->tcolors[n.second])); else painter->setBrush(Qt::NoBrush);
+			painter->drawRoundedRect(titleRect, 3, 3);
+			painter->drawText( titleRect, shortName(n.second), aligned );
+		}
+
+		// Draw assignments
+		QRectF stitleRect = titleRect, ttitleRect = titleRect;
+		for(auto pair : path->pairs)
+		{
+			if(pair.first.contains("NOTHING") || pair.second.contains("NOTHING")) continue; // don't show to 'null'
+
+			for(auto s : pair.first){
+				int srow = sorder.contains(s) ? sorder[s] : sorder.size();
+
+				for(auto t : pair.second){
+					int trow = torder.contains(t) ? torder[t] : torder.size();
+
+					stitleRect.moveTop( inbetween.top() + (srow * (titleRect.height() + padding)) );
+					stitleRect.moveRight( srect.left() - (titleRect.width() * 3) );
+
+					ttitleRect.moveTop( inbetween.top() + (trow * (titleRect.height() + padding)) );
+					ttitleRect.moveRight( srect.left() );
+				
+					int hheight = stitleRect.height() * 0.5;
+					painter->drawLine(stitleRect.topRight() + QPointF(0, hheight), ttitleRect.topLeft() + QPointF(0, hheight));
+				}
+			}
+		}
 	}
+	painter->restore();
 
 	// Draw border
     painter->setPen(QPen(Qt::gray, 1));
@@ -136,7 +194,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 	// Draw 3D parts
 	painter->beginNativePainting();
-	setLights();
+	//setLights();
 	setCamera2(srect, path->gcorr->sg);
 
 	// Draw source
@@ -147,8 +205,10 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		for(auto n : g->nodes) 
 		{
-			glColor3d(0,0,0);
+			glColor3d(0.8,0.8,0.8);
 			if(path->scolors.contains(n->id)) glColorQt(path->scolors[n->id]);
+
+			glDisable(GL_LIGHTING);
 			n->draw( false, true );
 		}
 	}
@@ -161,8 +221,10 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		for(auto n : g->nodes) 
 		{
-			glColor3d(0,0,0);
+			glColor3d(0.8,0.8,0.8);
 			if(path->tcolors.contains(n->id)) glColorQt(path->tcolors[n->id]);
+
+			glDisable(GL_LIGHTING);
 			n->draw( false, true );
 		}
 	}
@@ -170,17 +232,25 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	// Draw in between
 	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() && path->property["isReady"].toBool() )
 	{ 
-        Structure::Graph * g = path->scheduler->allGraphs[path->i];
+        Structure::Graph * g = path->scheduler->allGraphs[path->si];
 
 		glViewport(dx + inbetween.x(), dy + viewport[3] - inbetween.height() - inbetween.top(), inbetween.width(), inbetween.height());
 
 		for(auto n : g->nodes) 
 		{
-			glColor3d(0,0,0);
+			if( Scheduler::shouldNotExist(n) ) continue;
+
+			glColor3d(0.8,0.8,0.8);
 
 			QString sid = n->property["original_ID"].toString();
-			if(path->scolors.contains(sid)) glColorQt(path->scolors[sid]);
+			QString tid = n->property["correspond"].toString();
 
+			if(path->scolors.contains(sid)) 
+				glColorQt(path->scolors[sid]);
+			else if(path->tcolors.contains(tid))
+				glColorQt(path->tcolors[tid]);
+
+			glDisable(GL_LIGHTING);
 			n->draw( false, true );
 		}
 	}

@@ -15,6 +15,9 @@ CONFIG(debug, debug|release) {
     CFG = debug
 } else {
     CFG = release
+
+    DEFINES += QT_NO_DEBUG
+    DEFINES += QT_NO_DEBUG_OUTPUT
 }
 
 # Library name and destination
