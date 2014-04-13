@@ -117,7 +117,7 @@
         </property>
        </widget>
       </item>
-      <item row="9" column="0" colspan="2">
+      <item row="10" column="0" colspan="2">
        <widget class="QPushButton" name="correspondButton">
         <property name="text">
          <string>Correspond..</string>
@@ -154,6 +154,13 @@
        <widget class="QPushButton" name="clearButton">
         <property name="text">
          <string>Clear</string>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="1">
+       <widget class="QPushButton" name="loadGraphs">
+        <property name="text">
+         <string>Load..</string>
         </property>
        </widget>
       </item>

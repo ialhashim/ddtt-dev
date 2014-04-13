@@ -15,6 +15,14 @@ CONFIG(debug, debug|release) {
 LIBS += -L$$PWD/../NURBS/$$CFG/lib -lNURBS
 INCLUDEPATH += ../NURBS
 
+# Surface Reconstruction library
+LIBS += -L$$PWD/../Reconstruction/$$CFG/lib -lReconstruction
+INCLUDEPATH += ../Reconstruction
+
+# Splat Rendering library
+LIBS += -L$$PWD/../GlSplatRendererLib/$$CFG/lib -lGlSplatRendererLib
+INCLUDEPATH += ../GlSplatRendererLib
+
 # StructureGraph library
 LIBS += -L$$PWD/../StructureGraphLib/$$CFG/lib -lStructureGraphLib
 INCLUDEPATH += ../StructureGraphLib
@@ -23,9 +31,7 @@ INCLUDEPATH += ../StructureGraphLib
 LIBS += -L$$PWD/../AuctionLIB/$$CFG/lib -lAuctionLib
 INCLUDEPATH += ../AuctionLIB
 
-HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h DeformPathItem.h DeformPathItemWidget.h DeformScene.h \
-    DeformationPath.h
-SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp DeformPathItem.cpp DeformPathItemWidget.cpp DeformScene.cpp \
-    DeformationPath.cpp
+HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h DeformPathItem.h DeformPathItemWidget.h DeformScene.h DeformationPath.h
+SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp DeformPathItem.cpp DeformPathItemWidget.cpp DeformScene.cpp DeformationPath.cpp
 RESOURCES += ddtt-plugin.qrc
 FORMS += ddtt_widget.ui

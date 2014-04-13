@@ -631,11 +631,11 @@ void TopoBlender::generateSuperGraphs()
 	// Correspond nodes in super graphs
 	correspondSuperNodes();
 
-	// Equalize resolution for corresponded nodes
-	equalizeSuperNodeResolutions();
-
 	// Equalize type for corresponded nodes
 	equalizeSuperNodeTypes();
+
+	// Equalize resolution for corresponded nodes
+	equalizeSuperNodeResolutions();
 
 	// Visualization - color similar items
 	foreach(Structure::Node * n, super_sg->nodes)

@@ -10,6 +10,7 @@
 #include <QDebug>
 #include "next_combination.h"
 #include "ShapeCorresponder.h"
+#include "SynthesisManager.h"
 
 #include "GenericGraph.h"
 #include "StructureGraph.h"
@@ -28,25 +29,6 @@ QStringList toQStringList( const QVector<QString> & v ){
 }
 
 #include "cartesian.h"
-
-#include <QStack>
-QStack<double> nurbsQuality;
-static void inline beginFastNURBS(){
-	nurbsQuality.clear();
-	nurbsQuality.push(TIME_ITERATIONS);
-	nurbsQuality.push(CURVE_TOLERANCE);
-	nurbsQuality.push(RombergIntegralOrder);
-
-	TIME_ITERATIONS			= 6;
-	CURVE_TOLERANCE			= 1e-05;
-	RombergIntegralOrder	= 5;
-}
-static void inline endFastNURBS(){
-	if(nurbsQuality.size() < 3) return;
-	RombergIntegralOrder = nurbsQuality.pop();
-	CURVE_TOLERANCE = nurbsQuality.pop();
-	TIME_ITERATIONS = nurbsQuality.pop();
-}
 
 void measure_position(Structure::Graph * graph)
 {
@@ -344,6 +326,9 @@ Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVecto
 	sourceItem[sourceItem.size()] = nothingSet();
 	targetItem[targetItem.size()] = nothingSet();
 
+	// Bounds
+	K = qMin(K, tgroups.size());
+
 	// Record all initial costs
 	std::map< int, QVector< QPair<double, int> > > candidates;
 	std::map< QString, QString > candidates_debug;
@@ -355,8 +340,8 @@ Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVecto
 		for(size_t jj = 0; jj < tgroups.size(); jj++)
 		{
 			double minVal = DBL_MAX;
-			int si = -1;
-			int tj = -1;
+			int si = 0;
+			int tj = 0;
 
 			for(auto sid : sgroups[i])
 			{
@@ -498,7 +483,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	if(true) visualizeDifferenceMatrix(m, source, target);
 
 	// Considered neighbors
-	int K = 3;
+	int K = 2;
+	bool isSubsample = false;
 
 	Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target, K);
 
@@ -538,6 +524,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	// Prepare deformation paths
 	for( auto a : assignments )
 	{
+		int pathIndex = paths.size();
+
 		paths.push_back( DeformationPath() );
 		DeformationPath & path = paths.back();
 
@@ -564,11 +552,29 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 		path.gcorr->isReady = true;
 		path.gcorr->correspondAllNodes();
+		
+		path.i = pathIndex;
 	}
 
 	// Timing
 	property["prepareTime"].setValue( (int)prepareTimer.elapsed() );
 	computeTimer.start();
+
+	// Stats
+	property["pathsCount"].setValue( (int)paths.size() );
+
+	// Subsample paths
+	if( isSubsample )
+	{
+		int MaxNumPaths = 2;
+		std::vector<bool> mask = subsampleMask(MaxNumPaths, paths.size());
+		std::vector<DeformationPath> subsampled;
+		for(auto & path : paths){
+			if(mask[path.i]) 
+				subsampled.push_back(path);
+		}
+		paths = subsampled;
+	}
 
 	/// Find best correspondence
 	DeformationPath bestPath;
@@ -597,7 +603,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			
 			for(auto g : path.scheduler->allGraphs)
 			{
-				g->moveBottomCenterToOrigin();
+				g->moveBottomCenterToOrigin( true );
 
 				compute_part_measures( g );
 
@@ -655,7 +661,4 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			for( auto tid : p.second ) target->setColorFor(tid, c);
 		}
 	}
-
-	// Stat
-	property["pathsCount"].setValue( (int)paths.size() );
 }

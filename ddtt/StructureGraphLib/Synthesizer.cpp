@@ -63,6 +63,14 @@ RMF Synthesizer::consistentFrame( Structure::Curve * curve, Array1D_Vector4d & c
 	return rmf;
 }
 
+Array1D_Vector4d sheetCorners(){
+    Array1D_Vector4d corners;
+    corners.push_back(Vec4d(0,0,0,0));
+    corners.push_back(Vec4d(1,0,0,0));
+    corners.push_back(Vec4d(0,1,0,0));
+    corners.push_back(Vec4d(1,1,0,0));
+    return corners;
+}
 
 /// SAMPLING
 // Ray parameters from points
@@ -121,6 +129,9 @@ QVector<ParameterCoord> Synthesizer::genPointCoordsSheet( Structure::Sheet * she
 
 	Array2D_Vector4d sheetCoords = sheet->discretizedPoints(resolution);
 	Array1D_Vector4d allCoords;
+
+    if( sheetCoords.empty() )
+        sheetCoords.push_back( sheetCorners() );
 
 	qDebug() << "Sheet resolution count = " << sheetCoords.size();
 
@@ -455,7 +466,8 @@ void Synthesizer::sampleGeometryCurve( QVector<ParameterCoord> samples, Structur
 		}
 		else
 		{
-			Vector3 isect = octree.closestIntersectionPoint(ray, &faceIndex);
+            Vector3 isect = octree.closestIntersectionPoint(ray, &faceIndex, true);
+            if(faceIndex < 0) faceIndex = 0;
 
 			// Store the offset
 			offsets[ i ] = (Vector3(isect - rayPos.cast<double>())).norm();
@@ -521,8 +533,9 @@ void Synthesizer::sampleGeometrySheet( QVector<ParameterCoord> samples, Structur
 		else
 		{
 			// Store the offset
-			Vector3 isect = octree.closestIntersectionPoint(ray, &faceIndex);
+            Vector3 isect = octree.closestIntersectionPoint(ray, &faceIndex, true);
 			offsets[i] = (isect - rayPos).norm();
+            if(faceIndex < 0) faceIndex = 0;
 
 			// Code the normal relative to local frame
 			vn = fnormals[SurfaceMesh::Model::Face(faceIndex)];

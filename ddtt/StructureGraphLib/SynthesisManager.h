@@ -7,7 +7,7 @@
 
 #include "StructureGraph.h"
 
-#include "GLVertex.h"
+#include "../GlSplatRendererLib/GLVertex.h"
 
 // Forward declare
 class GraphCorresponder;

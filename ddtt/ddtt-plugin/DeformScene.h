@@ -15,6 +15,7 @@ public:
 	void addDeformationPath( DeformationPath * path );
 
 	QGraphicsView * gview;
+	QVector<QGraphicsItemGroup *> groups;
 
 protected:
     void drawBackground ( QPainter * painter, const QRectF & rect );
@@ -24,6 +25,7 @@ protected:
 
 public slots:
 	void init();
+	void pack();
 
 signals:
 	void viewPortReady();

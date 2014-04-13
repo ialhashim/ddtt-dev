@@ -632,7 +632,7 @@ void TaskCurve::executeMorphCurve( double t )
 	Array1D_Vector3 newPntsT = Curve::decodeCurve(property["cpCoordsT"].value<CurveEncoding>(), pointA, pointB);
 
 	Array1D_Vector3 blendedPnts;
-	for(int i = 0; i < (int)newPnts.size(); i++) 
+    for(int i = 0; i < (int)newPnts.size(); i++)
 		blendedPnts.push_back( AlphaBlend(t, newPnts[i], newPntsT[i]) );
 	
 	n->setControlPoints( blendedPnts );

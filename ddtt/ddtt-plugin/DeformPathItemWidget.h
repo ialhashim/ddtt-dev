@@ -11,7 +11,7 @@ class DeformPathItemWidget : public QGraphicsProxyWidget
 {
 	Q_OBJECT
 public:
-	DeformPathItemWidget(DeformationPath * usedPath = NULL);
+	DeformPathItemWidget(int width, int height, DeformationPath * usedPath = NULL);
 
 	DeformationPath * path;
 	QWidget * w;
@@ -19,6 +19,7 @@ public:
     QSlider * slider;
     QLabel * label;
 	QPushButton * saveCorrButton;
+	QPushButton * renderButton;
 	QPushButton * executeButton;
 
 public slots:

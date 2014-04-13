@@ -2,14 +2,15 @@
 #include "DeformPathItem.h"
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include "SynthesisManager.h"
 
 static inline QString shortName(QString name){
 	if(name.length() < 3) return name;
 	return QString("%1%2%3").arg(name.at(0)).arg(name.at(1)).arg(name.at(name.length()-1));
 }
 
-DeformPathItem::DeformPathItem(DeformationPath *usedPath) : path(usedPath){
-	m_rect = QRectF(0,0,800,600);
+DeformPathItem::DeformPathItem(int width, int height, DeformationPath *usedPath) : path(usedPath){
+	m_rect = QRectF(0,0,width,height);
 }
 
 QRectF DeformPathItem::boundingRect() const{
@@ -25,24 +26,12 @@ void qgluPerspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zF
 	glFrustum(xmin, xmax, ymin, ymax, zNear, zFar);
 }
 
-void setCamera()
-{
-	qgluPerspective(60, 1.0, 0.1, 40);
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-
-	glTranslatef(0, 0, -3);
-	glRotatef(50, 1, 0, 0);
-	glRotatef(10, 0, 0, 1);
-}
-
-QRectF setCamera2(QRectF boundingRect, Structure::Graph * g)
+QRectF setCamera(QRectF boundingRect, Structure::Graph * g)
 {
 	qglviewer::Camera * camera = new qglviewer::Camera;
 
 	camera->setUpVector(qglviewer::Vec(0,0,1));
-	camera->setPosition(qglviewer::Vec(2,-2,1.5));
+	camera->setPosition(qglviewer::Vec(-2,-2,0.8));
 	camera->lookAt(qglviewer::Vec());
 	camera->setSceneRadius( 10 );
 	camera->showEntireScene();
@@ -68,24 +57,29 @@ QRectF setCamera2(QRectF boundingRect, Structure::Graph * g)
 
 void setLights()
 {
-	glEnable(GL_LIGHTING);
-	GLfloat lightColor[] = {0.9f, 0.9f, 0.9f, 1.0f};
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
+	// Setup lights and material
+	GLfloat ambientLightColor[] = {0.06f,0.06f,0.06f,1};
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambientLightColor);
+
+	GLfloat diffuseLightColor[] = {0.8f,0.8f,0.8f,1};
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseLightColor);
+
+	GLfloat specularLightColor[] = {0.95f,0.95f,0.95f,1};
+	glLightfv(GL_LIGHT0, GL_SPECULAR, specularLightColor);
+
+	float posLight0[] = { 3, -3, 3, 0 };
+	glLightfv(GL_LIGHT0, GL_POSITION, posLight0);
+
 	glEnable(GL_LIGHT0);
+	glEnable(GL_LIGHTING);
 
-	if( false )
-	{
-		// Material
-		float mat_ambient[] = {0.15f, 0.15f, 0.15f, 1.0f};
-		float mat_diffuse[] = {0.8f, 0.8f, 0.8f, 1.0f};
-		float mat_specular[] = {0.09f, 0.09f, 0.09f, 1.0f};
-		float high_shininess = 100;
+	glEnable(GL_COLOR_MATERIAL);
+	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 
-		glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
-		glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
-		glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
-		glMaterialf(GL_FRONT, GL_SHININESS, high_shininess);
-	}
+	// Specular lighting
+	float specReflection[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+	glMaterialfv(GL_FRONT, GL_SPECULAR, specReflection);
+	glMateriali(GL_FRONT, GL_SHININESS, 40);
 }
 
 void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, QWidget *)
@@ -97,20 +91,20 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	QPointF sceneP = mapToScene( QPointF(0,0) );
 	QPoint viewP = view->mapFromScene(sceneP);
 
-    double dy = -viewP.y();
-    double dx = viewP.x();
+	double dy = -viewP.y();
+	double dx = viewP.x();
 
-    if( dy > viewport[3] || dy < -viewport[3] || dx > viewport[2] || dx < -viewport[2] ) return;
+	if( dy > viewport[3] || dy < -viewport[3] || dx > viewport[2] || dx < -viewport[2] ) return;
 
-    QRectF m_rect_scaled = view->transform().mapRect(m_rect);
-    int width = m_rect_scaled.width();
-    int height = m_rect_scaled.height();
-    int smallWidth = height * 0.5;
-    int tinyWidth = height * (1.0 / 8.0);
+	QRectF m_rect_scaled = view->transform().mapRect(m_rect);
+	int width = m_rect_scaled.width();
+	int height = m_rect_scaled.height();
+	int smallWidth = height * 0.5;
+	int tinyWidth = height * (1.0 / 6.0);
 
-    QRectF srect(width - smallWidth ,0,smallWidth,smallWidth);
-    QRectF trect(width - smallWidth,smallWidth,smallWidth,smallWidth);
-    QRectF inbetween(0, tinyWidth, width - smallWidth, height - tinyWidth);
+	QRectF srect(width - smallWidth ,0,smallWidth,smallWidth);
+	QRectF trect(width - smallWidth,smallWidth,smallWidth,smallWidth);
+	QRectF inbetween(0, tinyWidth, width - smallWidth, height - tinyWidth);
 
 	// DEBUG:
 	if( false ){
@@ -133,7 +127,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 		QVector< QPair<double, QString> > ssorted, tsorted;
 		for(auto n : path->gcorr->sg->nodes) ssorted.push_back( qMakePair(n->bbox().center().z(), n->id) ); qSort(ssorted);
 		for(auto n : path->gcorr->tg->nodes) tsorted.push_back( qMakePair(n->bbox().center().z(), n->id) ); qSort(tsorted);
-		
+
 		QMap<QString,int> sorder, torder;
 		QRectF titleRect(0,0,30,10);
 		QTextOption aligned(Qt::AlignAbsolute|Qt::AlignHCenter|Qt::AlignVCenter);
@@ -178,7 +172,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 					ttitleRect.moveTop( inbetween.top() + (trow * (titleRect.height() + padding)) );
 					ttitleRect.moveRight( srect.left() );
-				
+
 					int hheight = stitleRect.height() * 0.5;
 					painter->drawLine(stitleRect.topRight() + QPointF(0, hheight), ttitleRect.topLeft() + QPointF(0, hheight));
 				}
@@ -188,14 +182,14 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	painter->restore();
 
 	// Draw border
-    painter->setPen(QPen(Qt::gray, 1));
-    if(this->parentItem()->isSelected()) painter->setPen(QPen(Qt::blue, 5));
-    painter->drawRect(boundingRect());
+	painter->setPen(QPen(Qt::gray, 1));
+	if(this->parentItem()->isSelected()) painter->setPen(QPen(Qt::blue, 5));
+	painter->drawRect(boundingRect());
 
 	// Draw 3D parts
 	painter->beginNativePainting();
 	//setLights();
-	setCamera2(srect, path->gcorr->sg);
+	setCamera(srect, path->gcorr->sg);
 
 	// Draw source
 	{
@@ -203,7 +197,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		glViewport(dx + srect.x(), dy + viewport[3] - srect.height() - srect.top(), srect.width(), srect.height());
 
-		for(auto n : g->nodes) 
+		for(auto n : g->nodes)
 		{
 			glColor3d(0.8,0.8,0.8);
 			if(path->scolors.contains(n->id)) glColorQt(path->scolors[n->id]);
@@ -219,7 +213,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		glViewport(dx + trect.x(), dy + viewport[3] - trect.height() - trect.top(), trect.width(), trect.height());
 
-		for(auto n : g->nodes) 
+		for(auto n : g->nodes)
 		{
 			glColor3d(0.8,0.8,0.8);
 			if(path->tcolors.contains(n->id)) glColorQt(path->tcolors[n->id]);
@@ -231,12 +225,12 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 	// Draw in between
 	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() && path->property["isReady"].toBool() )
-	{ 
-        Structure::Graph * g = path->scheduler->allGraphs[path->si];
+	{
+		Structure::Graph * g = path->scheduler->allGraphs[path->si];
 
 		glViewport(dx + inbetween.x(), dy + viewport[3] - inbetween.height() - inbetween.top(), inbetween.width(), inbetween.height());
 
-		for(auto n : g->nodes) 
+		for(auto n : g->nodes)
 		{
 			if( Scheduler::shouldNotExist(n) ) continue;
 
@@ -245,13 +239,30 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 			QString sid = n->property["original_ID"].toString();
 			QString tid = n->property["correspond"].toString();
 
-			if(path->scolors.contains(sid)) 
+			if(path->scolors.contains(sid))
 				glColorQt(path->scolors[sid]);
 			else if(path->tcolors.contains(tid))
 				glColorQt(path->tcolors[tid]);
 
 			glDisable(GL_LIGHTING);
 			n->draw( false, true );
+		}
+
+		// Draw with surface
+		if(path->property.contains("synthManager"))
+		{
+			SynthesisManager* sm = path->property["synthManager"].value<SynthesisManager*>();
+			if( sm )
+			{
+				setLights();
+				glEnable(GL_DEPTH_TEST);
+				glClear(GL_DEPTH_BUFFER_BIT);
+
+				sm->color = Qt::red;
+				sm->drawSynthesis( g );
+
+				glDisable(GL_DEPTH_TEST);
+			}
 		}
 	}
 

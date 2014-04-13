@@ -34,6 +34,7 @@ void ddtt::create()
 		connect(w->ui->testButton, SIGNAL(clicked()), SLOT(execute()));
 		connect(w->ui->clearButton, SIGNAL(clicked()), SLOT(clear()));
 
+		connect(w->ui->loadGraphs, SIGNAL(clicked()), SLOT(loadGraphs()));
 		connect(w->ui->correspondButton, SIGNAL(clicked()), SLOT(correspond()));
 
 		dockwidget->setWidget(w);
@@ -44,7 +45,7 @@ void ddtt::create()
 		drawArea()->setShortcut(QGLViewer::DRAW_AXIS, Qt::Key_A);
 		drawArea()->setShortcut(QGLViewer::DRAW_GRID, Qt::Key_G);
 
-		w->ui->correspondButton->click();
+		//w->ui->correspondButton->click();
 	}
 }
 
@@ -151,7 +152,7 @@ void ddtt::loadModels(QStringList fileNames)
 
 void ddtt::loadGraphs()
 {
-	if( graphs.isEmpty() )
+	if( graphs.size() < 2 )
 	{
 		loadModels(QFileDialog::getOpenFileNames(0, "Open Model", 
 			mainWindow()->settings()->getString("lastUsedDirectory"), "Model Files (*.xml)"));
@@ -214,19 +215,19 @@ void ddtt::correspond()
 	// View correspondences
 	DeformScene * ds = new DeformScene;
 
-	// Subsample paths
-	int MaxNumPaths = 200;
-	std::vector<bool> mask = subsampleMask(MaxNumPaths, sc->paths.size());
-	std::vector<DeformationPath> subsampled;
-	for(auto & path : sc->paths) if(mask[path.i]) subsampled.push_back(path);
-	sc->paths = subsampled;
+	int limit = 10;
 
 	int i = 0;
+	
 	for(auto & path : sc->paths)
 	{
 		path.idx = i++;
 		ds->addDeformationPath( &path );
+
+		if(limit > 0 && i > limit) break; 
 	}
+
+	ds->pack();
 }
 
 bool ddtt::keyPressEvent(QKeyEvent* event)

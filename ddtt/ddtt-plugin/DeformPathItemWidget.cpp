@@ -10,13 +10,14 @@
 #include "DeformPathItemWidget.h"
 #include "ShapeCorresponder.h"
 
-DeformPathItemWidget::DeformPathItemWidget(DeformationPath * usedPath) : path(usedPath)
+DeformPathItemWidget::DeformPathItemWidget(int width, int height, DeformationPath * usedPath) : path(usedPath)
 {
 	// Create a widget with a slider and a progress bar
 	QWidget * w = new QWidget;
 
-	int width = 800 - (600 * 0.5);
-	int height = 75;
+	width = width - (height * 0.5);
+	height = (1.0/6.0) * height;
+
 	w->setMinimumSize(width, height);
 	w->setMaximumSize(width, height);
 
@@ -56,6 +57,17 @@ void DeformPathItemWidget::init()
 			QString defaultFilename = g1n+"_"+g2n;
 			QString filename = QFileDialog::getSaveFileName(0, "Save Correspondence", dpath + defaultFilename, "Correspondece files (*.txt)");
 			path->gcorr->saveCorrespondences( filename );
+		});
+
+		// Render samples
+		renderButton = new QPushButton("Render..");
+		sublayout->addWidget(renderButton);
+		connect(renderButton, &QPushButton::clicked, [=](){
+			this->setEnabled(false);
+
+			path->renderSamples();
+
+			this->setEnabled(true);
 		});
 
 		// Execute button

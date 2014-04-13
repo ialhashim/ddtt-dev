@@ -38,6 +38,7 @@ public:
     static double maxWeight( const std::vector<DeformationPath> & paths );
 	static void normalize( std::vector<DeformationPath> & paths );
 
+	void renderSamples();
 	void execute();
 };
 

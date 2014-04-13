@@ -56,20 +56,25 @@ void DeformScene::drawForeground(QPainter *painter, const QRectF &rect)
 
 void DeformScene::addDeformationPath(DeformationPath * path)
 {
+	int w = 500;
+	int h = w * 0.75;
+
 	// Create a DeformationItem and its widget
-	DeformPathItem * ditem = new DeformPathItem(path);
-	DeformPathItemWidget * dwidget = new DeformPathItemWidget(path);
+	DeformPathItem * ditem = new DeformPathItem(w,h, path);
+	DeformPathItemWidget * dwidget = new DeformPathItemWidget(w,h, path);
 	
 	QGraphicsItemGroup * group = new QGraphicsItemGroup;
 
 	group->addToGroup(ditem);
 	group->addToGroup(dwidget);
-	group->setPos(0, path->idx * 600);
+	group->setPos(0, path->idx * h);
 	group->setAcceptHoverEvents(true);
 	group->setFlags( QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable );
 	group->setHandlesChildEvents(false); // items in group get user inputs
 
 	addItem(group); 
+
+	groups.push_back(group);
 }
 
 void DeformScene::wheelEvent( QGraphicsSceneWheelEvent *e )
@@ -89,4 +94,27 @@ void DeformScene::wheelEvent( QGraphicsSceneWheelEvent *e )
         view->centerOn(view->mapToScene(e->pos().toPoint()));
         e->accept();
     }
+}
+
+void DeformScene::pack()
+{
+	int numItems = this->items().size();
+
+	int itemWidth = groups.front()->boundingRect().width();
+	int itemHeight = groups.front()->boundingRect().height();
+
+	int viewWidth = this->views().front()->width();
+	int viewHeight = this->views().front()->height();
+
+	int xi = 0, row = 0;
+
+	for(auto item : groups)
+	{
+		if((xi * itemWidth) > viewWidth) {xi = 0; row++;}
+		
+		int x = xi++ * itemWidth;
+		int y = row * itemHeight;
+
+		item->setPos(x,y);
+	}
 }

@@ -9,8 +9,8 @@ class DeformPathItem : public QGraphicsObject
 {
 	Q_OBJECT
 public:
-    DeformPathItem(DeformationPath * usedPath = NULL);
-    PropertyMap property;
+    DeformPathItem(int width, int height, DeformationPath * usedPath);
+	PropertyMap property;
 
 	DeformationPath * path;
 	QRectF m_rect;

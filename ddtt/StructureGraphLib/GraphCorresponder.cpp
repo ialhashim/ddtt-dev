@@ -55,12 +55,12 @@ QString baseName(QString s){
 
 QString GraphCorresponder::sgName()
 {
-	return baseName(sg->property["name"].toString());
+    return baseName(sg->property.value("name").toString());
 }
 
 QString GraphCorresponder::tgName()
 {
-	return baseName(tg->property["name"].toString());
+    return baseName(tg->property.value("name").toString());
 }
 
 // Matrix operations
