@@ -713,6 +713,16 @@ void Graph::draw( QGLViewer * drawArea )
     */
 }
 
+void Graph::drawNodeMesh(QString nid, QColor meshColor)
+{
+    Node * n = getNode(nid);
+    if(n->property.contains("mesh"))
+    {
+        QSharedPointer<SurfaceMeshModel> nodeMesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+        QuickMeshDraw::drawMeshSolid( nodeMesh.data(), meshColor );
+    }
+}
+
 void Graph::drawAABB()
 {
 	if (!property.contains("AABB"))

@@ -139,7 +139,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 			int row = sorder.size();
 			sorder[n.second] = row;
 			titleRect.moveTop( inbetween.top() + (row * (titleRect.height() + padding)) );
-			titleRect.moveRight( srect.left() - (titleRect.width() * 3) );
+			titleRect.moveRight( srect.left() - (titleRect.width() * 2) );
 			if(path->scolors.contains(n.second)) painter->setBrush(QBrush(path->scolors[n.second])); else painter->setBrush(Qt::NoBrush);
 			painter->drawRoundedRect(titleRect, 3, 3);
 			painter->drawText( titleRect, shortName(n.second), aligned );
@@ -168,7 +168,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 					int trow = torder.contains(t) ? torder[t] : torder.size();
 
 					stitleRect.moveTop( inbetween.top() + (srow * (titleRect.height() + padding)) );
-					stitleRect.moveRight( srect.left() - (titleRect.width() * 3) );
+					stitleRect.moveRight( srect.left() - (titleRect.width() * 2) );
 
 					ttitleRect.moveTop( inbetween.top() + (trow * (titleRect.height() + padding)) );
 					ttitleRect.moveRight( srect.left() );
@@ -188,8 +188,13 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 	// Draw 3D parts
 	painter->beginNativePainting();
-	//setLights();
+
 	setCamera(srect, path->gcorr->sg);
+	setLights();
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	bool isDrawMeshes = true;
 
 	// Draw source
 	{
@@ -199,11 +204,18 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		for(auto n : g->nodes)
 		{
-			glColor3d(0.8,0.8,0.8);
+			QColor c = QColor::fromRgbF(0.8,0.8,0.8);
+			glColor3d(c.redF(), c.greenF(), c.blueF());
 			if(path->scolors.contains(n->id)) glColorQt(path->scolors[n->id]);
-
 			glDisable(GL_LIGHTING);
 			n->draw( false, true );
+
+			if( isDrawMeshes )
+			{
+				glEnable(GL_LIGHTING);
+				if(path->scolors.contains(n->id)) c = path->scolors[n->id];
+				g->drawNodeMesh(n->id, c);
+			}
 		}
 	}
 
@@ -215,11 +227,18 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 		for(auto n : g->nodes)
 		{
-			glColor3d(0.8,0.8,0.8);
+			QColor c = QColor::fromRgbF(0.8,0.8,0.8);
+			glColor3d(c.redF(), c.greenF(), c.blueF());
 			if(path->tcolors.contains(n->id)) glColorQt(path->tcolors[n->id]);
-
 			glDisable(GL_LIGHTING);
 			n->draw( false, true );
+
+			if( isDrawMeshes )
+			{
+				glEnable(GL_LIGHTING);
+				if(path->tcolors.contains(n->id)) c = path->tcolors[n->id];
+				g->drawNodeMesh(n->id, c);
+			}
 		}
 	}
 
@@ -254,17 +273,15 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 			SynthesisManager* sm = path->property["synthManager"].value<SynthesisManager*>();
 			if( sm )
 			{
-				setLights();
-				glEnable(GL_DEPTH_TEST);
-				glClear(GL_DEPTH_BUFFER_BIT);
-
+				glEnable(GL_LIGHTING);
 				sm->color = Qt::red;
 				sm->drawSynthesis( g );
-
-				glDisable(GL_DEPTH_TEST);
 			}
 		}
 	}
+
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_LIGHTING);
 
 	glViewport(viewport[0],viewport[1],viewport[2],viewport[3]);
 	painter->endNativePainting();

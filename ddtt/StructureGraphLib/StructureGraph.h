@@ -105,7 +105,8 @@ namespace Structure{
 		// Visualization
 		void draw( QGLViewer * drawArea = 0 );
 		void drawAABB();
-		void draw2D(int width, int height);
+        void draw2D(int width, int height);
+        void drawNodeMesh(QString nid, QColor meshColor);
 		void drawNodeMeshNames( int & offSet );
 		QImage fontImage;
 
@@ -150,8 +151,8 @@ namespace Structure{
 		// Clean up
 		void clearDebug();
 		void clearAll();
-		void clearSelections();
-	};
+        void clearSelections();
+    };
 }
 
 Q_DECLARE_METATYPE( QSharedPointer<SurfaceMeshModel> )

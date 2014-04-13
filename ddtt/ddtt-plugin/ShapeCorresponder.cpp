@@ -141,6 +141,13 @@ double partDifference(QString sid, QString tid, Structure::Graph * source, Struc
 	return (Vs - Vt).norm();
 }
 
+double partDifference2(QString sid, QString tid, Structure::Graph * source, Structure::Graph * target )
+{
+	Array1D_Vector3 sPoints = source->getNode(sid)->controlPoints();
+	Array1D_Vector3 tPoints = target->getNode(tid)->controlPoints();
+	return HausdorffDistance(sPoints, tPoints);
+}
+
 mat buildDifferenceMatrix( Structure::Graph * source, Structure::Graph * target )
 {
 	int N = source->nodes.size();
@@ -149,13 +156,13 @@ mat buildDifferenceMatrix( Structure::Graph * source, Structure::Graph * target 
 	int extra_N = (M > N) ? M-N : 0;
 	int extra_M = (N > M) ? N-M : 0;
 
-	mat m( N + extra_N, mat_row(M + extra_M, AssignmentLib::Edge::WORST_WEIGHT) );
+	mat m( N + extra_N, mat_row(M + extra_M, DBL_MAX) );
 
 	double minVal = DBL_MAX, maxVal = -DBL_MAX;
 
 	for(int i = 0; i < N; i++){
 		for(int j = 0; j < M; j++){
-			double val = partDifference( source->nodes[i]->id, target->nodes[j]->id, source, target );
+			double val = partDifference2( source->nodes[i]->id, target->nodes[j]->id, source, target );
 			m[i][j] = val;
 
 			// Track limits
@@ -167,13 +174,8 @@ mat buildDifferenceMatrix( Structure::Graph * source, Structure::Graph * target 
 	// Normalize
 	for(int i = 0; i < (int)m.size(); i++){
 		for(int j = 0; j < (int)m.front().size(); j++){
-			if(m[i][j] == AssignmentLib::Edge::WORST_WEIGHT) m[i][j] = maxVal;
-			
+			if(m[i][j] == DBL_MAX) m[i][j] = maxVal;
 			m[i][j] = (m[i][j] - minVal) / (maxVal - minVal);
-
-			//m[i][j] = 1 - m[i][j]; // Similarity, 1.0 = exact
-
-			m[i][j] *= -m[i][j];
 		}
 	}
 
@@ -364,7 +366,7 @@ Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVecto
 		}
 
 		std::sort(diffs.begin(), diffs.end());
-		std::reverse(diffs.begin(), diffs.end());
+		//std::reverse(diffs.begin(), diffs.end());
 		candidates[i] = diffs;
 
 		// DEBUG:

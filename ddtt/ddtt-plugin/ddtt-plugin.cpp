@@ -215,7 +215,7 @@ void ddtt::correspond()
 	// View correspondences
 	DeformScene * ds = new DeformScene;
 
-	int limit = 10;
+	int limit = 100;
 
 	int i = 0;
 	
