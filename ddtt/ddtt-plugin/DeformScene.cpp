@@ -69,8 +69,8 @@ void DeformScene::addDeformationPath(DeformationPath * path)
 	group->addToGroup(dwidget);
 	group->setPos(0, path->idx * h);
 	group->setAcceptHoverEvents(true);
-	group->setFlags( QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable );
 	group->setHandlesChildEvents(false); // items in group get user inputs
+	//group->setFlags( QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable );
 
 	addItem(group); 
 
@@ -98,13 +98,9 @@ void DeformScene::wheelEvent( QGraphicsSceneWheelEvent *e )
 
 void DeformScene::pack()
 {
-	int numItems = this->items().size();
-
 	int itemWidth = groups.front()->boundingRect().width();
 	int itemHeight = groups.front()->boundingRect().height();
-
 	int viewWidth = this->views().front()->width();
-	int viewHeight = this->views().front()->height();
 
 	int xi = 0, row = 0;
 

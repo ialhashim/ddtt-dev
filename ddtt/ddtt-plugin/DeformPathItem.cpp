@@ -100,7 +100,7 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 	int width = m_rect_scaled.width();
 	int height = m_rect_scaled.height();
 	int smallWidth = height * 0.5;
-	int tinyWidth = height * (1.0 / 6.0);
+	int tinyWidth = height * (1.0 / 5.0);
 
 	QRectF srect(width - smallWidth ,0,smallWidth,smallWidth);
 	QRectF trect(width - smallWidth,smallWidth,smallWidth,smallWidth);

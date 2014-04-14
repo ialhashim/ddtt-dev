@@ -16,7 +16,7 @@ DeformPathItemWidget::DeformPathItemWidget(int width, int height, DeformationPat
 	QWidget * w = new QWidget;
 
 	width = width - (height * 0.5);
-	height = (1.0/6.0) * height;
+	height = (1.0/5.0) * height;
 
 	w->setMinimumSize(width, height);
 	w->setMaximumSize(width, height);
@@ -34,19 +34,29 @@ void DeformPathItemWidget::init()
 {
 	QVBoxLayout * layout = new QVBoxLayout;
 
+	layout->setMargin(0);
+	layout->setSpacing(0);
+
 	// Sub-layout
 	{
 		QHBoxLayout * sublayout = new QHBoxLayout;
+		QHBoxLayout * sliderlayout = new QHBoxLayout;
+
+		sublayout->setMargin(0);
+		sublayout->setSpacing(0);
+
+		sliderlayout->setMargin(0);
+		sliderlayout->setSpacing(0);
 
 		// Slider
 		slider = new QSlider(Qt::Horizontal);
 		slider->setTickPosition(QSlider::TicksBothSides);
 		slider->setMinimum(0);
-		slider->setMaximum(100);
+		slider->setMaximum(150);
 		QString style = "QSlider::groove:horizontal {background: blue;height: 4px;}";
 		style += "QSlider::handle:horizontal {background: #ff0000;width: 20px;margin: -16px 0px -16px 0px;}";
 		slider->setStyleSheet( style );
-		sublayout->addWidget(slider);
+		sliderlayout->addWidget(slider);
 
 		// Save Correspondence button
 		saveCorrButton = new QPushButton("Save..");
@@ -77,7 +87,8 @@ void DeformPathItemWidget::init()
 			path->execute(); 
 		});
 
-		layout->addLayout(sublayout);
+		layout->addLayout( sliderlayout );
+		layout->addLayout( sublayout );
 	}
     
 	// Messages
