@@ -14,6 +14,7 @@ class GraphCorresponder;
 class Scheduler;
 class TopoBlender;
 typedef QMap<QString, QMap<QString, QVariant> > SynthData;
+typedef std::vector< std::vector<double> > NodeProxy;
 
 extern QStack<double> nurbsQuality;
 
@@ -39,7 +40,8 @@ class SynthesisManager : public QObject
 {
 	Q_OBJECT
 public:
-    SynthesisManager(GraphCorresponder * gcorr, Scheduler * scheduler, TopoBlender * blender, int samplesCount = 20000);
+    SynthesisManager(GraphCorresponder * gcorr=nullptr, Scheduler * scheduler=nullptr,
+                     TopoBlender * blender=nullptr, int samplesCount = 20000);
     
 	GraphCorresponder * gcorr;
 	Scheduler * scheduler;
@@ -61,6 +63,11 @@ public:
 
 	// Visualization
 	QMap<QString, QMap<QString,QVariant> > sampled;
+
+    // Proxies
+    QMap<QString, QMap<QString,NodeProxy> > proxies;
+	QMap<QString, QVariant> proxyOptions;
+    static Array2D_Vector3 proxyRays( Array1D_Vector3 spineJoints, Array1D_Vector3 spineNormals, int numSides = 10 );
 
 	// Options
 	bool isSplatRenderer;
@@ -91,6 +98,10 @@ public slots:
 	void drawSynthesis( Structure::Graph * activeGraph );
 
 	void bufferCleanup();
+
+    void makeProxies(int numSides = 10, int numSpineJoints = 10);
+    void drawWithProxies(Structure::Graph * g);
+    void drawAsProxies(Structure::Graph * g);
 
 	void emitSynthDataReady();
 

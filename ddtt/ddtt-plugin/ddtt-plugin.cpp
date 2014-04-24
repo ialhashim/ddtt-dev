@@ -8,6 +8,7 @@
 #include "ddtt_widget.h"
 
 #include "StructureGraph.h"
+#include "SynthesisManager.h"
 #include "GraphExplorer.h"
 
 #include "Corresponder.h"
@@ -45,12 +46,34 @@ void ddtt::create()
 		drawArea()->setShortcut(QGLViewer::DRAW_AXIS, Qt::Key_A);
 		drawArea()->setShortcut(QGLViewer::DRAW_GRID, Qt::Key_G);
 
+		w->ui->loadGraphs->click();
 		//w->ui->correspondButton->click();
 	}
 }
 
+SynthesisManager * sm = NULL;
+
 void ddtt::decorate()
 {
+	// Cylinder experiment
+	{
+		// Test proxies
+		if(graphs.size())
+		{
+			if(!sm)
+			{
+				GraphCorresponder * g = new GraphCorresponder(graphs.front(), graphs.back());
+				Scheduler * s = new Scheduler;
+				TopoBlender * t = new TopoBlender(g,s);
+
+				sm = new SynthesisManager ( g, s, t );
+				sm->makeProxies(20, 3);
+			}
+
+			if(sm)sm->drawWithProxies( sm->scheduler->activeGraph );
+		}
+	}
+
 	double startX = bigbox.min().x();
 
 	for(int g = 0; g < (int) graphs.size(); g++)
@@ -209,6 +232,7 @@ void ddtt::correspond()
 	message << QString("Number of paths ( %1 ).").arg( sc->property["pathsCount"].toInt() );
 	message << QString("Prepare time ( %1 ms ).").arg( sc->property["prepareTime"].toInt() );
 	message << QString("Compute time ( %1 ms ).").arg( sc->property["computeTime"].toInt() );
+	message << QString("Evaluate time ( %1 ms ).").arg( sc->property["evaluateTime"].toInt() );
 	message << QString("Total correspondence search time ( %1 ms ).").arg(timer.elapsed());
 	mainWindow()->setStatusBarMessage( message.join("\n") );
 

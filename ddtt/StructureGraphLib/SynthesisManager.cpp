@@ -21,6 +21,12 @@ GlSplatRenderer * splat_renderer = NULL;
 #include "TopoBlender.h"
 #include "Task.h"
 
+// For proxies
+#include "Octree.h"
+#include <QGLFunctions>
+QGLFunctions * glFuncs = NULL;
+QGLFunctions * newGLFunction() { return new QGLFunctions(QGLContext::currentContext()); }
+
 // The following depends on the power of the GPU
 #define POINTS_LIMIT 600000
 
@@ -602,6 +608,8 @@ void SynthesisManager::drawSampled()
 {
 	if(!scheduler) return;
 
+	if(!glFuncs) glFuncs = newGLFunction();
+
 	if(!sampled.size() && scheduler->property["synthDataReady"].toBool())
 	{
 		foreach(Structure::Graph * g, graphs())
@@ -643,9 +651,9 @@ void SynthesisManager::drawSampled()
 			if(!vertices.size()) continue;
 
 			GLuint VertexVBOID;
-			glGenBuffers(1, &VertexVBOID);
-			glBindBuffer(GL_ARRAY_BUFFER, VertexVBOID);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(GLVertex) * vertices.size(), &vertices[0].x, GL_STATIC_DRAW);
+			glFuncs->glGenBuffers(1, &VertexVBOID);
+			glFuncs->glBindBuffer(GL_ARRAY_BUFFER, VertexVBOID);
+			glFuncs->glBufferData(GL_ARRAY_BUFFER, sizeof(GLVertex) * vertices.size(), &vertices[0].x, GL_STATIC_DRAW);
 
 			sampled[g->name()]["vboID"] = VertexVBOID;
 			sampled[g->name()]["count"] = vertices.size();
@@ -667,7 +675,7 @@ void SynthesisManager::drawSampled()
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_NORMAL_ARRAY);
 
-		glBindBuffer(GL_ARRAY_BUFFER, sampled[key]["vboID"].toUInt());
+		glFuncs->glBindBuffer(GL_ARRAY_BUFFER, sampled[key]["vboID"].toUInt());
 		glVertexPointer(3, GL_FLOAT, sizeof(GLVertex), (void*)offsetof(GLVertex, x));
 		glNormalPointer(GL_FLOAT, sizeof(GLVertex), (void*)offsetof(GLVertex, nx));
 		glDrawArrays(GL_POINTS, 0, sampled[g->name()]["count"].toInt());
@@ -678,7 +686,7 @@ void SynthesisManager::drawSampled()
 		glPopMatrix();
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0); // avoid interference with other drawing
+	glFuncs->glBindBuffer(GL_ARRAY_BUFFER, 0); // avoid interference with other drawing
 }
 
 void SynthesisManager::geometryMorph( SynthData & data, Structure::Graph * graph, bool isApprox, int limit )
@@ -829,6 +837,8 @@ void SynthesisManager::geometryMorph( SynthData & data, Structure::Graph * graph
 
 void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 {
+	if(!glFuncs) glFuncs = newGLFunction();
+
 	// Combine all geometries
 	if(currentGraph["graph"].value<Structure::Graph*>() != activeGraph)
 	{
@@ -840,7 +850,7 @@ void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 
 		if( currentGraph.contains("vboID") ){
 			VertexVBOID = currentGraph["vboID"].toUInt();
-			glDeleteBuffers(1, &VertexVBOID);
+			glFuncs->glDeleteBuffers(1, &VertexVBOID);
 		}
 
 		beginFastNURBS();
@@ -913,9 +923,9 @@ void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 		{
 			GLuint VertexVBOID = 0;
 
-			glGenBuffers(1, &VertexVBOID);
-			glBindBuffer(GL_ARRAY_BUFFER, VertexVBOID);
-			glBufferData(GL_ARRAY_BUFFER, sizeof(GLVertex) * vertices.size(), &vertices[0].x, GL_STATIC_DRAW);
+			glFuncs->glGenBuffers(1, &VertexVBOID);
+			glFuncs->glBindBuffer(GL_ARRAY_BUFFER, VertexVBOID);
+			glFuncs->glBufferData(GL_ARRAY_BUFFER, sizeof(GLVertex) * vertices.size(), &vertices[0].x, GL_STATIC_DRAW);
 
 			currentGraph["vboID"] = VertexVBOID;
 		}
@@ -928,6 +938,8 @@ void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 		currentGraph["graph"].setValue( activeGraph );
 	}
 
+	
+
 	if( isBasicRenderer && currentGraph.contains("vboID") )
 	{
 		glColorQt( color );
@@ -936,7 +948,7 @@ void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_NORMAL_ARRAY);
 
-		glBindBuffer(GL_ARRAY_BUFFER, currentGraph["vboID"].toUInt());
+		glFuncs->glBindBuffer(GL_ARRAY_BUFFER, currentGraph["vboID"].toUInt());
 		glVertexPointer(3, GL_FLOAT, sizeof(GLVertex), (void*)offsetof(GLVertex, x));
 		glNormalPointer(GL_FLOAT, sizeof(GLVertex), (void*)offsetof(GLVertex, nx));
 		glDrawArrays(GL_POINTS, 0, currentGraph["count"].toInt());
@@ -953,7 +965,7 @@ void SynthesisManager::drawSynthesis( Structure::Graph * activeGraph )
 		splat_renderer->draw();
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0); // avoid interference with other drawing
+	glFuncs->glBindBuffer(GL_ARRAY_BUFFER, 0); // avoid interference with other drawing
 }
 
 bool SynthesisManager::samplesAvailable( QString graph, QString nodeID )
@@ -972,6 +984,196 @@ void SynthesisManager::emitSynthDataReady()
 void SynthesisManager::bufferCleanup()
 {
 	GLuint VertexVBOID = this->currentGraph["vboID"].toUInt();
-	glDeleteBuffers(1, &VertexVBOID);
-	this->currentGraph.clear();
+	if(glFuncs) glFuncs->glDeleteBuffers(1, &VertexVBOID);
+    this->currentGraph.clear();
 }
+
+Array2D_Vector3 SynthesisManager::proxyRays(Array1D_Vector3 spine, Array1D_Vector3 spineNormals, int numSides)
+{
+    int numCaps = numSides * 0.5;
+
+    Array1D_Vector3 circle;
+    Array2D_Vector3 rays;
+
+    for(size_t i = 0; i < spine.size(); i++)
+    {
+        Vector3 axis = (i == 0) ? spine[1] - spine[0] : (i+1 == spine.size()) ? spine.back() - spine[spine.size() - 2] : spine[i+1] - spine[i];
+        axis.normalize();
+
+        // First cap
+        if(i == 0){
+            for(int sj = 0; sj + 1 < numCaps; sj++){
+                circle.clear();
+                double s = std::max(1e-8, (double(sj)/(numCaps-1)));
+                for(int si = 0; si < numSides; si++){
+                    double t = double(si) / (numSides-1);
+                    double theta = t * M_PI * 2.0;
+                    Vector3 v = rotatedVec(Vector3(s * spineNormals[i].normalized()), theta, axis);
+                    Vector3 height = (1.0-s) * -axis;
+                    circle.push_back( (v + height).normalized() );
+                }
+                rays.push_back(circle);
+            }
+        }
+
+        // Regular
+        circle.clear();
+        for(int si = 0; si < numSides; si++)
+        {
+            double t = double(si) / (numSides-1);
+            double theta = t * M_PI * 2.0;
+            circle.push_back( rotatedVec(spineNormals[i], theta, axis).normalized() );
+        }
+        rays.push_back(circle);
+
+        // End cap
+        if(i == spine.size() - 1){
+            for(int sj = 1; sj < numCaps; sj++){
+                circle.clear();
+                double s = std::max(1e-8, 1.0 - (double(sj)/(numCaps-1)));
+                for(int si = 0; si < numSides; si++){
+                    double t = double(si) / (numSides-1);
+                    double theta = t * M_PI * 2.0;
+                    Vector3 v = rotatedVec(Vector3(s * spineNormals[i].normalized()), theta, axis);
+                    Vector3 height = (1.0-s) * axis;
+                    circle.push_back( (v + height).normalized() );
+                }
+                rays.push_back(circle);
+            }
+        }
+    }
+
+    return rays;
+}
+
+void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
+{
+	QVector<Structure::Graph*> graphs;
+	graphs << scheduler->activeGraph << scheduler->targetGraph;
+
+	for(auto g : graphs)
+	{
+		for(auto n : g->nodes)
+		{
+            SurfaceMesh::Model * model = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+			if(!model) continue;
+			Octree octree(model, 40);
+
+			// Sample rays covering a 3D capsule, used to shoot toward surface
+			Array1D_Vector3 spine, spineNormals;
+            if(n->type() == Structure::SHEET){
+
+            } else spine = n->controlPoints();
+
+			if(!spine.size()) continue;
+			spine = refineByNumber(spine, numSpineJoints);
+            
+            RMF rmf = RMF( spine );	rmf.compute();
+			for(auto frame : rmf.U) spineNormals.push_back(frame.r);
+            Array2D_Vector3 crossSections = SynthesisManager::proxyRays( spine, spineNormals, numSides );
+
+			// Sample surface
+            for(int i = 0; i < crossSections.size(); i++)
+            {
+				// Get spine index position
+                int si = i - ((numSides * 0.5) - 1);
+                if(si < 0) si = 0;
+                if(si > spine.size() - 1) si = spine.size() - 1;
+
+                Vector3 p = spine[si];
+
+				std::vector<double> offsets;
+
+                for(auto r : crossSections[i])
+                {
+                    Ray ray(p, r);
+                    int fidx = -1;
+                    Vector3 isect = octree.closestIntersectionPoint(ray, &fidx, true);
+                    if(fidx < 0) isect = Vector3(0,0,0);
+
+                    double offset = (isect - p).norm();
+
+					offsets.push_back( offset );
+                }
+
+				proxies[g->name()][n->id].push_back( offsets );
+            }
+		}
+	}
+
+	proxyOptions["numSides"].setValue( numSides );
+	proxyOptions["numSpineJoints"].setValue( numSpineJoints );
+}
+
+void SynthesisManager::drawWithProxies(Graph *g)
+{
+	int numSides = proxyOptions["numSides"].toInt();
+	int numSpineJoints = proxyOptions["numSpineJoints"].toInt();
+	if(numSides < 1 || numSpineJoints < 1) return;
+
+	for(auto n : g->nodes)
+	{
+		SurfaceMesh::Model * model = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+		if(!model) continue;
+
+		NodeProxy proxy = proxies[g->name()][n->id];
+		if(proxy.empty()) continue;
+
+		// Sample rays covering a 3D capsule, used to shoot toward surface
+		Array1D_Vector3 spine, spineNormals;
+		if(n->type() == Structure::SHEET){
+
+		} else spine = n->controlPoints();
+
+		if(!spine.size()) continue;
+		spine = refineByNumber(spine, numSpineJoints);
+
+		RMF rmf = RMF( spine );	rmf.compute();
+		for(auto frame : rmf.U) spineNormals.push_back(frame.r);
+
+		// DEBUG: draw frames
+		{
+			std::vector<RMF::Frame> frames = rmf.U;
+			starlab::FrameSoup fs(0.1f);
+			foreach (RMF::Frame f, frames) fs.addFrame(f.r, f.s, f.t, f.center);
+			fs.draw();
+		}
+
+		Array2D_Vector3 crossSections = SynthesisManager::proxyRays( spine, spineNormals, numSides );
+
+		glDisable(GL_LIGHTING);
+		glColor3d(1,0,0);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+		glBegin(GL_QUADS);
+		for(int i = 0; i + 1 < crossSections.size(); i++)
+		{
+			// Get spine index position
+			int si = i - ((numSides * 0.5) - 1);
+			if(si < 0) si = 0;
+			if(si > spine.size() - 1) si = spine.size() - 1;
+
+			Vector3 p0 = spine[si];
+			if(i < ((numSides * 0.5) - 1) || si+1 == spine.size()) si--;
+			Vector3 p1 = spine[si+1];
+
+			std::vector<Vector3> cA = crossSections[i];
+			std::vector<Vector3> cB = crossSections[i+1];
+
+			for(size_t j = 0; j + 1 < cA.size(); j++)
+			{
+				glVector3(Vector3(p0 + proxy[i][j] * cA[j])); 
+				glVector3(Vector3(p1 + proxy[i+1][j] * cB[j]));
+				glVector3(Vector3(p1 + proxy[i+1][j+1] * cB[j+1]));
+				glVector3(Vector3(p0 + proxy[i][j+1] * cA[j+1]));
+			}
+		}
+		glEnd();
+	}
+}
+
+void SynthesisManager::drawAsProxies(Graph *g)
+{
+
+}
+

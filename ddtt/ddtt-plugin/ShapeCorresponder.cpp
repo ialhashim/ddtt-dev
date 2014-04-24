@@ -5,6 +5,8 @@
 #include <iterator>
 
 #include <QApplication>
+#include <QGLWidget>
+#include <QGLFramebufferObjectFormat>
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QDebug>
@@ -16,6 +18,29 @@
 #include "StructureGraph.h"
 #include "GraphDistance.h"
 using namespace Structure;
+
+qglviewer::Camera * setupCamera(){
+	qglviewer::Camera * camera = new qglviewer::Camera;
+	camera->setUpVector(qglviewer::Vec(0,0,1));
+	camera->setPosition(qglviewer::Vec(-2,-2,0.8));
+	camera->lookAt(qglviewer::Vec());
+	camera->setSceneRadius( 10 );
+	camera->showEntireScene();
+	return camera;
+}
+void updateCamera(qglviewer::Camera * camera, Structure::Graph * g){
+	qglviewer::Vec viewDir = camera->viewDirection();
+	Eigen::AlignedBox3d graphBBox = g->bbox();
+	double distance = graphBBox.sizes().maxCoeff() * 2.25;
+	Vector3 center = graphBBox.center();
+	Vector3 newPos = center - (distance * Vector3(viewDir[0], viewDir[1], viewDir[2]));
+	camera->setRevolveAroundPoint( qglviewer::Vec(center) );
+	qglviewer::Vec new_pos(newPos);
+	camera->frame()->setPositionWithConstraint(new_pos);
+	camera->setScreenWidthAndHeight(128, 128);
+	camera->loadProjectionMatrix();
+	camera->loadModelViewMatrix();
+}
 
 static inline QString shortName(QString name){
 	if(name.length() < 3) return name;
@@ -472,7 +497,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	std::mt19937 g(rd());
 	std::shuffle(colors.begin(), colors.end(), g);
 
-	QElapsedTimer prepareTimer, computeTimer;
+	QElapsedTimer prepareTimer, computeTimer, evaluateTimer;
 	prepareTimer.start();
 
 	QVector<Structure::Graph*> graphs;
@@ -486,7 +511,6 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 	// Considered neighbors
 	int K = 2;
-	bool isSubsample = false;
 
 	Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target, K);
 
@@ -565,10 +589,11 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	// Stats
 	property["pathsCount"].setValue( (int)paths.size() );
 
-	// Subsample paths
+	// Subsample paths	
+	bool isSubsample = true;
 	if( isSubsample )
 	{
-		int MaxNumPaths = 2;
+		int MaxNumPaths = 10;
 		std::vector<bool> mask = subsampleMask(MaxNumPaths, paths.size());
 		std::vector<DeformationPath> subsampled;
 		for(auto & path : paths){
@@ -579,6 +604,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	}
 
 	/// Find best correspondence
+	int numSamples = 5;
 	DeformationPath bestPath;
 	{
 		beginFastNURBS();
@@ -598,38 +624,14 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.scheduler->timeStep = 0.1;
 			path.scheduler->executeAll();
 
-			// Collect error
-			double error = 0;
-
-			Structure::Graph sourceCopy( *source );
-			
-			for(auto g : path.scheduler->allGraphs)
+			// Gather samples from execution
+			for(int s = 0; s < numSamples; s++)
 			{
-				g->moveBottomCenterToOrigin( true );
+				double t = double(s)/(numSamples-1);
+				int idx = t * (path.scheduler->allGraphs.size()-1);
 
-				compute_part_measures( g );
-
-				for(auto n_orig : sourceCopy.nodes)
-				{
-					Structure::Node * n = NULL;
-					for(auto ni : g->nodes){
-						if(ni->property.contains("original_ID") && ni->property.value("original_ID") == n_orig->id){
-							n = ni; break;
-						}
-					}
-					if(!n) continue;
-
-					double partDiff = partDifference(n_orig->id, n->id, source, g);
-					if( !std::isfinite(partDiff) ) partDiff = 1e20;
-
-					path.errors.push_back( partDiff );
-
-					error += partDiff;
-				}
+				path.samples.push_back( new Structure::Graph( *path.scheduler->allGraphs[idx] ) );
 			}
-
-			// Record error
-			path.weight = error;
 
 			// Clean up
 			{
@@ -638,21 +640,68 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 				path.errors.clear();
 			}
 		}
+
+		endFastNURBS();
 	}
 
 	// Timing
 	property["computeTime"].setValue( (int)computeTimer.elapsed() );
 
-	if( paths.size() )
+	if( !paths.size() ) return;
+
+	// Evaluate
 	{
+		int w = 128, h = 128;
+		vector<unsigned char> glbuffer(w*h, 0);
+
+		QGLFormat glformat;	glformat.setSamples(0);
+		QGLWidget qgl(glformat);
+		qgl.setMinimumSize(w,h); qgl.setMaximumSize(w,h);
+		qgl.makeCurrent();
+		qgl.qglClearColor(Qt::white);
+		
+		QGLFramebufferObjectFormat fboFormat;
+		fboFormat.setMipmap(false);
+		fboFormat.setSamples(0);
+		fboFormat.setInternalTextureFormat(GL_LUMINANCE);
+		QGLFramebufferObject * fbo = new QGLFramebufferObject(QSize(w,h),fboFormat);
+
+		fbo->bind();
+
+		glViewport(0,0,w,h);
+		qglviewer::Camera * cam = setupCamera();
+
+		evaluateTimer.start();
+
+		for(auto p : paths)
+		{
+			for(auto g : p.samples)
+			{
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear Screen And Depth Buffer
+
+				updateCamera(cam, g);
+				g->setColorAll(Qt::black);
+				g->draw();
+
+				glReadPixels(0,0,w,h, GL_LUMINANCE, GL_UNSIGNED_BYTE, &glbuffer.front());
+
+				// DEBUG:
+				//qgl.grabFrameBuffer().save( QString("%1_%2.png").arg(p.i).arg(g->property["t"].toDouble()) );
+			}
+		}
+
+		property["evaluateTime"].setValue(evaluateTimer.elapsed());
+
+		fbo->release();
+
 		// Best = lowest error
 		std::sort(paths.begin(), paths.end(), DeformationPathCompare);
 		bestPath = paths.front();
 
 		// set indices
-		int j = 0;
-		for( auto & p : paths )	p.idx = j++;
+		int j = 0; for( auto & p : paths )	p.idx = j++;
 
+		// Color with best correspondence
 		source->setColorAll(Qt::lightGray);
 		target->setColorAll(Qt::lightGray);
 

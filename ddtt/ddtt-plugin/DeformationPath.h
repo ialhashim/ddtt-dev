@@ -4,7 +4,7 @@
 #include "Scheduler.h"
 #include "TopoBlender.h"
 
-typedef QMap<QString,QVariant> PropertyMap;
+typedef QMap< QString,QVariant > PropertyMap;
 typedef QPair< QVector<QString>, QVector<QString> > Pairing;
 typedef QVector< Pairing > VectorPairings;
 typedef QVector< VectorPairings > Assignments;
@@ -20,26 +20,21 @@ public:
     QVector<Pairing> pairs;
     QVector<double> errors;
 
-    QMap<QString, QColor> scolors;
-    QMap<QString, QColor> tcolors;
+    QMap<QString, QColor> scolors, tcolors;
 
-    int idx;
-    int i;
-	int si;
+    int idx, i, si;
     PropertyMap property;
 
     GraphCorresponder * gcorr;
     QSharedPointer<Scheduler> scheduler;
     QSharedPointer<TopoBlender> blender;
 
-	void normalizeErrors();
+	QVector<Structure::Graph*> samples;
 
-    static double minWeight( const std::vector<DeformationPath> & paths );
-    static double maxWeight( const std::vector<DeformationPath> & paths );
-	static void normalize( std::vector<DeformationPath> & paths );
-
-	void renderSamples();
 	void execute();
+
+	// Visualization
+	void renderSamples();
 };
 
 static inline bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }

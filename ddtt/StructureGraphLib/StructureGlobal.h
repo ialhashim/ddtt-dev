@@ -223,6 +223,27 @@ static std::vector<Eigen::Vector3d> refineByNumber(const std::vector<Eigen::Vect
 		newPnts.insert( newPnts.begin() + (idx), midPoint );
 	}
 
+	// Contract to get to target
+	while((int)newPnts.size() > targetNumber)
+	{
+		// Find index of shortest edge
+		double minDist = DBL_MAX;
+		int idx = -1;
+		for(int i = 1; i < (int) newPnts.size(); i++){
+			double dist = (newPnts[i] - newPnts[i-1]).norm();
+			if(dist < minDist){
+				minDist = dist;
+				idx = i;
+			}
+		}
+
+		// Remove not at end neighbor
+		int toRemoveIdx = idx;
+		if(idx == newPnts.size()-1) toRemoveIdx--;
+
+		newPnts.erase( newPnts.begin() + toRemoveIdx );
+	}
+
 	return newPnts;
 }
 
