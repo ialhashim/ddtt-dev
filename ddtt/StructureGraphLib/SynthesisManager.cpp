@@ -1049,7 +1049,9 @@ Array2D_Vector3 SynthesisManager::proxyRays(Array1D_Vector3 spine, Array1D_Vecto
 void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
 {
 	QVector<Structure::Graph*> graphs;
-	graphs << scheduler->activeGraph << scheduler->targetGraph;
+	graphs << scheduler->originalActiveGraph << scheduler->originalTargetGraph;
+
+	double resolution = 0.1;
 
 	for(auto g : graphs)
 	{
@@ -1061,9 +1063,7 @@ void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
 
 			// Sample rays covering a 3D capsule, used to shoot toward surface
 			Array1D_Vector3 spine, spineNormals;
-            if(n->type() == Structure::SHEET){
-
-            } else spine = n->controlPoints();
+			spine = n->discretizedAsCurve( resolution );
 
 			if(!spine.size()) continue;
 			spine = refineByNumber(spine, numSpineJoints);
@@ -1103,47 +1103,104 @@ void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
 
 	proxyOptions["numSides"].setValue( numSides );
 	proxyOptions["numSpineJoints"].setValue( numSpineJoints );
+	proxyOptions["resolution"].setValue( resolution );
 }
 
 void SynthesisManager::drawWithProxies(Graph *g)
 {
 	int numSides = proxyOptions["numSides"].toInt();
 	int numSpineJoints = proxyOptions["numSpineJoints"].toInt();
+	double resolution = proxyOptions["resolution"].toDouble();
 	if(numSides < 1 || numSpineJoints < 1) return;
+
+	float currentColor[4];
+	glGetFloatv(GL_CURRENT_COLOR,currentColor);
+	QColor color = QColor::fromRgbF(currentColor[0],currentColor[1],currentColor[2],currentColor[3]);
 
 	for(auto n : g->nodes)
 	{
-		SurfaceMesh::Model * model = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
-		if(!model) continue;
+		if( n->property["zeroGeometry"].toBool() || n->property["shrunk"].toBool()) 
+			continue;
 
-		NodeProxy proxy = proxies[g->name()][n->id];
-		if(proxy.empty()) continue;
+		if(!n->property.contains("correspond"))
+			continue;
+
+		// Check against expected skeleton geometry
+		{
+			Node * origN = scheduler->originalActiveGraph->getNode(n->id);
+			QString tid = n->property["corresponded"].toString();
+
+			if( !tid.isEmpty() && n->property["taskIsDone"].toBool() ) origN = scheduler->originalTargetGraph->getNode( tid );
+
+			Array1D_Vector3 cp0 = origN->controlPoints();
+			Array1D_Vector3 cp1 = n->controlPoints();
+			Vector3 mean0(0,0,0); for(int i = 0; i < (int)cp0.size(); i++) { mean0 += cp0[i]; }; mean0 /= cp0.size();
+			Vector3 mean1(0,0,0); for(int i = 0; i < (int)cp1.size(); i++) { mean1 += cp1[i]; }; mean1 /= cp1.size();
+
+			double geoDiff = 0.0;
+			for(int i = 0; i < (int)cp0.size(); i++) geoDiff = ((cp0[i]-mean0) - (cp1[i]-mean1)).norm();
+			bool isSameGeometry = geoDiff < 1e-8;
+
+			bool isDeformed = !n->property["fixedSize"].toBool();
+			bool isNotDone = n->property.contains("isReady") && n->property.contains("correspond") && n->property["isReady"].toBool() && !n->property["taskIsDone"].toBool();
+			
+			if( isSameGeometry || (!isDeformed && !isNotDone) )
+			{
+				Vector3 c0 = n->controlPoints().front();
+
+				if( n->property["taskIsDone"].toBool() ){
+					n = scheduler->targetGraph->getNode( n->property["correspond"].toString() );
+				}
+
+				QSharedPointer<SurfaceMeshModel> nodeMesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				Vector3 deltaMesh = n->property["deltaMesh"].value<Vector3>();
+				Vector3 v0 = nodeMesh->get_vertex_property<Vector3>(VPOINT)[Vertex(0)];
+				Vector3 translation = c0 - (v0 - deltaMesh);
+
+				if(proxyOptions.contains("solidColor"))
+					color = proxyOptions["solidColor"].value<QColor>();
+				
+				QuickMeshDraw::drawMeshSolid( nodeMesh.data(), color, translation );
+
+				continue;
+			}
+		}
+
+		NodeProxy proxy = proxies[scheduler->originalActiveGraph->name()][n->id];
+		NodeProxy proxyTarget = proxies[scheduler->originalTargetGraph->name()][n->property["correspond"].toString()];
+
+		double alpha = n->property["t"].toDouble();
+
+		if(proxy.empty() || proxyTarget.empty()) continue;
 
 		// Sample rays covering a 3D capsule, used to shoot toward surface
 		Array1D_Vector3 spine, spineNormals;
-		if(n->type() == Structure::SHEET){
-
-		} else spine = n->controlPoints();
+		spine = n->discretizedAsCurve( resolution );
 
 		if(!spine.size()) continue;
 		spine = refineByNumber(spine, numSpineJoints);
 
 		RMF rmf = RMF( spine );	rmf.compute();
 		for(auto frame : rmf.U) spineNormals.push_back(frame.r);
+		Array2D_Vector3 crossSections = SynthesisManager::proxyRays( spine, spineNormals, numSides );
 
 		// DEBUG: draw frames
+		if( proxyOptions["isDebug"].toBool() )
 		{
 			std::vector<RMF::Frame> frames = rmf.U;
 			starlab::FrameSoup fs(0.1f);
 			foreach (RMF::Frame f, frames) fs.addFrame(f.r, f.s, f.t, f.center);
 			fs.draw();
+
+			glDisable(GL_LIGHTING);
+			glColor3d(1,0,0);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		}
 
-		Array2D_Vector3 crossSections = SynthesisManager::proxyRays( spine, spineNormals, numSides );
-
-		glDisable(GL_LIGHTING);
-		glColor3d(1,0,0);
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		if(proxyOptions.contains("proxyColor")){
+			QColor c = proxyOptions["proxyColor"].value<QColor>();
+			glColor3d(c.redF(),c.greenF(),c.blueF());
+		}
 
 		glBegin(GL_QUADS);
 		for(int i = 0; i + 1 < crossSections.size(); i++)
@@ -1162,18 +1219,12 @@ void SynthesisManager::drawWithProxies(Graph *g)
 
 			for(size_t j = 0; j + 1 < cA.size(); j++)
 			{
-				glVector3(Vector3(p0 + proxy[i][j] * cA[j])); 
-				glVector3(Vector3(p1 + proxy[i+1][j] * cB[j]));
-				glVector3(Vector3(p1 + proxy[i+1][j+1] * cB[j+1]));
-				glVector3(Vector3(p0 + proxy[i][j+1] * cA[j+1]));
+				glVector3(Vector3(p0 + AlphaBlend(alpha, proxy[i][j], proxyTarget[i][j]) * cA[j])); 
+				glVector3(Vector3(p1 + AlphaBlend(alpha, proxy[i+1][j], proxyTarget[i+1][j]) * cB[j]));
+				glVector3(Vector3(p1 + AlphaBlend(alpha, proxy[i+1][j+1], proxyTarget[i+1][j+1]) * cB[j+1]));
+				glVector3(Vector3(p0 + AlphaBlend(alpha, proxy[i][j+1], proxyTarget[i][j+1]) * cA[j+1]));
 			}
 		}
 		glEnd();
 	}
 }
-
-void SynthesisManager::drawAsProxies(Graph *g)
-{
-
-}
-

@@ -52,28 +52,10 @@ void ddtt::create()
 }
 
 SynthesisManager * sm = NULL;
+float frame = 0;
 
 void ddtt::decorate()
 {
-	// Cylinder experiment
-	{
-		// Test proxies
-		if(graphs.size())
-		{
-			if(!sm)
-			{
-				GraphCorresponder * g = new GraphCorresponder(graphs.front(), graphs.back());
-				Scheduler * s = new Scheduler;
-				TopoBlender * t = new TopoBlender(g,s);
-
-				sm = new SynthesisManager ( g, s, t );
-				sm->makeProxies(20, 3);
-			}
-
-			if(sm)sm->drawWithProxies( sm->scheduler->activeGraph );
-		}
-	}
-
 	double startX = bigbox.min().x();
 
 	for(int g = 0; g < (int) graphs.size(); g++)

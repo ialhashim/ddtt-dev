@@ -101,7 +101,6 @@ public slots:
 
     void makeProxies(int numSides = 10, int numSpineJoints = 10);
     void drawWithProxies(Structure::Graph * g);
-    void drawAsProxies(Structure::Graph * g);
 
 	void emitSynthDataReady();
 
