@@ -70,7 +70,8 @@ size_t weld( std::vector<T> & p, std::vector<size_t> & xrefs, HashFunction hash,
 	size_t * const hashTable = new size_t[hashSize + N];	// hash table + linked list
 	size_t * const next = hashTable + hashSize;				// use bottom part as linked list
 
-	memset( hashTable, NIL, hashSize*sizeof(size_t) );		// init hash table (NIL = 0xFFFFFFFF so memset works)
+    //memset( hashTable, NIL, hashSize*sizeof(size_t) );		// init hash table (NIL = 0xFFFFFFFF so memset works)
+    for(size_t i = 0 ; i < hashSize ; i++) hashTable[i] = NIL;
 
 	// xrefs and p have the same size.
 	xrefs.resize(N);

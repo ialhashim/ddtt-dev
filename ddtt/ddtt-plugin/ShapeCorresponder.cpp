@@ -23,6 +23,7 @@ using namespace Structure;
 
 // Evaluation
 #include "ImageCompare.h"
+#include "MarchingSquares.h"
 ImageCompare im;
 QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
 

@@ -65,6 +65,112 @@ namespace SoftwareRenderer{
 		}
 	}
 
+	void DrawBline(Eigen::MatrixXd & m, Eigen::Vector3d point0, Eigen::Vector3d point1, double color)
+	{
+		int x0 = (int)point0.x();
+		int y0 = (int)point0.y();
+		int x1 = (int)point1.x();
+		int y1 = (int)point1.y();
+
+		auto dx = std::abs(x1 - x0);
+		auto dy = std::abs(y1 - y0);
+		auto sx = (x0 < x1) ? 1 : -1;
+		auto sy = (y0 < y1) ? 1 : -1;
+		auto err = dx - dy;
+
+		while (true) {
+			if(x0 < 0 || x0 > m.cols() - 1 || y0 < 0 || y0 > m.rows() - 1) {} else m(y0, x0) = color;
+
+			if ((x0 == x1) && (y0 == y1)) break;
+			auto e2 = 2 * err;
+			if (e2 > -dy) { err -= dy; x0 += sx; }
+			if (e2 < dx) { err += dx; y0 += sy; }
+		}
+	}
+
+	// Clamping values to keep them between 0 and 1
+	double Clamp(double value, double min = 0, double max = 1){
+		return std::max(min, std::min(value, max));
+	}
+
+	// Interpolating the value between 2 vertices 
+	// min is the starting point, max the ending point
+	// and gradient the % between the 2 points
+	double Interpolate(double min, double max, double gradient){
+		return min + (max - min) * Clamp(gradient);
+	}
+
+	// drawing line between 2 points from left to right
+	// papb -> pcpd
+	// pa, pb, pc, pd must then be sorted before
+	void ProcessScanLine(Eigen::MatrixXd & m, int y, Vector3 pa, Vector3 pb, Vector3 pc, Vector3 pd, double color)	{
+		// Thanks to current Y, we can compute the gradient to compute others values like
+		// the starting X (sx) and ending X (ex) to draw between
+		// if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
+		auto gradient1 = pa.y() != pb.y() ? (y - pa.y()) / (pb.y() - pa.y()) : 1;
+		auto gradient2 = pc.y() != pd.y() ? (y - pc.y()) / (pd.y() - pc.y()) : 1;
+
+		int sx = (int)Interpolate(pa.x(), pb.x(), gradient1);
+		int ex = (int)Interpolate(pc.x(), pd.x(), gradient2);
+
+		// drawing a line from left (sx) to right (ex) 
+		for (auto x = sx; x < ex; x++)
+		{
+			if(x < 0 || x > m.cols() - 1 || y < 0 || y > m.rows() - 1) 
+				continue;
+			m(y,x) = color;
+		}
+	}
+
+	void drawTriangle(Eigen::MatrixXd & buffer, Eigen::Vector3d p1, Eigen::Vector3d p2, Eigen::Vector3d p3, double color)
+	{
+		// Sorting the points in order to always have this order on screen p1, p2 & p3
+		// with p1 always up (thus having the Y the lowest possible to be near the top screen)
+		// then p2 between p1 & p3
+		if (p1.y() > p2.y()){
+			auto temp = p2;
+			p2 = p1;
+			p1 = temp;
+		}
+
+		if (p2.y() > p3.y()){
+			auto temp = p2;
+			p2 = p3;
+			p3 = temp;
+		}
+
+		if (p1.y() > p2.y()){
+			auto temp = p2;
+			p2 = p1;
+			p1 = temp;
+		}
+
+		// inverse slopes
+		double dP1P2, dP1P3;
+
+		if (p2.y() - p1.y() > 0) dP1P2 = (p2.x() - p1.x()) / (p2.y() - p1.y());
+		else dP1P2 = 0;
+
+		if (p3.y() - p1.y() > 0) dP1P3 = (p3.x() - p1.x()) / (p3.y() - p1.y());
+		else dP1P3 = 0;
+
+		if (dP1P2 > dP1P3){
+			for (auto y = (int)p1.y(); y <= (int)p3.y(); y++){
+				if (y < p2.y())
+					ProcessScanLine(buffer, y, p1, p3, p1, p2, color);
+				else
+					ProcessScanLine(buffer, y, p1, p3, p2, p3, color);
+			}
+		}
+		else{
+			for (auto y = (int)p1.y(); y <= (int)p3.y(); y++){
+				if (y < p2.y())
+					ProcessScanLine(buffer, y, p1, p2, p1, p3, color);
+				else
+					ProcessScanLine(buffer, y, p2, p3, p1, p3, color);
+			}
+		}
+	}
 
 	Eigen::Vector3d TransformCoordinates(const Eigen::Vector3d & vector, const Matrix4 & m) {
 		double x = (vector[0] * m(0)) + (vector[1] * m(4)) + (vector[2] * m(8)) + m(12);
@@ -74,24 +180,17 @@ namespace SoftwareRenderer{
 		return Eigen::Vector3d(x / w, y / w, z / w);
 	};
 
-	Matrix4 CreateProjectionMatrix(double fov_degrees, double aspect_ratio, double zNear = 1.0, double zFar = 10.0)
+	Matrix4 CreateProjectionMatrix(double fov_degrees, double aspect_ratio, double zNear = 0.1, double zFar = 10.0)
 	{
-		double fov = RADIANS(fov_degrees * 0.5);
+		double yScale = cot( RADIANS(fov_degrees * 0.5) );
+		double xScale = yScale/aspect_ratio;
+		Eigen::Matrix4d pmat;
+		pmat << -xScale, 0,							0,	0,
+				0, yScale,							0,	0,
+				0,		0,		zFar/(zFar-zNear)	,	1,
+				0,		0, -zFar*zNear/(zFar-zNear)	,	0;
 
-		Matrix4 matrix = Matrix4::Identity();
-
-		double t = 1.0 / (std::tan(fov * 0.5));
-		matrix(0) = t / aspect_ratio;
-		matrix(1) = matrix(2) = matrix(3) = 0.0;
-		matrix(5) = t;
-		matrix(4) = matrix(6) = matrix(7) = 0.0;
-		matrix(8) = matrix(9) = 0.0;
-		matrix(10) = -zFar / (zNear - zFar);
-		matrix(11) = 1.0;
-		matrix(12) = matrix(13) = matrix(15) = 0.0;
-		matrix(14) = (zNear * zFar) / (zNear - zFar);
-
-		return matrix;
+		return pmat;
 	}
 
 	Matrix4 CreateWorldMatrix(double transX = 0, double transY = 0, double transZ = 0)
@@ -105,20 +204,17 @@ namespace SoftwareRenderer{
 	{
 		Matrix4 vmat = Matrix4::Identity();
 
-		Eigen::Vector3d zAxis = (target - eye);
-		zAxis.normalize();
-		Eigen::Vector3d xAxis = (up.cross(zAxis));
-		xAxis.normalize();
-		Eigen::Vector3d yAxis = (zAxis.cross(xAxis));
-		yAxis.normalize();
+		Eigen::Vector3d zAxis = (target - eye);			zAxis.normalize();
+		Eigen::Vector3d xAxis = (up.cross(zAxis));		xAxis.normalize();
+		Eigen::Vector3d yAxis = (zAxis.cross(xAxis));	yAxis.normalize();
 		double ex = -(xAxis.dot(eye));
 		double ey = -(yAxis.dot(eye));
 		double ez = -(zAxis.dot(eye));
 
 		vmat << xAxis[0], xAxis[1], xAxis[2],  ex,
-			yAxis[0], yAxis[1], yAxis[2],  ey,
-			zAxis[0], zAxis[1], zAxis[2],  ez,
-			0		, 0	  , 0		,  1;
+				yAxis[0], yAxis[1], yAxis[2],  ey,
+				zAxis[0], zAxis[1], zAxis[2],  ez,
+				0		, 0		  , 0		,  1;
 
 		vmat = Matrix4( vmat.transpose() );
 
@@ -146,7 +242,6 @@ namespace SoftwareRenderer{
 	QVector< PairPoints > cube()
 	{
 		QVector< PairPoints > face;
-
 		QVector< PairPoints > faces;
 
 		double len = 0.5;
@@ -298,13 +393,14 @@ namespace SoftwareRenderer{
 		return M;
 	}
 
-	QImage matrixToImage( const Eigen::MatrixXd & mimg )
+	QImage matrixToImage( const Eigen::MatrixXd & mimg, bool isAlphaBack = true )
 	{
 		int width = mimg.rows();
 		int height = mimg.cols();
 
-		QImage img(width, height, QImage::Format_ARGB32);
-		img.fill(QColor(0,0,0,0));
+		QImage img(width, height, QImage::Format_ARGB32_Premultiplied);
+
+		(isAlphaBack) ? img.fill(QColor(0,0,0,0)) : img.fill(QColor(255,255,255));
 
 		QPainter painter(&img);
 
@@ -326,5 +422,32 @@ namespace SoftwareRenderer{
 		}
 
 		return img;
+	}
+
+	Eigen::MatrixXd render( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 vmat = CreateViewMatrix() )
+	{
+		Eigen::MatrixXd buffer = Eigen::MatrixXd::Zero( height, width );
+
+		// Camera and projection
+		Eigen::Vector2d viewArea( width, height );
+		Matrix4 pmat = CreateProjectionMatrix( 45, double(width) / height );
+		Matrix4 wmat = CreateWorldMatrix();
+		Matrix4 transformMatrix = wmat * vmat * pmat;
+
+		for(auto tri : triangles)
+		{
+			Eigen::Vector3d p0 = Project(tri[0], transformMatrix, viewArea);
+			Eigen::Vector3d p1 = Project(tri[1], transformMatrix, viewArea);
+			Eigen::Vector3d p2 = Project(tri[2], transformMatrix, viewArea);
+
+			drawTriangle(buffer, p0, p1, p2, 1.0);
+
+			// Wireframe:
+			//DrawBline(buffer, p0,p1, 1.0);
+			//DrawBline(buffer, p1,p2, 1.0);
+			//DrawBline(buffer, p2,p0, 1.0);
+		}
+
+		return buffer;
 	}
 }

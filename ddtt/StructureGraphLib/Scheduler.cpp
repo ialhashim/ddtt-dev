@@ -14,7 +14,7 @@
 #include "kmeans.h"
 #include "kmedoid.h"
 
-#include "SoftwareRenderer.h"
+//#include "SoftwareRenderer.h"
 
 #include "TaskGroups.h"
 
@@ -1400,14 +1400,13 @@ QVector<Structure::Graph*> Scheduler::topoVaryingInBetweens(int N, bool isVisual
 				for(int pi = 0; pi < cpnts.size(); pi++) cpnts[pi] = ((cpnts[pi] - mean) / scale);
 			}
 
-			MatrixXd thumbnail = SoftwareRenderer::render(cpnts, thumbWidth, thumbWidth, 2, Vector3(0,0,0));
-
+			//MatrixXd thumbnail = SoftwareRenderer::render(cpnts, thumbWidth, thumbWidth, 2, Vector3(0,0,0));
 			//if( isVisualize ) SoftwareRenderer::matrixToImage(thumbnail).save(QString("skeleton_%1.png").arg(i));
 			
 			// Fill to a vector
 			for(int d = 0; d < thumbWidth * thumbWidth; d++) 
 			{
-				V(i,d) = thumbnail(d);
+			//	V(i,d) = thumbnail(d);
 			}
 		}
 
@@ -1535,7 +1534,7 @@ QVector<Structure::Graph*> Scheduler::topoVaryingInBetweens(int N, bool isVisual
 			painter.setBrush(randColors[ classes[i] ]);
 			painter.drawEllipse(QPoint(x,y),10,10);
 
-			painter.drawImage( x, y, SoftwareRenderer::matrixToImage( SoftwareRenderer::vectorToMatrix(V.row(i), thumbWidth, thumbWidth) ) );
+			//painter.drawImage( x, y, SoftwareRenderer::matrixToImage( SoftwareRenderer::vectorToMatrix(V.row(i), thumbWidth, thumbWidth) ) );
 		}
 
 		// Topology

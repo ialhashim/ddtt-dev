@@ -23,7 +23,9 @@ public:
 		point = fromPoints;
 
 		if(fromPoints.size() > 1 && (fromPoints[0] - fromPoints[1]).norm() > ZERO_NORM)
+		{
             if(isCompute) compute();
+		}
 		else
 		{
 			U.push_back(Frame::fromRS(Vec3d(1,0,0), Vec3d(0,1,0)));

@@ -3,6 +3,7 @@
 #include <vector>
 #include <Eigen/Core>
 
+/* Adapted from JavaScript! ha ha https://github.com/sakri/MarchingSquaresJS */
 struct MarchingSquares
 {
 	typedef Eigen::Vector2d PixelType;

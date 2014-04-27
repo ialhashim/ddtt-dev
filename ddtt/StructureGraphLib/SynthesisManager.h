@@ -14,7 +14,14 @@ class GraphCorresponder;
 class Scheduler;
 class TopoBlender;
 typedef QMap<QString, QMap<QString, QVariant> > SynthData;
+
+// Proxies
 typedef std::vector< std::vector<double> > NodeProxy;
+struct SimplePolygon{ 
+	SimplePolygon(std::vector<Vector3> v = std::vector<Vector3>(), QColor c = QColor(0,0,0), bool isWireframe = false) : 
+		vertices(v), c(c), isWireframe(isWireframe){} 
+	std::vector<Vector3> vertices; QColor c; bool isWireframe;
+};
 
 extern QStack<double> nurbsQuality;
 
@@ -100,7 +107,7 @@ public slots:
 	void bufferCleanup();
 
     void makeProxies(int numSides = 10, int numSpineJoints = 10);
-    void drawWithProxies(Structure::Graph * g);
+    std::vector<SimplePolygon> drawWithProxies(Structure::Graph * g);
 
 	void emitSynthDataReady();
 
