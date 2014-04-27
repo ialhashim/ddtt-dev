@@ -35,6 +35,6 @@ public slots:
 	void loadModels(QStringList fileNames);
 	void clear();
 	void loadGraphs();
-
+	void loadKnowledge();
 	void correspond();
 };

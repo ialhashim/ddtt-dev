@@ -3,6 +3,7 @@
 #include "Task.h"
 #include "Scheduler.h"
 #include "TopoBlender.h"
+#include "SynthesisManager.h"
 
 typedef QMap< QString,QVariant > PropertyMap;
 typedef QPair< QVector<QString>, QVector<QString> > Pairing;
@@ -28,6 +29,7 @@ public:
     GraphCorresponder * gcorr;
     QSharedPointer<Scheduler> scheduler;
     QSharedPointer<TopoBlender> blender;
+	QSharedPointer<SynthesisManager> synthman;
 
 	QVector<Structure::Graph*> samples;
 

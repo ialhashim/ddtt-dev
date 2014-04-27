@@ -14,6 +14,7 @@
 #include "Corresponder.h"
 
 #include "ShapeCorresponder.h"
+#include "ImageCompare.h"
 
 #include "DeformScene.h"
 
@@ -46,13 +47,50 @@ void ddtt::create()
 		drawArea()->setShortcut(QGLViewer::DRAW_AXIS, Qt::Key_A);
 		drawArea()->setShortcut(QGLViewer::DRAW_GRID, Qt::Key_G);
 
-		w->ui->loadGraphs->click();
+		//w->ui->loadGraphs->click();
 		//w->ui->correspondButton->click();
+
+		//loadKnowledge();
 	}
 }
 
-SynthesisManager * sm = NULL;
-float frame = 0;
+void ddtt::loadKnowledge()
+{
+	QElapsedTimer loadTimer; loadTimer.start();
+
+	ImageCompare im;
+	
+	//im.loadKnowledge("C:/Temp/_imageSearch/test_data", "chairs");
+	im.loadKnowledge("C:/Temp/_imageSearch/all_images_apcluster_data", "chairs");
+
+	mainWindow()->setStatusBarMessage(QString("Loaded knowledge dataset [%1] with %2 shapes (%3 ms)").arg(
+		"chairs").arg(im.datasetSize("chairs")).arg(loadTimer.elapsed()));
+
+	// Find duplicates:
+	if( false )
+	{	
+		ImageCompare::Instance inst = im.getInstance("chairs");
+
+		// Timing:
+		QElapsedTimer queryTimer; queryTimer.start();
+		QVector<ImageCompare::Instance> results = im.kNearest( inst, 7 );
+		mainWindow()->setStatusBarMessage( QString("Query time (%1 ms)").arg(queryTimer.elapsed()) );
+
+		// Debug:
+		ImageCompare::showInstances( QVector<ImageCompare::Instance>() << inst );
+		ImageCompare::showInstances( im.kNearest( inst, 7 ) );
+
+		// Clean up:
+		//im.removeDuplicateSets(0.2, "chairs");
+
+		for(auto dupset : im.duplicateSets( 0.3 ))
+		{
+			QVector<QImage> setimgs;
+			for(auto instance : dupset)	setimgs << instance.image();
+			showImages( setimgs );
+		}
+	}
+}
 
 void ddtt::decorate()
 {
@@ -203,7 +241,7 @@ void ddtt::correspond()
 	if(graphs.front()->nodes.size() > graphs.back()->nodes.size())
 		std::swap( graphs.front(), graphs.back() );
 
-	sc = new ShapeCorresponder( graphs.front(), graphs.back(), !w->ui->bestAssign->isChecked() );
+	sc = new ShapeCorresponder( graphs.front(), graphs.back(), "chairs" );
 
 	drawArea()->clear();
 	for(auto r : sc->debug) drawArea()->addRenderObject(r);

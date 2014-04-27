@@ -24,7 +24,7 @@ struct ShapeCorresponder{
 
 	std::vector<DeformationPath> paths;
 
-	ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool isFullSet = true);
+	ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, QString knowledge = QString());
 
 	QVector<RenderObject::Base *> debug;
 };

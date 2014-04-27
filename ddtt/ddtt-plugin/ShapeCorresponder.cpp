@@ -13,34 +13,21 @@
 #include "next_combination.h"
 #include "ShapeCorresponder.h"
 #include "SynthesisManager.h"
+#include "Octree.h"
+#include "SoftwareRenderer.h"
 
 #include "GenericGraph.h"
 #include "StructureGraph.h"
 #include "GraphDistance.h"
 using namespace Structure;
 
-qglviewer::Camera * setupCamera(){
-	qglviewer::Camera * camera = new qglviewer::Camera;
-	camera->setUpVector(qglviewer::Vec(0,0,1));
-	camera->setPosition(qglviewer::Vec(-2,-2,0.8));
-	camera->lookAt(qglviewer::Vec());
-	camera->setSceneRadius( 10 );
-	camera->showEntireScene();
-	return camera;
-}
-void updateCamera(qglviewer::Camera * camera, Structure::Graph * g){
-	qglviewer::Vec viewDir = camera->viewDirection();
-	Eigen::AlignedBox3d graphBBox = g->bbox();
-	double distance = graphBBox.sizes().maxCoeff() * 2.25;
-	Vector3 center = graphBBox.center();
-	Vector3 newPos = center - (distance * Vector3(viewDir[0], viewDir[1], viewDir[2]));
-	camera->setRevolveAroundPoint( qglviewer::Vec(center) );
-	qglviewer::Vec new_pos(newPos);
-	camera->frame()->setPositionWithConstraint(new_pos);
-	camera->setScreenWidthAndHeight(128, 128);
-	camera->loadProjectionMatrix();
-	camera->loadModelViewMatrix();
-}
+// Evaluation
+#include "ImageCompare.h"
+ImageCompare im;
+QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
+
+// Help generate combinations
+#include "cartesian.h"
 
 static inline QString shortName(QString name){
 	if(name.length() < 3) return name;
@@ -52,8 +39,6 @@ QStringList toQStringList( const QVector<QString> & v ){
 	for(auto & s : v) l << s;
 	return l;
 }
-
-#include "cartesian.h"
 
 void measure_position(Structure::Graph * graph)
 {
@@ -488,8 +473,11 @@ Assignments allAssignments( QVector< QVector<QString> > sgroups, QVector< QVecto
 	return assignments;
 }
 
-ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, bool) : source(g1), target(g2)
+ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, QString knowledge) : source(g1), target(g2)
 {
+	// Load knowledge
+	im.loadKnowledge( chairsDatasetFolder, "chairs" );
+
 	// Set of random colors
 	QVector<QColor> colors;
 	for(int i = 0; i < (int)source->nodes.size() * 2; i++) colors.push_back(starlab::qRandomColor2());
@@ -508,6 +496,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 	mat m = buildDifferenceMatrix(source, target);
 	if(true) visualizeDifferenceMatrix(m, source, target);
+
 
 	// Considered neighbors
 	int K = 2;
@@ -593,14 +582,28 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	bool isSubsample = true;
 	if( isSubsample )
 	{
-		int MaxNumPaths = 10;
+		int MaxNumPaths = 2;
 		std::vector<bool> mask = subsampleMask(MaxNumPaths, paths.size());
 		std::vector<DeformationPath> subsampled;
 		for(auto & path : paths){
 			if(mask[path.i]) 
 				subsampled.push_back(path);
 		}
-		paths = subsampled;
+		paths = subsampled; 
+	}
+
+	/// Cache Octrees
+	for(auto g : graphs){
+		for(auto n : g->nodes){
+			SurfaceMesh::Model * model = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+			if(!model) continue;
+			Octree * octree = model->property("octree").value<Octree*>();
+			if( !octree ){
+				octree = new Octree(model, 40);
+				QVariant oct; oct.setValue(octree);
+				model->setProperty("octree", oct);
+			}
+		}
 	}
 
 	/// Find best correspondence
@@ -619,24 +622,68 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			// Prepare blending
 			path.scheduler = QSharedPointer<Scheduler>( new Scheduler );
 			path.blender = QSharedPointer<TopoBlender>( new TopoBlender( path.gcorr, path.scheduler.data() ) );
+			path.synthman = QSharedPointer<SynthesisManager>( new SynthesisManager(path.gcorr, path.scheduler.data(), path.blender.data()) );
 
 			// Deform
 			path.scheduler->timeStep = 0.1;
 			path.scheduler->executeAll();
 
 			// Gather samples from execution
-			for(int s = 0; s < numSamples; s++)
+			bool isSamplePath = true;
+			if( isSamplePath )
 			{
-				double t = double(s)/(numSamples-1);
-				int idx = t * (path.scheduler->allGraphs.size()-1);
+				path.synthman->makeProxies(60, 20);
 
-				path.samples.push_back( new Structure::Graph( *path.scheduler->allGraphs[idx] ) );
+				for(int s = 0; s < numSamples; s++)
+				{
+					double t = double(s)/(numSamples-1);
+					t = ((1.0 - 0.6) / 2.0) + (t * 0.6); // middle 60%
+
+					int idx = t * (path.scheduler->allGraphs.size()-1);
+					Structure::Graph * g = path.scheduler->allGraphs[idx];
+
+					std::vector<SimplePolygon> polys = path.synthman->drawWithProxies(g);
+
+					if( polys.size() )
+					{
+						QVector< QVector<Vector3> > tris;
+
+						for(auto p : polys){
+							if(p.vertices.size() < 4)
+								tris.push_back( QVector<Vector3>() << p.vertices[0] << p.vertices[1] << p.vertices[2] );
+							else{
+								tris.push_back( QVector<Vector3>() << p.vertices[0] << p.vertices[1] << p.vertices[2] );
+								tris.push_back( QVector<Vector3>() << p.vertices[2] << p.vertices[3] << p.vertices[0] );
+							}
+						}
+
+						// Camera
+						Eigen::AlignedBox3d graphBBox = g->bbox();
+						double distance = graphBBox.sizes().maxCoeff() * 4.5;
+						Vector3 direction (-2,-2,0.8);
+						direction.normalize();
+						
+						Vector3 target = graphBBox.center();
+						Vector3 eye = (direction * distance) + target;
+						Vector3 up(0,0,1);
+						Eigen::MatrixXd camera = SoftwareRenderer::CreateViewMatrix(eye, target, up);
+
+						Eigen::MatrixXd buffer = SoftwareRenderer::render(tris, 128, 128, camera);
+
+						// DEBUG
+						if( true )
+						{
+							SoftwareRenderer::matrixToImage( buffer, false ).save( QString("path_%1_%2.png").arg(pi).arg(s) );
+						}
+					}
+				}
 			}
 
 			// Clean up
 			{
 				path.scheduler.clear();
 				path.blender.clear();
+				path.synthman.clear();
 				path.errors.clear();
 			}
 		}
@@ -649,51 +696,8 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 	if( !paths.size() ) return;
 
-	// Evaluate
+	// Find best
 	{
-		int w = 128, h = 128;
-		vector<unsigned char> glbuffer(w*h, 0);
-
-		QGLFormat glformat;	glformat.setSamples(0);
-		QGLWidget qgl(glformat);
-		qgl.setMinimumSize(w,h); qgl.setMaximumSize(w,h);
-		qgl.makeCurrent();
-		qgl.qglClearColor(Qt::white);
-		
-		QGLFramebufferObjectFormat fboFormat;
-		fboFormat.setMipmap(false);
-		fboFormat.setSamples(0);
-		fboFormat.setInternalTextureFormat(GL_LUMINANCE);
-		QGLFramebufferObject * fbo = new QGLFramebufferObject(QSize(w,h),fboFormat);
-
-		fbo->bind();
-
-		glViewport(0,0,w,h);
-		qglviewer::Camera * cam = setupCamera();
-
-		evaluateTimer.start();
-
-		for(auto p : paths)
-		{
-			for(auto g : p.samples)
-			{
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear Screen And Depth Buffer
-
-				updateCamera(cam, g);
-				g->setColorAll(Qt::black);
-				g->draw();
-
-				glReadPixels(0,0,w,h, GL_LUMINANCE, GL_UNSIGNED_BYTE, &glbuffer.front());
-
-				// DEBUG:
-				//qgl.grabFrameBuffer().save( QString("%1_%2.png").arg(p.i).arg(g->property["t"].toDouble()) );
-			}
-		}
-
-		property["evaluateTime"].setValue(evaluateTimer.elapsed());
-
-		fbo->release();
-
 		// Best = lowest error
 		std::sort(paths.begin(), paths.end(), DeformationPathCompare);
 		bestPath = paths.front();
