@@ -38,7 +38,7 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 		QString fullFilename = d.absolutePath() + "/" + file;
 		
 		ImageCompare::Instance inst;
-		inst.index = dataset.data.size();
+		inst.index = i;
 		inst.filename = fullFilename;
 		inst.id = QFileInfo(inst.filename).baseName();
 
@@ -90,27 +90,31 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 	datasets[datasetName] = dataset;
 }
 
-std::vector<double> ImageCompare::generateSignature( Instance inst, bool isSaveToFile )
-{		
-	int sig_length = 128;
-
-	if(!inst.contour.size()) return std::vector<double>();
-
+std::vector<double> ImageCompare::centroidDistanceSignature( const std::vector< std::pair<double,double> > & contour )
+{
 	// Find centroid
 	std::pair<double,double> c(0,0);
-	for(auto p : inst.contour) { c.first += p.first ; c.second += p.second; }
-	c.first /= inst.contour.size(); c.second /= inst.contour.size();
+	for(auto p : contour) { c.first += p.first ; c.second += p.second; }
+	c.first /= contour.size(); c.second /= contour.size();
 
-	// Centroid Distance signature
 	std::vector<double> dists;
-	for(auto p : inst.contour) 
+	for(auto p : contour) 
 	{
 		double dist = std::sqrt( pow(p.first - c.first,2) + pow(p.second - c.second,2) );
 		dists.push_back( dist );
 	}
 
-	// FFT
-	std::vector<double> real = dists, imag(real.size(), 0);
+	return dists;
+}
+
+std::vector<double> ImageCompare::fourierDescriptor( std::vector<double> cds )
+{
+	if(!cds.size()) return cds;
+
+	int sig_length = 128;
+
+	// FFT on Centroid Distance signature
+	std::vector<double> real = cds, imag(real.size(), 0);
 	Fft::transform(real, imag);
 
 	bool isNormalizeFD = true;
@@ -137,10 +141,10 @@ std::vector<double> ImageCompare::generateSignature( Instance inst, bool isSaveT
 	}
 
 	// Check against signature length
-	if( inst.contour.size() < sig_length)
+	if( real.size() < sig_length)
 	{
-		size_t padding = sig_length - inst.contour.size();
-		size_t h = inst.contour.size() / 2;
+		size_t padding = sig_length - real.size();
+		size_t h = real.size() / 2;
 		real.insert(real.begin() + h, padding, 0);
 		imag.insert(imag.begin() + h, padding, 0);
 	}
@@ -151,6 +155,15 @@ std::vector<double> ImageCompare::generateSignature( Instance inst, bool isSaveT
 	// Shorten to assigned size 
 	Fft::shrink(sig_length, real, imag);
 
+	return real;
+}
+
+std::vector<double> ImageCompare::generateSignature( Instance inst, bool isSaveToFile )
+{		
+	if(!inst.contour.size()) return std::vector<double>();
+
+	std::vector<double> sig = fourierDescriptor( centroidDistanceSignature(inst.contour) );
+
 	if( isSaveToFile )
 	{
 		// Save to disk
@@ -159,10 +172,10 @@ std::vector<double> ImageCompare::generateSignature( Instance inst, bool isSaveT
 		QTextStream out( &sigFile );
 
 		if( sigFile.open(QIODevice::WriteOnly | QIODevice::Text) )
-			for(auto s : real) out << QString::number(s) << " ";
+			for(auto s : sig) out << QString::number(s) << " ";
 	}
 
-	return real;
+	return sig;
 }
 
 double ImageCompare::distance(const Instance &instanceA, const Instance &instanceB)
@@ -170,13 +183,13 @@ double ImageCompare::distance(const Instance &instanceA, const Instance &instanc
 	/* Quadratic-Chi Histogram Distance */
 	//double dist = QC::distance( j.signature, instance.signature );
 
-	/* L-2 */
+	/* L2 Euclidean distance */
 	double dist = QC::L2distance( instanceA.signature, instanceB.signature );	
 
 	return dist;
 }
 
-QVector<ImageCompare::Instance> ImageCompare::kNearest(const ImageCompare::Instance &instance, int k, bool isReversed)
+QVector<ImageCompare::Instance> ImageCompare::kNearest(const ImageCompare::Instance &instance, int k, bool isReversed) const
 {
 	QVector<ImageCompare::Instance> result;
 
@@ -185,11 +198,11 @@ QVector<ImageCompare::Instance> ImageCompare::kNearest(const ImageCompare::Insta
 
 	for(auto key : datasets.keys())
 	{
-		DataSet & dataset = datasets[key];
+		const DataSet & dataset = datasets[key];
 
 		for(auto & j : dataset.data)
 		{
-			candidates << ScoreInstance( distance(j, instance), j.index );
+			candidates << ScoreInstance( ImageCompare::distance(j, instance), j.index );
 		}
 	
 		// Sort...

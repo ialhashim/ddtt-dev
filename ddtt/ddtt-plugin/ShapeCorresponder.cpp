@@ -25,7 +25,8 @@ using namespace Structure;
 #include "ImageCompare.h"
 #include "MarchingSquares.h"
 ImageCompare im;
-QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
+//QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
+QString chairsDatasetFolder = "C:/Temp/_imageSearch/test_data";
 
 // Help generate combinations
 #include "cartesian.h"
@@ -498,7 +499,6 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	mat m = buildDifferenceMatrix(source, target);
 	if(true) visualizeDifferenceMatrix(m, source, target);
 
-
 	// Considered neighbors
 	int K = 2;
 
@@ -580,7 +580,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 	property["pathsCount"].setValue( (int)paths.size() );
 
 	// Subsample paths	
-	bool isSubsample = true;
+	bool isSubsample = false;
 	if( isSubsample )
 	{
 		int MaxNumPaths = 2;
@@ -629,10 +629,11 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 			path.scheduler->timeStep = 0.1;
 			path.scheduler->executeAll();
 
-			// Gather samples from execution
-			bool isSamplePath = true;
-			if( isSamplePath )
+			// Evaluate
+			bool isEvaluate = true;
+			if( isEvaluate )
 			{
+				path.weight = 0.0;
 				path.synthman->makeProxies(60, 20);
 
 				for(int s = 0; s < numSamples; s++)
@@ -658,23 +659,44 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 							}
 						}
 
-						// Camera
+						// Setup camera
 						Eigen::AlignedBox3d graphBBox = g->bbox();
 						double distance = graphBBox.sizes().maxCoeff() * 4.5;
 						Vector3 direction (-2,-2,0.8);
 						direction.normalize();
-						
 						Vector3 target = graphBBox.center();
 						Vector3 eye = (direction * distance) + target;
 						Vector3 up(0,0,1);
 						Eigen::MatrixXd camera = SoftwareRenderer::CreateViewMatrix(eye, target, up);
 
+						// Draw geometry into a buffer
 						Eigen::MatrixXd buffer = SoftwareRenderer::render(tris, 128, 128, camera);
 
+						// Find outer most contour using marching squares
+						std::vector< std::pair<double,double> > contour;
+						for(auto p : MarchingSquares::march(buffer, 1.0))
+							contour.push_back( std::make_pair(p.x(), p.y()) );
+
+						// Compute signature
+						std::vector<double> cds = ImageCompare::centroidDistanceSignature( contour );
+						std::vector<double> sig = ImageCompare::fourierDescriptor( cds );
+
+						// Compare with respect to knowledge
+						ImageCompare::Instance sampleInstance( sig );
+						for( auto against : im.kNearest(sampleInstance, 5) )
+							path.weight += ImageCompare::distance( sampleInstance, against );
+
 						// DEBUG
-						if( true )
+						if( false )
 						{
-							SoftwareRenderer::matrixToImage( buffer, false ).save( QString("path_%1_%2.png").arg(pi).arg(s) );
+							QImage debugImg = SoftwareRenderer::matrixToImage( buffer, false );
+							QPainter painter(&debugImg); QPainterPath qpath;	int i = 0;
+							for(auto p : contour) (i++ == 0) ? qpath.moveTo(p.first, p.second) : qpath.lineTo(p.first, p.second);
+							painter.setPen(QPen(Qt::red, 2)); painter.drawPath(qpath);
+							QString title = QString("path-%1-%2").arg(pi).arg(s);
+							painter.setFont(QFont("Courier", 7));
+							painter.drawText(QPoint(10,10), title + QString("[%2]").arg(path.weight));
+							debugImg.save( title + ".png" );
 						}
 					}
 				}

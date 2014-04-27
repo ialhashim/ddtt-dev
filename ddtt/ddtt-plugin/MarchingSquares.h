@@ -36,7 +36,7 @@ struct MarchingSquares
 
 		for(int y = 0; y < height; y++){
 			for(int x = 0; x < width; x++){
-				if(image(y,x) != fillValue)
+				if(image(y,x) == fillValue)
 					return PixelType(x,y);
 			}
 		}
@@ -49,15 +49,11 @@ struct MarchingSquares
 		int startX = startingPoint.x();
 		int startY = startingPoint.y();
 
-		// Bounds
-		if (startX < 0)			startX = 0;
-		if (startX > width)		startX = width;
-		if (startY < 0)			startY = 0;
-		if (startY > height)	startY = height;
-		
 		// Set up our return list
 		std::vector<PixelType> pointList;
 
+		if(startX < 0 || startY < 0) return pointList;
+		
 		// Our current x and y positions, initialized
 		// to the init values passed in
 		int x = startX;
@@ -90,7 +86,7 @@ struct MarchingSquares
 
 	inline bool emptyPixel( int x, int y )
 	{
-		if(x < 0 || x > image.cols() - 1 || y < 0 || y > image.rows() - 1) return true;
+		if(x < 0 || x > width - 1 || y < 0 || y > height - 1) return true;
 		return image(y,x) != fillValue;
 	}
 

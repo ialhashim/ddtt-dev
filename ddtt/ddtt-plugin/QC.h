@@ -10,9 +10,9 @@ struct isEqualZero{
 };
 
 /* The Quadratic-Chi Histogram Distance Family. Ofir Pele, Michael Werman. [ECCV 2010] */
-namespace QC
+struct QC
 {
-	double distance( std::vector<double> histogramP, std::vector<double> histogramQ )
+	static double distance( std::vector<double> histogramP, std::vector<double> histogramQ )
 	{
 		// Defaults
 		int THRESHOLD = 3;
@@ -50,14 +50,15 @@ namespace QC
 		return std::sqrt( std::max(0.0, DADt) );
 	}
 
-	double L2distance( std::vector<double> histogramP, std::vector<double> histogramQ )
+	static double L2distance( std::vector<double> histogramP, std::vector<double> histogramQ )
 	{
 		int N = (int)histogramP.size();
+		if(N == 0 || histogramP.size() != histogramQ.size()) return 1e12;
 
 		// Convert to Eigen vectors
 		Eigen::Map<Eigen::VectorXd> P( &histogramP[0], N );
 		Eigen::Map<Eigen::VectorXd> Q( &histogramQ[0], N );
-
+		 
 		return ( P - Q ).norm();
 	}
-}
+};
