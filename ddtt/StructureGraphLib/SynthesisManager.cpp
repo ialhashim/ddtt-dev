@@ -1226,6 +1226,8 @@ std::vector<SimplePolygon> SynthesisManager::drawWithProxies(Graph *g)
 				polygon << Vector3(p1 + AlphaBlend(alpha, proxy[i+1][j+1], proxyTarget[i+1][j+1]) * cB[j+1]);
 				polygon << Vector3(p0 + AlphaBlend(alpha, proxy[i][j+1], proxyTarget[i][j+1]) * cA[j+1]);
 
+                std::reverse(polygon.begin(), polygon.end());
+
 				geometries.push_back(SimplePolygon(polygon.toStdVector(), proxyColor, isWireframe));
 			}
 		}

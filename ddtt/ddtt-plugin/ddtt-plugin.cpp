@@ -193,12 +193,66 @@ void ddtt::loadModels(QStringList fileNames)
 	setSceneBounds();
 }
 
+void ddtt::loadJob(QString filename)
+{
+	QFile job_file( filename );
+
+	if (!job_file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+	QFileInfo jobFileInfo(job_file.fileName());
+	QTextStream in(&job_file);
+
+	// Job file content
+	QString sgFileName, tgFileName, correspondenceFileName, scheduleFileName;
+	int samplesCount;
+	double gdResolution, timeStep;
+	int reconLevel, renderCount;
+
+	QString curPath = jobFileInfo.absolutePath() + "/";
+
+	sgFileName = in.readLine();
+	tgFileName = in.readLine();
+	correspondenceFileName = in.readLine();
+	scheduleFileName = in.readLine();
+
+	in >> samplesCount;
+	in >> gdResolution >> timeStep;
+	in >> reconLevel >> renderCount;
+
+	/*
+	// Load graphs
+	tb->graphs.push_back( new Structure::Graph ( curPath + sgFileName ) );
+	tb->graphs.push_back( new Structure::Graph ( curPath + tgFileName ) );
+	tb->setSceneBounds();
+	tb->updateDrawArea();
+
+	// Load correspondence
+	tb->gcoor = tb->c_manager->makeCorresponder();
+	tb->gcoor->loadCorrespondences( curPath + correspondenceFileName );
+	tb->gcoor->isReady = true;
+	*/
+
+	graphs.push_back( new Structure::Graph ( curPath + sgFileName ) );
+	graphs.push_back( new Structure::Graph ( curPath + tgFileName ) );
+
+	mainWindow()->settings()->set( "lastUsedDirectory", jobFileInfo.absolutePath() );
+
+	setSceneBounds();
+}
+
 void ddtt::loadGraphs()
 {
 	if( graphs.size() < 2 )
 	{
-		loadModels(QFileDialog::getOpenFileNames(0, "Open Model", 
-			mainWindow()->settings()->getString("lastUsedDirectory"), "Model Files (*.xml)"));
+		QStringList files = QFileDialog::getOpenFileNames(0, "Open Model", 
+			mainWindow()->settings()->getString("lastUsedDirectory"), "Model Files (*.xml);;Job files (*.job)");
+		if(files.size() < 1) return;
+
+		if(files.front().contains(".job"))
+		{
+			loadJob( files.front() );
+		}
+		else
+			loadModels( files );
 	}
 }
 
@@ -234,6 +288,7 @@ void ddtt::execute()
 void ddtt::correspond()
 {
 	loadGraphs();
+	if(graphs.empty()) return;
 
 	QElapsedTimer timer; timer.start();
 

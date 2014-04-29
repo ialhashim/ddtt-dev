@@ -219,7 +219,8 @@ static inline double optMapMae( std::vector<Point> contourA, std::vector<Point> 
 		contours[3].push_back(p.y());
 	}
 
-	double bestcost = 0;
+	double bestcost = 1e12;
+	if(contourA.size() < 3 || contourB.size() < 3) return bestcost;
 
 	_optMapMae(	&contours[0][0], &contours[1][0],
 				&contours[2][0], &contours[3][0],

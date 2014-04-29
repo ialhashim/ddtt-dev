@@ -61,3 +61,28 @@ void DeformationPath::renderSamples()
 
 	property["isReady"].setValue( true );
 }
+
+void DeformationPath::renderProxies()
+{
+	if(!gcorr) return;
+
+	qApp->setOverrideCursor(Qt::WaitCursor);
+
+	scheduler = QSharedPointer<Scheduler>( new Scheduler );
+	blender = QSharedPointer<TopoBlender>( new TopoBlender( gcorr, scheduler.data() ) );
+
+	// Surface sampling via proxies
+	smanager = new SynthesisManager(gcorr, scheduler.data(), blender.data());
+	smanager->makeProxies(60,20);
+
+	// Execute path
+	scheduler->executeAll();
+	for(auto & g : scheduler->allGraphs) g->moveBottomCenterToOrigin( true );
+
+	property["synthManager"].setValue( smanager );
+
+	qApp->restoreOverrideCursor();
+	QCursor::setPos(QCursor::pos());
+
+	property["isReady"].setValue( true );
+}

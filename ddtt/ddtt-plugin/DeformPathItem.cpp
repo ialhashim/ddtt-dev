@@ -275,7 +275,21 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 			{
 				glEnable(GL_LIGHTING);
 				sm->color = Qt::red;
-				sm->drawSynthesis( g );
+
+				if(sm->proxies.size())
+				{
+					for(auto poly : sm->drawWithProxies( g ))
+					{
+						glColorQt( sm->color );
+						glBegin(GL_POLYGON);
+						Vector3 normal = (poly.vertices[1] - poly.vertices[0]).cross(poly.vertices[2] - poly.vertices[0]).normalized();
+						glNormal3( normal );
+						for(auto v : poly.vertices) glVector3(v);
+						glEnd();
+					}
+				}
+				else
+					sm->drawSynthesis( g );
 			}
 		}
 	}

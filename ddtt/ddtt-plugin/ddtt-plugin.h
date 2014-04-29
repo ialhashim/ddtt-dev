@@ -33,6 +33,7 @@ public:
 public slots:
 	void execute();
 	void loadModels(QStringList fileNames);
+	void loadJob(QString filename);
 	void clear();
 	void loadGraphs();
 	void loadKnowledge();

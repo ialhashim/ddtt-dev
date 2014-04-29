@@ -19,6 +19,7 @@ public:
     QSlider * slider;
     QLabel * label;
 	QPushButton * saveCorrButton;
+	QPushButton * proxyButton;
 	QPushButton * renderButton;
 	QPushButton * executeButton;
 

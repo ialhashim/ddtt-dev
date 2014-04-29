@@ -69,14 +69,21 @@ void DeformPathItemWidget::init()
 			path->gcorr->saveCorrespondences( filename );
 		});
 
+		// Render proxies
+		proxyButton = new QPushButton("Proxies..");
+		sublayout->addWidget(proxyButton);
+		connect(proxyButton, &QPushButton::clicked, [=](){
+			this->setEnabled(false);
+			path->renderProxies();
+			this->setEnabled(true);
+		});
+
 		// Render samples
 		renderButton = new QPushButton("Render..");
 		sublayout->addWidget(renderButton);
 		connect(renderButton, &QPushButton::clicked, [=](){
 			this->setEnabled(false);
-
 			path->renderSamples();
-
 			this->setEnabled(true);
 		});
 
