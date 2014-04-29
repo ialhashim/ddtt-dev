@@ -73,11 +73,11 @@ void ddtt::loadKnowledge()
 
 		// Timing:
 		QElapsedTimer queryTimer; queryTimer.start();
-		QVector<ImageCompare::Instance> results = im.kNearest( inst, 7 );
+		ImageCompare::InstanceMatches results = im.kNearest( inst, 7 );
 		mainWindow()->setStatusBarMessage( QString("Query time (%1 ms)").arg(queryTimer.elapsed()) );
 
 		// Debug:
-		ImageCompare::showInstances( QVector<ImageCompare::Instance>() << inst );
+		ImageCompare::showInstances( ImageCompare::InstanceMatches() << qMakePair(0,inst) );
 		ImageCompare::showInstances( im.kNearest( inst, 7 ) );
 
 		// Clean up:

@@ -2,10 +2,6 @@
 
 #pragma once
 
-#include "Hungarian.h"
-#undef max
-#undef min
-
 #include <QVector>
 #include <QVariant>
 #include "RenderObjectExt.h"

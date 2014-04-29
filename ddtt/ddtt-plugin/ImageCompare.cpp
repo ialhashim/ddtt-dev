@@ -189,9 +189,9 @@ double ImageCompare::distance(const Instance &instanceA, const Instance &instanc
 	return dist;
 }
 
-QVector<ImageCompare::Instance> ImageCompare::kNearest(const ImageCompare::Instance &instance, int k, bool isReversed) const
+ImageCompare::InstanceMatches ImageCompare::kNearest(const Instance &instance, int k, bool isReversed) const
 {
-	QVector<ImageCompare::Instance> result;
+	ImageCompare::InstanceMatches result;
 
 	typedef QPair<double, int> ScoreInstance;
     QVector< ScoreInstance > candidates;
@@ -212,7 +212,7 @@ QVector<ImageCompare::Instance> ImageCompare::kNearest(const ImageCompare::Insta
 		if(isReversed) std::reverse(candidates.begin(), candidates.end());
 
 		// Return first 'k'
-		for(int i = 0; i < k; i++) result.push_back( datasets[key].data.at( candidates[i].second ) );
+		for(int i = 0; i < k; i++) result.push_back( qMakePair(candidates[i].first, datasets[key].data.at( candidates[i].second )) );
 	}
 
     return result;
@@ -297,15 +297,36 @@ void ImageCompare::removeDuplicateSets( double threshold, QString datasetName )
 	loadKnowledge(datasetPath, datasetName);
 }
 
-void ImageCompare::showInstances(QVector<ImageCompare::Instance> instances)
+void ImageCompare::showInstances(InstanceMatches instances)
 {
 	QVector<QImage> imgs;
 	QStringList labels;
 
-	for(auto i : instances){
+	for(auto match : instances){
+		Instance & i = match.second;
 		imgs.push_back( i.image() );
 		labels.push_back( QString("%1 : %2").arg(i.index).arg(i.id) );
 	}
 
 	showImages(imgs, labels);
+}
+
+QImage ImageCompare::visualizeInstance( ImageCompare::Instance instance, QString lable )
+{
+	QImage img = instance.image().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+	QPainter painter( &img ); 
+	QPainterPath qpath;	int i = 0;
+	for(auto p : instance.contour) (i++ == 0) ? qpath.moveTo(p.first, p.second) : qpath.lineTo(p.first, p.second);
+	
+	painter.setPen(QPen(Qt::blue, 2)); painter.drawPath(qpath);
+	
+	painter.fillRect(img.rect().translated(QPoint(0,-80)), QColor(255,255,255,180));
+
+	QString title = QString("%1:%2").arg(instance.index).arg(instance.id);
+	painter.setFont(QFont("Courier", 9));
+	painter.drawText(QPoint(10,15), title);
+	painter.drawText(QPoint(10,25), lable);
+	
+	return img;
 }

@@ -36,8 +36,10 @@ public:
 		QImage cachedImage;
 		QImage image() { if(cachedImage.isNull()) cachedImage.load(filename); return cachedImage; }
 		QMap<QString,QVariant> property;
-		Instance(){}
-		Instance(std::vector<double> signature) : signature(signature){}
+		Instance(){ index = -1; }
+		Instance(std::vector< std::pair<double,double> > contour) : contour(contour){
+			signature = ImageCompare::fourierDescriptor( ImageCompare::centroidDistanceSignature( contour ) );
+		}
 	};
 
 	struct DataSet{
@@ -60,7 +62,8 @@ public:
 	static double distance(const ImageCompare::Instance &instanceA, const ImageCompare::Instance &instanceB);
 
 	/// k-nearest neighbors
-	QVector<Instance> kNearest(const ImageCompare::Instance &instance, int k = 1, bool isReversed = false) const;
+	typedef QVector< QPair<double, Instance > > InstanceMatches;
+	InstanceMatches kNearest(const ImageCompare::Instance &instance, int k = 1, bool isReversed = false) const;
 
 	/// Duplicated items
 	QVector< QVector<Instance> > duplicateSets( double threshold, QString datasetName = QString() );
@@ -71,6 +74,6 @@ public:
 	size_t datasetSize(QString datasetName);
 
 	/// Visualization
-	static void showInstances( QVector<Instance> instances );
-
+	static void showInstances( InstanceMatches instances );
+	static QImage visualizeInstance( Instance instance, QString lable = QString() );
 };
