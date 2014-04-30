@@ -28,7 +28,27 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 	dataset.path = folderPath;
 	
 	QStringList imageFiles = d.entryList( QStringList() << "*.png" );
-	dataset.data.resize( imageFiles.size() );
+
+	QVector<ImageCompare::Instance> data = ImageCompare::loadDatafiles( d, imageFiles );
+	dataset.data = data;
+
+	datasets[datasetName] = dataset;
+}
+
+void ImageCompare::addMoreKnowledge(QString datasetName, QString folderPath)
+{
+	if( !datasets.contains(datasetName) ){
+		loadKnowledge(folderPath, datasetName);
+		return;
+	}
+
+	QDir d(folderPath);
+	datasets[datasetName].data << loadDatafiles( d, d.entryList( QStringList() << "*.png" ) );
+}
+
+QVector<ImageCompare::Instance> ImageCompare::loadDatafiles(QDir d, QStringList imageFiles)
+{
+	QVector<ImageCompare::Instance> data( imageFiles.size() );
 
 	// Go over image files in the folder
 	#pragma omp parallel for
@@ -36,7 +56,7 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 	{
 		QString file = imageFiles[i];
 		QString fullFilename = d.absolutePath() + "/" + file;
-		
+
 		ImageCompare::Instance inst;
 		inst.index = i;
 		inst.filename = fullFilename;
@@ -83,11 +103,12 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 			// Compute signature..
 			inst.signature = generateSignature(inst, true);
 		}
-		
-		dataset.data[i] = inst;
+
+		data[i] = inst;
 	}
 
-	datasets[datasetName] = dataset;
+	QVector<ImageCompare::Instance> result = data;
+	return result;
 }
 
 std::vector<double> ImageCompare::centroidDistanceSignature( const std::vector< std::pair<double,double> > & contour )

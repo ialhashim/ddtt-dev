@@ -12,6 +12,9 @@ MyDrawArea * lastSelected = NULL;
 
 QVector<MyDrawArea*> activeViewers;
 
+// Binary images rendering
+#include "SoftwareRenderer.h"
+
 MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrowser)
 {
 	// Anti-aliasing when using QGLWidget or subclasses
@@ -104,6 +107,48 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 			}
 		}
 		ui->deleteList->clear();
+	});
+
+	connect(ui->genBinaryImgsButton, &QPushButton::released, [=](){
+		if(database.empty()) return;
+
+		#pragma omp parallel for
+		for(int i = 0; i < (int)database.size(); i++)
+		{
+			QString meshfile = database.at(i);
+
+			SurfaceMesh::SurfaceMeshModel mesh;
+			mesh.read( meshfile.toStdString() );
+			mesh.updateBoundingBox();
+
+			QVector< QVector<Eigen::Vector3d> > faces;
+
+			Vector3VertexProperty points = mesh.vertex_coordinates();
+			for(auto f : mesh.faces()){
+				QVector<Eigen::Vector3d> face;
+				for(auto v : mesh.vertices(f)){
+					face.push_back( points[v] );
+				}
+				faces.push_back(face);
+			}
+
+			QFileInfo meshFileInfo(meshfile);
+			QString meshname = meshFileInfo.baseName();
+			QString path = meshFileInfo.absolutePath();
+			QString binaryImgFilename = QString("%1.png").arg(path + "/" + meshname);
+
+			// Setup camera
+			Eigen::AlignedBox3d bbox = mesh.bbox();
+			double distance = bbox.sizes().maxCoeff() * 3.5;
+			Vector3 direction (-1.25,-2,0.7);
+			direction.normalize();
+			Vector3 target = bbox.center();
+			Vector3 eye = (direction * distance) + target;
+			Vector3 up(0,0,1);
+			Eigen::MatrixXd camera = SoftwareRenderer::CreateViewMatrix(eye, target, up);
+
+			SoftwareRenderer::matrixToImage( SoftwareRenderer::render(faces, 128, 128, camera) ).save( binaryImgFilename );
+		}
 	});
 }
 

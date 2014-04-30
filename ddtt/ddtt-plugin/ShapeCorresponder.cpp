@@ -12,6 +12,7 @@
 ImageCompare im;
 //QString chairsDatasetFolder = "C:/Temp/_imageSearch/test_data";
 QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
+QString chairs3DDatasetFolder = "C:/Temp/_imageSearch/3d_warehouse_chairs";
 
 ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g2, QString knowledge) : source(g1), target(g2)
 {
@@ -20,6 +21,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
 
 	// Load knowledge
 	im.loadKnowledge( chairsDatasetFolder, "chairs" );
+	//im.addMoreKnowledge( "chairs", chairs3DDatasetFolder );
 
     // Generate possible paths
     int k = 2;

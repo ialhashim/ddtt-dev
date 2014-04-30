@@ -6,6 +6,7 @@
 #include <QVariant>
 #include <QImage>
 #include <QPainter>
+#include <QDir>
 #include <QMessageBox>
 
 inline void showImages(QVector<QImage> imgs, QStringList labels = QStringList()){ 
@@ -52,9 +53,11 @@ public:
     QMap<QString,QVariant> property;
 
 	void loadKnowledge( QString folderPath, QString datasetName = QString() );
-
+	void addMoreKnowledge(QString datasetName, QString folderPath);
+	static QVector<ImageCompare::Instance> loadDatafiles(QDir d, QStringList imageFiles);
+	
 	/// Signatures for fast look up
-	std::vector<double> generateSignature( Instance instance, bool isSaveToFile = true );
+	static std::vector<double> generateSignature( Instance instance, bool isSaveToFile = true );
 	static std::vector<double> centroidDistanceSignature( const std::vector< std::pair<double,double> > & contour );
 	static std::vector<double> fourierDescriptor( std::vector<double> cds );
 
