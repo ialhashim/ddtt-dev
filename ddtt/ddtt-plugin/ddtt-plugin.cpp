@@ -234,6 +234,9 @@ void ddtt::loadJob(QString filename)
 	graphs.push_back( new Structure::Graph ( curPath + sgFileName ) );
 	graphs.push_back( new Structure::Graph ( curPath + tgFileName ) );
 
+	graphs.front()->property["correspondenceFile"].setValue( curPath + correspondenceFileName );
+	graphs.back()->property["correspondenceFile"].setValue( curPath + correspondenceFileName );
+
 	mainWindow()->settings()->set( "lastUsedDirectory", jobFileInfo.absolutePath() );
 
 	setSceneBounds();
@@ -244,7 +247,7 @@ void ddtt::loadGraphs()
 	if( graphs.size() < 2 )
 	{
 		QStringList files = QFileDialog::getOpenFileNames(0, "Open Model", 
-			mainWindow()->settings()->getString("lastUsedDirectory"), "Model Files (*.xml);;Job files (*.job)");
+			mainWindow()->settings()->getString("lastUsedDirectory"), "All Supported (*.job *.xml);;Model Files (*.xml);;Job files (*.job)");
 		if(files.size() < 1) return;
 
 		if(files.front().contains(".job"))
@@ -279,8 +282,7 @@ void ddtt::execute()
 
 	drawArea()->clear();
 
-	for(auto r : c.debug)
-		drawArea()->addRenderObject(r);
+	for(auto r : c.debug) drawArea()->addRenderObject(r);
 
 	drawArea()->updateGL();
 }
@@ -290,14 +292,19 @@ void ddtt::correspond()
 	loadGraphs();
 	if(graphs.empty()) return;
 
-	QElapsedTimer timer; timer.start();
-
 	// Make first has smaller number of nodes
 	if(graphs.front()->nodes.size() > graphs.back()->nodes.size())
 		std::swap( graphs.front(), graphs.back() );
 
 	sc = new ShapeCorresponder( graphs.front(), graphs.back(), "chairs" );
 
+	connect(sc, SIGNAL(done()), SLOT(postCorrespond()));
+
+	sc->start();
+}
+
+void ddtt::postCorrespond()
+{
 	drawArea()->clear();
 	for(auto r : sc->debug) drawArea()->addRenderObject(r);
 	drawArea()->update();
@@ -308,7 +315,6 @@ void ddtt::correspond()
 	message << QString("Prepare time ( %1 ms ).").arg( sc->property["prepareTime"].toInt() );
 	message << QString("Compute time ( %1 ms ).").arg( sc->property["computeTime"].toInt() );
 	message << QString("Evaluate time ( %1 ms ).").arg( sc->property["evaluateTime"].toInt() );
-	message << QString("Total correspondence search time ( %1 ms ).").arg(timer.elapsed());
 	mainWindow()->setStatusBarMessage( message.join("\n") );
 
 	// View correspondences

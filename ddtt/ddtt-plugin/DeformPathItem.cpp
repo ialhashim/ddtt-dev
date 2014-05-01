@@ -183,6 +183,11 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 
 	// Draw border
 	painter->setPen(QPen(Qt::gray, 1));
+
+	// Special border for ground truth
+	if(path->property.contains("isGroundTruth") && path->property.value("isGroundTruth").toBool())
+		painter->setPen( QPen(Qt::green, 8) );
+
 	if(this->parentItem()->isSelected()) painter->setPen(QPen(Qt::blue, 5));
 	painter->drawRect(boundingRect());
 

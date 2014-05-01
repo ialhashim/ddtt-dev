@@ -38,9 +38,7 @@ public:
 		QImage image() { if(cachedImage.isNull()) cachedImage.load(filename); return cachedImage; }
 		QMap<QString,QVariant> property;
 		Instance(){ index = -1; }
-		Instance(std::vector< std::pair<double,double> > contour) : contour(contour){
-			signature = ImageCompare::fourierDescriptor( ImageCompare::centroidDistanceSignature( contour ) );
-		}
+		Instance(std::vector< std::pair<double,double> > contour);
 	};
 
 	struct DataSet{
@@ -54,10 +52,13 @@ public:
 
 	void loadKnowledge( QString folderPath, QString datasetName = QString() );
 	void addMoreKnowledge(QString datasetName, QString folderPath);
+	void addInstance( QString datasetName, ImageCompare::Instance instance );
 	static QVector<ImageCompare::Instance> loadDatafiles(QDir d, QStringList imageFiles);
 	
 	/// Signatures for fast look up
+	static bool isClockwise( const std::vector< std::pair<double,double> > & contour );
 	static std::vector<double> generateSignature( Instance instance, bool isSaveToFile = true );
+	static std::pair<double,double> getCentroid( const std::vector< std::pair<double,double> > & contour );
 	static std::vector<double> centroidDistanceSignature( const std::vector< std::pair<double,double> > & contour );
 	static std::vector<double> fourierDescriptor( std::vector<double> cds );
 

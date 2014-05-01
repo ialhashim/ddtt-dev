@@ -26,7 +26,7 @@ void ImageCompare::loadKnowledge(QString folderPath, QString datasetName)
 	DataSet dataset;
 	dataset.name = datasetName;
 	dataset.path = folderPath;
-	
+
 	QStringList imageFiles = d.entryList( QStringList() << "*.png" );
 
 	QVector<ImageCompare::Instance> data = ImageCompare::loadDatafiles( d, imageFiles );
@@ -44,6 +44,15 @@ void ImageCompare::addMoreKnowledge(QString datasetName, QString folderPath)
 
 	QDir d(folderPath);
 	datasets[datasetName].data << loadDatafiles( d, d.entryList( QStringList() << "*.png" ) );
+}
+
+void ImageCompare::addInstance(QString datasetName, Instance instance)
+{
+	if( instance.index < 0 ) instance.index = datasetSize(datasetName);
+	if( instance.id.isNull() || instance.id.isEmpty() ) instance.id = QString::number(instance.index);
+	if( instance.signature.empty() ) instance.signature = ImageCompare::generateSignature( instance.contour );
+
+	datasets[datasetName].data.push_back( instance );
 }
 
 QVector<ImageCompare::Instance> ImageCompare::loadDatafiles(QDir d, QStringList imageFiles)
@@ -79,6 +88,9 @@ QVector<ImageCompare::Instance> ImageCompare::loadDatafiles(QDir d, QStringList 
 					inst.contour.push_back( std::make_pair(data[0].toDouble(), data[1].toDouble()) );
 				}
 			}
+
+			// Check orientation
+			if( isClockwise(inst.contour) ) std::reverse( inst.contour.begin(), inst.contour.end() );
 		}
 		else
 		{
@@ -111,12 +123,47 @@ QVector<ImageCompare::Instance> ImageCompare::loadDatafiles(QDir d, QStringList 
 	return result;
 }
 
+bool ImageCompare::isClockwise(const std::vector< std::pair<double,double> > & contour)
+{
+	double sum = 0.0;
+	for (size_t i = 0; i < contour.size(); i++) {
+		std::pair<double,double> v1 = contour[i];
+		std::pair<double,double> v2 = contour[(i + 1) % contour.size()];
+		sum += (v2.first - v1.first) * (v2.second + v1.second);
+	}
+	return sum > 0.0;
+}
+
+std::pair<double,double> ImageCompare::getCentroid(const std::vector< std::pair<double,double> > & contour)
+{
+	double accumulatedArea = 0.0;
+	double centerx = 0.0;
+	double centery = 0.0;
+
+	for (size_t i = 0, j = contour.size() - 1; i < contour.size(); j = i++)
+	{
+		double temp = contour[i].first * contour[j].second - contour[j].first * contour[i].second;
+		accumulatedArea += temp;
+		centerx += (contour[i].first + contour[j].first) * temp;
+		centery += (contour[i].second + contour[j].second) * temp;
+	}
+
+	// return midpoint if area is almost zero..
+	if (abs(accumulatedArea) < 1e-8){
+		std::pair<double,double> c(0,0);
+		for(auto p : contour) { c.first += p.first ; c.second += p.second; }
+		c.first /= contour.size(); c.second /= contour.size();
+		return c;
+	}
+
+	accumulatedArea *= 3.0;
+	return std::pair<double,double>(centerx / accumulatedArea, centery / accumulatedArea);
+}
+
 std::vector<double> ImageCompare::centroidDistanceSignature( const std::vector< std::pair<double,double> > & contour )
 {
 	// Find centroid
-	std::pair<double,double> c(0,0);
-	for(auto p : contour) { c.first += p.first ; c.second += p.second; }
-	c.first /= contour.size(); c.second /= contour.size();
+	std::pair<double,double> c = getCentroid( contour );
 
 	std::vector<double> dists;
 	for(auto p : contour) 
@@ -132,7 +179,7 @@ std::vector<double> ImageCompare::fourierDescriptor( std::vector<double> cds )
 {
 	if(!cds.size()) return cds;
 
-	int sig_length = 128;
+	int sig_length = 256;
 
 	// FFT on Centroid Distance signature
 	std::vector<double> real = cds, imag(real.size(), 0);
@@ -215,7 +262,7 @@ ImageCompare::InstanceMatches ImageCompare::kNearest(const Instance &instance, i
 	ImageCompare::InstanceMatches result;
 
 	typedef QPair<double, int> ScoreInstance;
-    QVector< ScoreInstance > candidates;
+	QVector< ScoreInstance > candidates;
 
 	for(auto key : datasets.keys())
 	{
@@ -225,18 +272,21 @@ ImageCompare::InstanceMatches ImageCompare::kNearest(const Instance &instance, i
 		{
 			candidates << ScoreInstance( ImageCompare::distance(j, instance), j.index );
 		}
-	
+
 		// Sort...
 		std::sort( candidates.begin(), candidates.end(), [](const ScoreInstance& a, const ScoreInstance& b){ return a.first < b.first; } );
 
 		// To get 'k' furthest, useful for debugging
 		if(isReversed) std::reverse(candidates.begin(), candidates.end());
 
+		// bound check
+		int K = std::min(k, datasets[key].data.size());
+
 		// Return first 'k'
-		for(int i = 0; i < k; i++) result.push_back( qMakePair(candidates[i].first, datasets[key].data.at( candidates[i].second )) );
+		for(int i = 0; i < K; i++) result.push_back( qMakePair(candidates[i].first, datasets[key].data.at( candidates[i].second )) );
 	}
 
-    return result;
+	return result;
 }
 
 ImageCompare::Instance ImageCompare::getInstance( QString datasetName, int idx )
@@ -339,15 +389,30 @@ QImage ImageCompare::visualizeInstance( ImageCompare::Instance instance, QString
 	QPainter painter( &img ); 
 	QPainterPath qpath;	int i = 0;
 	for(auto p : instance.contour) (i++ == 0) ? qpath.moveTo(p.first, p.second) : qpath.lineTo(p.first, p.second);
-	
+
 	painter.setPen(QPen(Qt::blue, 2)); painter.drawPath(qpath);
-	
+
 	painter.fillRect(img.rect().translated(QPoint(0,-80)), QColor(255,255,255,180));
 
 	QString title = QString("%1:%2").arg(instance.index).arg(instance.id);
 	painter.setFont(QFont("Courier", 9));
 	painter.drawText(QPoint(10,15), title);
-	painter.drawText(QPoint(10,25), lable);
-	
+
+	QStringList lables = lable.split("\n");
+	int y = 25;
+
+	for(auto lable : lables){
+		painter.drawText(QPoint(10,y), lable);
+		y += 10;
+	}
+
 	return img;
+}
+
+ImageCompare::Instance::Instance(std::vector< std::pair<double,double> > contour) : contour(contour), index(-1)
+{
+	// Check orientation
+	if( isClockwise(this->contour) ) std::reverse( this->contour.begin(), this->contour.end() );
+
+	signature = ImageCompare::fourierDescriptor( ImageCompare::centroidDistanceSignature( contour ) );
 }

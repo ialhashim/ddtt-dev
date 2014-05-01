@@ -717,8 +717,13 @@ void Scheduler::finalize()
 
 		// Move last tag to overtime
 		QSet<int> modfiedTags = property["timeTags"].value< QSet<int> >();
-		int lastVal = modfiedTags.values().back();
-		modfiedTags.remove(lastVal);
+
+		if(modfiedTags.size())
+		{
+			int lastVal = modfiedTags.values().back();
+			modfiedTags.remove(lastVal);
+		}
+
 		modfiedTags.insert(totalExecutionTime() - (0.5 * Task::DEFAULT_LENGTH));
 		property["timeTags"].setValue(modfiedTags);
 	}

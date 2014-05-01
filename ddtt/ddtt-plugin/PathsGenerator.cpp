@@ -215,6 +215,7 @@ void PathsGenerator::visualizeDifferenceMatrix(std::vector< std::vector<double> 
         }
     }
 
+	tw->setMinimumSize(900,900);
     tw->show();
     qApp->processEvents();
 }
@@ -490,37 +491,32 @@ PathsGenerator::PathsGenerator(Structure::Graph * source, Structure::Graph * tar
     // Get all assignments
     Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target, K);
 
-    // Check agasinst Ground-truth, did we get the good assignment?
+	// Check against Ground-truth, did we get the good assignment?
+	VectorPairings groundTruth;
     {
-        // Check for existing correspondence file
-        QString path = QFileInfo(source->property["name"].toString()).absolutePath() + "/", ext = ".txt";
-        QString g1n = source->name(), g2n = target->name();
-        QStringList files; files << (path+g1n+"_"+g2n+ext) << (path+g2n+"_"+g1n+ext);
-        int fileidx = -1;
-        for(int i = 0; i < 2; i++){
-            QString f = files[i];
-            if(!QFileInfo (f).exists()) continue;
-            fileidx = i;
-        }
-        if( fileidx != -1 ){
+		// Check for existing correspondence file
+		QString path = QFileInfo(source->property["name"].toString()).absolutePath() + "/", ext = ".txt";
+		QString g1n = source->name(), g2n = target->name();
 
-            bool corrReversed = (fileidx == 0) ? false : true;
-            GraphCorresponder * bestCorrespond = new GraphCorresponder(source, target);
-            bestCorrespond->loadCorrespondences(files[fileidx], corrReversed);
+		QStringList files; 
+		files << (path+g1n+"_"+g2n+ext) << (path+g2n+"_"+g1n+ext);
+		files << source->property["correspondenceFile"].toString();
 
-            VectorPairings v1;
-            QVector< PART_LANDMARK > vp = bestCorrespond->correspondences;
-            for(auto p : vp) v1.push_back( Pairing(p.first, p.second) );
+		int fileidx = -1;
+		for(int i = 0; i < files.size(); i++){
+			QString f = files[i];
+			if(!QFileInfo (f).exists()) continue;
+			fileidx = i;
+		}
+		if( fileidx != -1 ){
 
-            bool isFound = false;
+			bool corrReversed = (fileidx == 1) ? true : false;
+			GraphCorresponder * bestCorrespond = new GraphCorresponder(source, target);
+			bestCorrespond->loadCorrespondences(files[fileidx], corrReversed);
 
-            for( VectorPairings v2 : assignments ){
-                if(v1.size() == v2.size() && std::is_permutation(v1.begin(), v1.end(), v2.begin())){
-                    isFound = true;
-                    break;
-                }
-            }
-        }
+			QVector< PART_LANDMARK > vp = bestCorrespond->correspondences;
+			for(auto p : vp) groundTruth.push_back( Pairing(p.first, p.second) );
+		}
     }
 
     // Prepare deformation paths
@@ -556,6 +552,13 @@ PathsGenerator::PathsGenerator(Structure::Graph * source, Structure::Graph * tar
         path.gcorr->correspondAllNodes();
 
         path.i = pathIndex;
+
+		// Check for ground truth
+		VectorPairings v1 = path.pairs;
+		VectorPairings v2 = groundTruth;
+		if(v1.size() == v2.size() && std::is_permutation(v1.begin(), v1.end(), v2.begin())){
+			path.property["isGroundTruth"].setValue( true );
+		}
     }
 }
 

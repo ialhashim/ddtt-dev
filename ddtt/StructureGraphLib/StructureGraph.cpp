@@ -1665,6 +1665,7 @@ void Graph::replaceCoords( QString nodeA, QString nodeB, Array1D_Vector4d coordA
 Vector3 Graph::position( QString nodeID, Vector4d& coord )
 {
 	Node * node = getNode(nodeID);
+	if(!node) return bbox().center(); // Something went wrong..
 	return node->position(coord);
 }
 

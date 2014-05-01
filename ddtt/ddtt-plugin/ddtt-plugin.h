@@ -38,4 +38,5 @@ public slots:
 	void loadGraphs();
 	void loadKnowledge();
 	void correspond();
+	void postCorrespond();
 };

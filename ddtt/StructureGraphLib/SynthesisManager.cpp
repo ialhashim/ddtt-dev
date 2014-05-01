@@ -1076,6 +1076,7 @@ void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
 
 			if(!spine.size()) continue;
 			spine = refineByNumber(spine, numSpineJoints);
+            spine = smoothPolyline(spine, 1);
             
             RMF rmf = RMF( spine );	rmf.compute();
 			for(auto frame : rmf.U) spineNormals.push_back(frame.r);
@@ -1098,7 +1099,7 @@ void SynthesisManager::makeProxies(int numSides, int numSpineJoints)
                     Ray ray(p, r);
                     int fidx = -1;
                     Vector3 isect = octree->closestIntersectionPoint(ray, &fidx, true);
-                    if(fidx < 0) isect = Vector3(0,0,0);
+                    if(fidx < 0) isect = ray.origin;
 
                     double offset = (isect - p).norm();
 
@@ -1192,6 +1193,7 @@ std::vector<SimplePolygon> SynthesisManager::drawWithProxies(Graph *g)
 
 		if(!spine.size()) continue;
 		spine = refineByNumber(spine, numSpineJoints);
+        spine = smoothPolyline(spine, 1);
 
 		RMF rmf = RMF( spine );	rmf.compute();
 		for(auto frame : rmf.U) spineNormals.push_back(frame.r);

@@ -819,6 +819,9 @@ void Task::executeMorphEdges( double t )
 		Structure::Node *otherOld = link->otherNode(n->id);
 		Structure::Node *otherNew = active->getNode(cur.a.first);
 
+		// Somthing went wrong?
+		if(!otherOld || !otherNew) continue;
+
 		// Do not perform on active nodes
 		Task * otherTask = otherOld->property["task"].value<Task*>();
 		if(otherTask->isReady && !otherTask->isDone) continue;
