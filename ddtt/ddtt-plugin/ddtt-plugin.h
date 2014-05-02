@@ -39,4 +39,5 @@ public slots:
 	void loadKnowledge();
 	void correspond();
 	void postCorrespond();
+	void experiment();
 };

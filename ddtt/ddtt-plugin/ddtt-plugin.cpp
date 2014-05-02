@@ -35,6 +35,7 @@ void ddtt::create()
 
 		connect(w->ui->testButton, SIGNAL(clicked()), SLOT(execute()));
 		connect(w->ui->clearButton, SIGNAL(clicked()), SLOT(clear()));
+		connect(w->ui->experimentButton, SIGNAL(clicked()), SLOT(experiment()));
 
 		connect(w->ui->loadGraphs, SIGNAL(clicked()), SLOT(loadGraphs()));
 		connect(w->ui->correspondButton, SIGNAL(clicked()), SLOT(correspond()));
@@ -52,6 +53,13 @@ void ddtt::create()
 
 		//loadKnowledge();
 	}
+}
+
+#include "PartEvaluator.h"
+void ddtt::experiment()
+{
+	PartEvaluator::evaluate( graphs.front() );
+	if(graphs.size()>1) PartEvaluator::evaluate( graphs.back() );
 }
 
 void ddtt::loadKnowledge()

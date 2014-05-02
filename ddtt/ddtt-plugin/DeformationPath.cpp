@@ -76,7 +76,11 @@ void DeformationPath::renderProxies()
 	smanager->makeProxies(60,20);
 
 	// Execute path
+	scheduler->timeStep = 0.1;
 	scheduler->executeAll();
+
+	//this->badMorphing();
+
 	for(auto & g : scheduler->allGraphs) g->moveBottomCenterToOrigin( true );
 
 	property["synthManager"].setValue( smanager );
@@ -85,4 +89,59 @@ void DeformationPath::renderProxies()
 	QCursor::setPos(QCursor::pos());
 
 	property["isReady"].setValue( true );
+}
+
+void DeformationPath::badMorphing()
+{
+	for(double t = 0; t <= 1.0; t += scheduler->timeStep)
+	{
+		// Current nodes geometry
+		QMap<Structure::Node*, Array1D_Vector3> startGeometry;
+		for(auto n : scheduler->activeGraph->nodes)
+		{
+			if(n->property["taskTypeReal"].toInt() == Task::GROW)
+			{
+				Array1D_Vector3 pnts = n->controlPoints();
+				Vector3 p = pnts.front();
+				Array1D_Vector3 newpnts(pnts.size(), p);
+				for(auto & p: newpnts) p += Eigen::Vector3d(starlab::uniformRand(), starlab::uniformRand(), starlab::uniformRand()) * 1e-5;
+				n->setControlPoints(newpnts);
+			}
+
+			if(n->property["taskTypeReal"].toInt() == Task::SHRINK)
+			{
+				auto tn = scheduler->targetGraph->getNode( n->property["correspond"].toString() );
+				Array1D_Vector3 pnts = tn->controlPoints();
+				Vector3 p = pnts[pnts.size() / 2];
+				Array1D_Vector3 newpnts(pnts.size(), p);
+				for(auto & p: newpnts) p += Eigen::Vector3d(starlab::uniformRand(), starlab::uniformRand(), starlab::uniformRand()) * 1e-5;
+				tn->setControlPoints(newpnts);
+			}
+
+			startGeometry[n] = n->controlPoints();
+		}
+
+		// Morph nodes
+		for(auto n : scheduler->activeGraph->nodes)
+		{
+			auto tn = scheduler->targetGraph->getNode( n->property["correspond"].toString() );
+			if(!tn) continue;
+
+			Array1D_Vector3 finalGeometry = tn->controlPoints();
+			Array1D_Vector3 newGeometry;
+
+			for(int i = 0; i < (int) finalGeometry.size(); i++)
+				newGeometry.push_back( AlphaBlend(t, startGeometry[n][i], Vector3(finalGeometry[i])) );
+
+			n->setControlPoints( newGeometry );
+			n->property["t"].setValue( t );
+
+			if(t > 0.5 && n->property["taskTypeReal"].toInt() == Task::SHRINK) 
+				n->property["shrunk"].setValue( true );
+		}
+
+		scheduler->allGraphs.push_back(  new Structure::Graph( *scheduler->activeGraph )  );
+	}
+
+	property["progressDone"] = true;
 }

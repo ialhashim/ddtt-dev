@@ -56,7 +56,7 @@ void DeformScene::drawForeground(QPainter *painter, const QRectF &rect)
 
 void DeformScene::addDeformationPath(DeformationPath * path)
 {
-	int w = 400;
+	int w = 550;
 	int h = w * 0.75;
 
 	// Create a DeformationItem and its widget
@@ -98,7 +98,6 @@ void DeformScene::wheelEvent( QGraphicsSceneWheelEvent *e )
 
 void DeformScene::pack()
 {
-	int padding = 5;
 	int itemWidth = groups.front()->boundingRect().width();
 	int itemHeight = groups.front()->boundingRect().height();
 	int viewWidth = this->views().front()->width();

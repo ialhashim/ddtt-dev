@@ -38,6 +38,9 @@ public:
 	// Visualization
 	void renderSamples();
 	void renderProxies();
+
+	// Experimental
+	void badMorphing();
 };
 
 static inline bool DeformationPathCompare (const DeformationPath & i, const DeformationPath & j) { return (i.weight < j.weight); }
