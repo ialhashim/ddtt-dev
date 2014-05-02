@@ -17,7 +17,7 @@
 typedef QPair<Eigen::Vector3d, Eigen::Vector3d> PairPoints;
 typedef Eigen::Matrix<double,4,4,Eigen::RowMajor> Matrix4;
 
-double angle = 0.0;
+//double angle = 0.0;
 
 namespace SoftwareRenderer{
 
@@ -27,7 +27,7 @@ namespace SoftwareRenderer{
 		}
 	};
 
-	void horizontalLine(Eigen::MatrixXd & m,  int xpos, int ypos, int x1, double color){
+	inline void horizontalLine(Eigen::MatrixXd & m,  int xpos, int ypos, int x1, double color){
 		for(int x = xpos; x <= x1; ++x){
 			if(x < 0 || x > m.cols() - 1 || ypos < 0 || ypos > m.rows() - 1) 
 				continue;
@@ -35,13 +35,13 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	void plot4points(Eigen::MatrixXd & buffer, int cx, int cy, int x, int y, double color){
+	inline void plot4points(Eigen::MatrixXd & buffer, int cx, int cy, int x, int y, double color){
 		horizontalLine(buffer, cx - x, cy + y, cx + x, color);
 		if (x != 0 && y != 0)
 			horizontalLine(buffer, cx - x, cy - y, cx + x, color);
 	}
 
-	void circle(Eigen::MatrixXd & buffer, int cx, int cy, int radius, double color){
+	inline void circle(Eigen::MatrixXd & buffer, int cx, int cy, int radius, double color){
 		int error = -radius;
 		int x = radius;
 		int y = 0;
@@ -65,7 +65,7 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	void DrawBline(Eigen::MatrixXd & m, Eigen::Vector3d point0, Eigen::Vector3d point1, double color)
+	inline void DrawBline(Eigen::MatrixXd & m, Eigen::Vector3d point0, Eigen::Vector3d point1, double color)
 	{
 		int x0 = (int)point0.x();
 		int y0 = (int)point0.y();
@@ -89,21 +89,21 @@ namespace SoftwareRenderer{
 	}
 
 	// Clamping values to keep them between 0 and 1
-	double Clamp(double value, double min = 0, double max = 1){
+	inline double Clamp(double value, double min = 0, double max = 1){
 		return std::max(min, std::min(value, max));
 	}
 
 	// Interpolating the value between 2 vertices 
 	// min is the starting point, max the ending point
 	// and gradient the % between the 2 points
-	double Interpolate(double min, double max, double gradient){
+	inline double Interpolate(double min, double max, double gradient){
 		return min + (max - min) * Clamp(gradient);
 	}
 
 	// drawing line between 2 points from left to right
 	// papb -> pcpd
 	// pa, pb, pc, pd must then be sorted before
-	void ProcessScanLine(Eigen::MatrixXd & m, int y, Vector3 pa, Vector3 pb, Vector3 pc, Vector3 pd, double color)	{
+	inline void ProcessScanLine(Eigen::MatrixXd & m, int y, Vector3 pa, Vector3 pb, Vector3 pc, Vector3 pd, double color)	{
 		// Thanks to current Y, we can compute the gradient to compute others values like
 		// the starting X (sx) and ending X (ex) to draw between
 		// if pa.Y == pb.Y or pc.Y == pd.Y, gradient is forced to 1
@@ -122,7 +122,7 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	void drawTriangle(Eigen::MatrixXd & buffer, Eigen::Vector3d p1, Eigen::Vector3d p2, Eigen::Vector3d p3, double color)
+	inline void drawTriangle(Eigen::MatrixXd & buffer, Eigen::Vector3d p1, Eigen::Vector3d p2, Eigen::Vector3d p3, double color)
 	{
 		// Sorting the points in order to always have this order on screen p1, p2 & p3
 		// with p1 always up (thus having the Y the lowest possible to be near the top screen)
@@ -172,7 +172,7 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	Eigen::Vector3d TransformCoordinates(const Eigen::Vector3d & vector, const Matrix4 & m) {
+	inline Eigen::Vector3d TransformCoordinates(const Eigen::Vector3d & vector, const Matrix4 & m) {
 		double x = (vector[0] * m(0)) + (vector[1] * m(4)) + (vector[2] * m(8)) + m(12);
 		double y = (vector[0] * m(1)) + (vector[1] * m(5)) + (vector[2] * m(9)) + m(13);
 		double z = (vector[0] * m(2)) + (vector[1] * m(6)) + (vector[2] * m(10)) + m(14);
@@ -180,7 +180,7 @@ namespace SoftwareRenderer{
 		return Eigen::Vector3d(x / w, y / w, z / w);
 	};
 
-	Matrix4 CreateProjectionMatrix(double fov_degrees, double aspect_ratio, double zNear = 0.1, double zFar = 10.0)
+	inline Matrix4 CreateProjectionMatrix(double fov_degrees, double aspect_ratio, double zNear = 0.1, double zFar = 10.0)
 	{
 		double yScale = cot( RADIANS(fov_degrees * 0.5) );
 		double xScale = yScale/aspect_ratio;
@@ -193,14 +193,14 @@ namespace SoftwareRenderer{
 		return pmat;
 	}
 
-	Matrix4 CreateWorldMatrix(double transX = 0, double transY = 0, double transZ = 0)
+	inline Matrix4 CreateWorldMatrix(double transX = 0, double transY = 0, double transZ = 0)
 	{
 		Matrix4 wmat = Matrix4::Identity();
 		wmat.row(3) = Eigen::Vector4d(transX, transY, transZ, 1);
 		return wmat;
 	}
 
-	Matrix4 CreateViewMatrix( Eigen::Vector3d eye = Eigen::Vector3d(3,-3,3), Eigen::Vector3d target = Eigen::Vector3d(0,0,0), Eigen::Vector3d up = Eigen::Vector3d(0,0.0,1.0)  )
+	inline Matrix4 CreateViewMatrix( Eigen::Vector3d eye = Eigen::Vector3d(3,-3,3), Eigen::Vector3d target = Eigen::Vector3d(0,0,0), Eigen::Vector3d up = Eigen::Vector3d(0,0.0,1.0)  )
 	{
 		Matrix4 vmat = Matrix4::Identity();
 
@@ -221,7 +221,7 @@ namespace SoftwareRenderer{
 		return vmat;
 	}
 
-	Eigen::Vector3d Project(const Eigen::Vector3d & coord, const Matrix4 & transMat, const Eigen::Vector2d & viewArea)
+	inline Eigen::Vector3d Project(const Eigen::Vector3d & coord, const Matrix4 & transMat, const Eigen::Vector2d & viewArea)
 	{
 		double PixelWidth = viewArea[0];
 		double PixelHeight = viewArea[1];
@@ -239,7 +239,7 @@ namespace SoftwareRenderer{
 		return Eigen::Vector3d( screen[0], screen[1], -point[2] );
 	}
 
-	QVector< PairPoints > cube()
+	inline QVector< PairPoints > cube()
 	{
 		QVector< PairPoints > face;
 		QVector< PairPoints > faces;
@@ -271,7 +271,7 @@ namespace SoftwareRenderer{
 		return faces;
 	}
 
-	void render( QVector< PairPoints > lines, QImage & img, int width, int height )
+	inline void render( QVector< PairPoints > lines, QImage & img, int width, int height )
 	{
 		// Rendering device
 		img = QImage(width, height, QImage::Format_RGB32);
@@ -292,7 +292,7 @@ namespace SoftwareRenderer{
 		//Eigen::Vector3d p = Project(Eigen::Vector3d(0,0,0), transformMatrix, viewArea);
 		//painter.drawEllipse(QPoint( p[0], p[1] ), 3, 3);
 
-		angle += 0.01;
+		//angle += 0.01;
 
 		foreach(PairPoints line, lines)
 		{
@@ -303,7 +303,7 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	Eigen::MatrixXd render( QVector< Eigen::Vector3d > points, int width = 32, int height = 32, int pointSize = 1, Eigen::Vector3d translate = Eigen::Vector3d(0,0,0) )
+	inline Eigen::MatrixXd render( QVector< Eigen::Vector3d > points, int width = 32, int height = 32, int pointSize = 1, Eigen::Vector3d translate = Eigen::Vector3d(0,0,0) )
 	{
 		Eigen::MatrixXd img = Eigen::MatrixXd::Zero( height, width );
 
@@ -363,7 +363,7 @@ namespace SoftwareRenderer{
 		return img;
 	}
 
-	void render( QVector< Eigen::Vector3d > points, QImage & img, int width = 32, int height = 32, int pointSize = 1, Eigen::Vector3d translate = Eigen::Vector3d(0,0,0) )
+	inline void render( QVector< Eigen::Vector3d > points, QImage & img, int width = 32, int height = 32, int pointSize = 1, Eigen::Vector3d translate = Eigen::Vector3d(0,0,0) )
 	{
 		img = QImage(width, height, QImage::Format_RGB32);
 		QPainter painter(&img);
@@ -386,14 +386,14 @@ namespace SoftwareRenderer{
 		}
 	}
 
-	Eigen::MatrixXd vectorToMatrix( const Eigen::VectorXd & v, int width, int height )
+	inline Eigen::MatrixXd vectorToMatrix( const Eigen::VectorXd & v, int width, int height )
 	{
 		Eigen::MatrixXd M(height, width);
 		for(int i = 0; i < v.size(); i++) M(i) = v(i);
 		return M;
 	}
 
-	QImage matrixToImage( const Eigen::MatrixXd & mimg, bool isAlphaBack = true )
+	inline QImage matrixToImage( const Eigen::MatrixXd & mimg, bool isAlphaBack = true )
 	{
 		int width = mimg.rows();
 		int height = mimg.cols();
@@ -424,7 +424,7 @@ namespace SoftwareRenderer{
 		return img;
 	}
 
-	Eigen::MatrixXd render( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 vmat = CreateViewMatrix() )
+	inline Eigen::MatrixXd render( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 vmat = CreateViewMatrix() )
 	{
 		Eigen::MatrixXd buffer = Eigen::MatrixXd::Zero( height, width );
 

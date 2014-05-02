@@ -57,7 +57,7 @@ void TopoBlender::setupUI()
 	scheduler->dock = new QDockWidget( "Scheduler" );
 	scheduler->dock->setWidget( scheduler->widget );
 	QMainWindow * win = (QMainWindow *) parentWidget;
-	win->addDockWidget(Qt::BottomDockWidgetArea, scheduler->dock);
+	if(win) win->addDockWidget(Qt::BottomDockWidgetArea, scheduler->dock);
 
 	scheduler->isApplyChangesUI = true;
 }

@@ -109,7 +109,7 @@ public slots:
 	void setGDResolution(double r);
 	void setTimeStep(double dt);
 
-	void startAllSameTime();
+    void startAllSameTime(int defaultStartTime = 0);
 	void startDiffTime();
 
 	void loadSchedule(QString filename);

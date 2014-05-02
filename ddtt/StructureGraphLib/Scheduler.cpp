@@ -800,12 +800,12 @@ void Scheduler::stopExecution()
 	isForceStop = true;
 }
 
-void Scheduler::startAllSameTime()
+void Scheduler::startAllSameTime(int defaultStartTime)
 {
 	if(selectedItems().isEmpty())
 	{
 		foreach(Task * t, tasks)
-			t->setX(0);
+            t->setStart( defaultStartTime );
 	}
 	else
 	{
@@ -818,7 +818,7 @@ void Scheduler::startAllSameTime()
 
 		foreach(Task * t, tasks){
 			if(t->isSelected())
-				t->setX( minStart );
+                t->setStart( minStart );
 		}
 	}
 }
