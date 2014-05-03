@@ -76,7 +76,6 @@ void DeformationPath::renderProxies()
 	smanager->makeProxies(60,20);
 
 	// Execute path
-	scheduler->timeStep = 0.1;
 	scheduler->executeAll();
 
 	//this->badMorphing();

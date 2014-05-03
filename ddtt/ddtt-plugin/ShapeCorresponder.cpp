@@ -14,7 +14,7 @@ QProgressDialog * pd = NULL;
 
 ImageCompare im;
 //QString chairsDatasetFolder = "C:/Temp/_imageSearch/test_data";
-QString chairsDatasetFolder = "C:/Temp/_imageSearch/all_images_apcluster_data";
+QString chairsDatasetFolder = "C:/Development/binary_chairs/all_images_apcluster_data";
 QString chairs3DDatasetFolder = "C:/Temp/_imageSearch/3d_warehouse_chairs";
 
 Eigen::MatrixXd renderGraphBinary( Structure::Graph * g, SynthesisManager * synthman )
@@ -54,7 +54,7 @@ ShapeCorresponder::ShapeCorresponder(Structure::Graph * g1, Structure::Graph * g
     QElapsedTimer prepareTimer; prepareTimer.start();
 
 	// Load knowledge
-	//im.loadKnowledge( chairsDatasetFolder, "chairs" );
+    im.loadKnowledge( chairsDatasetFolder, "chairs" );
 	//im.addMoreKnowledge( "chairs", chairs3DDatasetFolder );
 	
     // Generate possible paths
@@ -172,7 +172,6 @@ void ShapeCorresponder::run()
 				path.synthman = QSharedPointer<SynthesisManager>( new SynthesisManager(path.gcorr, path.scheduler.data(), path.blender.data()) );
 
 				// Deform
-				path.scheduler->timeStep = 0.1;
 				path.scheduler->executeAll();
 				
 				// Evaluate

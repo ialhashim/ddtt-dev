@@ -159,8 +159,15 @@ Array1D_Vector3 Sheet::discretizedAsCurve(Scalar resolution)
     Array1D_Vector3 result;
     Scalar curveLength = curve.GetLength(0,1);
 
-	if( !std::isfinite(curveLength) || curveLength < 1e-12 )
-		return curve.mCtrlPoint;
+    // Degenerate cases
+    bool validControlPoints = std::isfinite(curve.mCtrlPoint.front().x());
+    if( !validControlPoints ){
+        result.clear();
+        for(int i = 0; i < 4; i++) result.push_back(Vector3(0,0,0));
+        return result;
+    }
+    if( !std::isfinite(curveLength) || curveLength < resolution )
+        return curve.mCtrlPoint;
 
     int np = qMax(2.0, 1.0 + (curveLength / resolution));
 
