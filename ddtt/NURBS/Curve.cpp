@@ -179,11 +179,11 @@ void Curve<Real>::SubdivideByLength (int numPoints, Array1D_Vector3& points)
     assertion(numPoints >= 2, "Subdivision requires at least two points\n");
     points = new1<Vector3>(numPoints);
 
-    Real delta = GetTotalLength()/(numPoints - 1);
+    Real delta = GetTotalLength() / (numPoints - 1);
 
     for (int i = 0; i < numPoints; ++i)
     {
-        Real length = delta*i;
+        Real length = delta * i;
         Real t = GetTime(length, TIME_ITERATIONS, CURVE_TOLERANCE);
         points[i] = GetPosition(t);
     }
@@ -201,7 +201,7 @@ void Curve<Real>::SubdivideByLengthTime (int numPoints, std::vector<Real> & time
 	// degenerate curve check
 	if( !IsFiniteNumber(len) ){
 		for (int i = 0; i < numPoints; ++i)
-			times[i] = double(i) / numPoints - 1;
+			times[i] = double(i) / (numPoints - 1);
 		return;
 	}
 

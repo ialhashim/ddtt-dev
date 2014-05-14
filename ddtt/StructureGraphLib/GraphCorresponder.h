@@ -85,11 +85,15 @@ public:
 	static void correspondTwoCurves( Structure::Curve *sCurve, Structure::Curve *tCurve, Structure::Graph * tgt );
 	static void correspondTwoSheets( Structure::Sheet *sSheet, Structure::Sheet *tSheet, Structure::Graph * tgt );
 	
-	// Find non-corresponding nodes
+    // Set non-corresponding nodes
 	std::vector<QString> nonCorresSource(); // to kill
 	std::vector<QString> nonCorresTarget(); // to grow
 	void setNonCorresSource(QString sID);
-	void setNonCorresTarget(QString sID);
+	void setNonCorresTarget(QString tID);
+
+	// Queries
+	std::vector<QString> correspondingNodesTarget(QString sID);
+	std::vector<QString> correspondingNodesSource(QString tID);
 
 	// Results
 	bool isReady;

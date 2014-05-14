@@ -1189,7 +1189,35 @@ void GraphCorresponder::setNonCorresTarget(QString tID)
 {
 	clearFor(tID, false);
 
-	nonCorresT.insert( tg->getNode(tID)->property["index"].toInt() );
+    nonCorresT.insert( tg->getNode(tID)->property["index"].toInt() );
+}
+
+std::vector<QString> GraphCorresponder::correspondingNodesTarget(QString sID)
+{
+    std::vector<QString> result;
+
+    for(PART_LANDMARK corr : correspondences)
+    {
+        if(corr.first.count(sID))
+            for(QString tid : corr.second)
+                result.push_back(tid);
+    }
+
+    return result;
+}
+
+std::vector<QString> GraphCorresponder::correspondingNodesSource(QString tID)
+{
+    std::vector<QString> result;
+
+    for(PART_LANDMARK corr : correspondences)
+    {
+        if(corr.second.count(tID))
+            for(QString sid : corr.first)
+                result.push_back(sid);
+    }
+
+    return result;
 }
 
 void GraphCorresponder::saveCorrespondences( QString filename, bool isWithScores )

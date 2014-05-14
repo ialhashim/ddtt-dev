@@ -424,15 +424,19 @@ namespace SoftwareRenderer{
 		return img;
 	}
 
-	inline Eigen::MatrixXd render( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 vmat = CreateViewMatrix() )
+	inline Eigen::MatrixXd renderTriangles2D( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height )
 	{
-		Eigen::MatrixXd buffer = Eigen::MatrixXd::Zero( height, width );
-
-		// Camera and projection
 		Eigen::Vector2d viewArea( width, height );
-		Matrix4 pmat = CreateProjectionMatrix( 45, double(width) / height );
-		Matrix4 wmat = CreateWorldMatrix();
-		Matrix4 transformMatrix = wmat * vmat * pmat;
+		Eigen::MatrixXd buffer = Eigen::MatrixXd::Zero( height, width );
+		for(auto tri : triangles) 
+			drawTriangle(buffer, tri[0], tri[1], tri[2], 1.0);
+		return buffer;
+	}
+
+	inline Eigen::MatrixXd renderTriangles( QVector< QVector< Eigen::Vector3d > > triangles, Matrix4 transformMatrix, int width, int height )
+	{
+		Eigen::Vector2d viewArea( width, height );
+		Eigen::MatrixXd buffer = Eigen::MatrixXd::Zero( height, width );
 
 		for(auto tri : triangles)
 		{
@@ -449,5 +453,19 @@ namespace SoftwareRenderer{
 		}
 
 		return buffer;
+	}
+
+	inline Eigen::MatrixXd renderTriangles( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 projectionMatrix, Matrix4 viewMatrix )
+	{
+		Matrix4 wmat = CreateWorldMatrix();
+		Matrix4 transformMatrix = wmat * viewMatrix * projectionMatrix;
+		return renderTriangles(triangles, projectionMatrix, width, height );
+	}
+
+	inline Eigen::MatrixXd render( QVector< QVector< Eigen::Vector3d > > triangles, int width, int height, Matrix4 vmat = CreateViewMatrix() )
+	{
+		// Camera and projection
+		Matrix4 pmat = CreateProjectionMatrix( 45, double(width) / height );
+		return renderTriangles(triangles, width, height, pmat, vmat);
 	}
 }
