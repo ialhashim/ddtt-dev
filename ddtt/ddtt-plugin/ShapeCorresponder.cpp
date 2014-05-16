@@ -303,7 +303,11 @@ void ShapeCorresponder::run()
 	// Timing
 	property["computeTime"].setValue( (int)computeTimer.elapsed() );
 
-	if( !paths.size() ) return;
+    if( !paths.size() )
+    {
+        emit( done() );
+        return;
+    }
 
 	// Find best
 	{

@@ -217,8 +217,6 @@ public:
 			glLoadIdentity();
 		}
 
-		graph->nodes.size();
-	
 		for(auto node : graph->nodes)
 		{
 			std::vector<QString> correspond = gcorr->correspondingNodesTarget(node->id);
@@ -308,4 +306,75 @@ public:
 		glEnable(GL_DEPTH_TEST);
 	}
 
+	QImage drawBlendedImage(ProjectedStructureGraph * pgOther, GraphCorresponder * gcorr, double alpha)
+	{
+		QImage img(screenWidth, screenWidth, QImage::Format_RGB888);
+		img.fill( qRgba(255,255,255,255) ); // white background
+		if(!graph || !pgOther || !pgOther->graph || !gcorr) return img;
+
+		// Draw blended boundaries
+		{
+			QPainter painter( &img );
+			painter.setBrush(QBrush(Qt::black));
+			painter.setPen(Qt::NoPen);
+
+			for(auto node : graph->nodes)
+			{
+				std::vector<QString> correspond = gcorr->correspondingNodesTarget(node->id);
+				if(correspond.empty()) continue;
+
+				QString tid = correspond.front(); // for now..
+
+				if(!projections.contains(node->id)) continue;
+				Array1D_Vector3 src = projections.value(node->id).boundary;
+				Array1D_Vector3 tgt = pgOther->projections.value(tid).boundary;
+
+				QPainterPath path;
+
+				for(size_t i = 0; i < src.size(); i++)
+				{
+					Vector3 p = AlphaBlend( qRanged(0.0, alpha, 1.0) , src[i], tgt[i]);
+					if(i == 0) 
+						path.moveTo(p.x(), p.y());
+					else
+						path.lineTo(p.x(), p.y());
+				}
+
+				painter.drawPath( path );
+			}
+		}
+
+		return img;
+	}
+
+	QImage drawBoundaryImage()
+	{
+		QImage img(screenWidth, screenWidth, QImage::Format_RGB888);
+		img.fill( qRgba(255,255,255,255) ); // white background
+		if(!graph) return img;
+
+		QPainter painter( &img );
+		painter.setBrush(QBrush(Qt::black));
+		painter.setPen(Qt::NoPen);
+
+		for(auto node : graph->nodes)
+		{
+			if(!projections.contains(node->id)) continue;
+			Array1D_Vector3 src = projections.value(node->id).boundary;
+			
+			QPainterPath path;
+
+			for(size_t i = 0; i < src.size(); i++)
+			{
+				Vector3 p = src[i];
+
+				if(i == 0) path.moveTo(p.x(), p.y());
+				else path.lineTo(p.x(), p.y());
+			}
+
+			painter.drawPath( path );
+		}
+
+		return img;
+	}
 };

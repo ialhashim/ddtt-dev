@@ -16,13 +16,17 @@
 #include "ShapeCorresponder.h"
 #include "ImageCompare.h"
 
+#include "ShapeCorresponder2.h"
+
 #include "DeformScene.h"
 
 #define BBOX_WIDTH(box) (box.max().x()-box.min().x())
 #define PADDING_FACTOR 1.0
 
 ddtt_widget * w = NULL;
-ShapeCorresponder * sc = NULL;
+//ShapeCorresponder * sc = NULL;
+
+ShapeCorresponder2 * sc2 = NULL;
 
 void ddtt::create()
 {
@@ -304,25 +308,29 @@ void ddtt::correspond()
 	if(graphs.front()->nodes.size() > graphs.back()->nodes.size())
 		std::swap( graphs.front(), graphs.back() );
 
-	sc = new ShapeCorresponder( graphs.front(), graphs.back(), "chairs" );
+    //sc = new ShapeCorresponder( graphs.front(), graphs.back(), "chairs" );
+    sc2 = new ShapeCorresponder2(graphs.front(), graphs.back());
 
-	connect(sc, SIGNAL(done()), SLOT(postCorrespond()));
+    //connect(sc, SIGNAL(done()), SLOT(postCorrespond()));
+    connect(sc2, SIGNAL(done()), SLOT(postCorrespond()));
 
-	sc->start();
+    //sc->start();
+    sc2->start();
 }
 
 void ddtt::postCorrespond()
 {
 	drawArea()->clear();
-	for(auto r : sc->debug) drawArea()->addRenderObject(r);
+    //for(auto r : sc->debug) drawArea()->addRenderObject(r);
+    for(auto r : sc2->debug) drawArea()->addRenderObject(r);
 	drawArea()->update();
 
 	// Stats
 	QStringList message;
-	message << QString("Number of paths ( %1 ).").arg( sc->property["pathsCount"].toInt() );
-	message << QString("Prepare time ( %1 ms ).").arg( sc->property["prepareTime"].toInt() );
-	message << QString("Compute time ( %1 ms ).").arg( sc->property["computeTime"].toInt() );
-	message << QString("Evaluate time ( %1 ms ).").arg( sc->property["evaluateTime"].toInt() );
+    message << QString("Number of paths ( %1 ).").arg( sc2->property["pathsCount"].toInt() );
+    message << QString("Prepare time ( %1 ms ).").arg( sc2->property["prepareTime"].toInt() );
+    message << QString("Compute time ( %1 ms ).").arg( sc2->property["computeTime"].toInt() );
+    message << QString("Evaluate time ( %1 ms ).").arg( sc2->property["evaluateTime"].toInt() );
 	mainWindow()->setStatusBarMessage( message.join("\n") );
 
 	// View correspondences
@@ -332,7 +340,7 @@ void ddtt::postCorrespond()
 
 	int i = 0;
 	
-	for(auto & path : sc->paths)
+    for(auto & path : sc2->paths)
 	{
 		path.idx = i++;
 		ds->addDeformationPath( &path );

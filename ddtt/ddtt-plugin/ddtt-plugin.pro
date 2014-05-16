@@ -32,11 +32,19 @@ INCLUDEPATH += ../StructureGraphLib
 LIBS += -L$$PWD/../AuctionLIB/$$CFG/lib -lAuctionLib
 INCLUDEPATH += ../AuctionLIB
 
+# Bag of visual Words library
+LIBS += -L$$PWD/../bowlib/$$CFG/lib -lbow
+INCLUDEPATH += ../bowlib
+include(../bowlib/opencv.pri)
+
 HEADERS += ddtt-plugin.h ddtt_widget.h Corresponder.h ShapeCorresponder.h DeformPathItem.h DeformPathItemWidget.h DeformScene.h DeformationPath.h \
     ImageCompare.h \
-    PathsGenerator.h
+    PathsGenerator.h \
+    ShapeCorresponder2.h
 SOURCES += ddtt-plugin.cpp ddtt_widget.cpp Corresponder.cpp ShapeCorresponder.cpp DeformPathItem.cpp DeformPathItemWidget.cpp DeformScene.cpp DeformationPath.cpp \
     ImageCompare.cpp \
-    PathsGenerator.cpp
+    PathsGenerator.cpp \
+    ShapeCorresponder2.cpp
+
 RESOURCES += ddtt-plugin.qrc
 FORMS += ddtt_widget.ui
