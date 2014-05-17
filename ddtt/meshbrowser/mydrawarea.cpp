@@ -107,6 +107,9 @@ void MyDrawArea::draw()
 				glEnable(GL_LIGHTING);
 			}
 		}
+
+        glDisable( GL_POLYGON_OFFSET_FILL );
+        glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 	}
 
 	glDisable(GL_DEPTH_TEST);
@@ -126,7 +129,16 @@ void MyDrawArea::draw()
 
 		glLineWidth(2);
 		this->stopScreenCoordinatesSystem();
-	}
+    }
+
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    startScreenCoordinatesSystem();
+    glColor3d(1,1,1);
+    renderText(10,20, QFileInfo(filename).baseName());
+    stopScreenCoordinatesSystem();
+    glPopAttrib();
+
+    glEnable( GL_MULTISAMPLE );
 }
 
 std::vector< SurfaceMesh::SurfaceMeshModel* > connectedPieces(SurfaceMesh::SurfaceMeshModel * mesh) {
