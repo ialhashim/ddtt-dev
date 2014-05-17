@@ -149,7 +149,7 @@ void bdf::applyFilter(RichParameterSet *pars)
 
 		for(Vertex v : mesh()->vertices())
 		{
-			QColor c = starlab::qtJetColorMap(dB(startVertex, v.idx()));
+            QColor c = starlab::qtJetColor(dB(startVertex, v.idx()));
 			drawArea()->drawPoint( points[v], 8, c );
 		}
 	}
