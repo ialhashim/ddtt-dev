@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <iterator>
 
+#include "SymmetryAnalysis.h"
+Q_DECLARE_METATYPE( QVector<SymmetryAnalysis*> )
+
 #include "PathsGenerator.h"
 
 #include <QApplication>
@@ -251,6 +254,86 @@ VectorPairings PathsGenerator::splitMany( QVector<QString> A, QVector<QString> B
     return result;
 }
 
+void PathsGenerator::prepareSymmetryAnalysis(Structure::Graph * sg, Structure::Graph * tg)
+{
+	QVector< QVector<SymmetryAnalysis*> > analysis;
+	QVector<Structure::Graph*> graphs; graphs << sg << tg;
+
+	for(auto g : graphs)
+	{
+		QVector<SymmetryAnalysis*> sanalysis;
+
+		for(int i = 0; i < g->groups.size(); i++)
+		{
+			auto group = g->groups.at(i);
+			std::vector<SurfaceMesh::SurfaceMeshModel*> group_meshes;
+			for( auto element : group ) group_meshes.push_back( g->getMesh(element) );
+			sanalysis.push_back( new SymmetryAnalysis( group_meshes ) );
+		}
+
+		analysis.push_back( sanalysis );
+	}
+
+	sg->property["symmetryAnalysis"].setValue( analysis.front() );
+	tg->property["symmetryAnalysis"].setValue( analysis.back() );
+}
+
+QVector<VectorPairings> PathsGenerator::manyToMany2(Structure::Graph * sg, Structure::Graph * tg, QVector<QString> snodes, QVector<QString> tnodes)
+{
+	QVector<VectorPairings> allResolved;
+
+	SymmetryAnalysis *sanalysis = NULL, *tanalysis = NULL;
+	for(auto a : sg->property["symmetryAnalysis"].value< QVector<SymmetryAnalysis*> >()){
+		if(a->hasMesh(snodes.front())){
+			sanalysis = a;
+			break;
+		}
+	}
+	for(auto a : tg->property["symmetryAnalysis"].value< QVector<SymmetryAnalysis*> >()){
+		if(a->hasMesh(tnodes.front())){
+			tanalysis = a;
+			break;
+		}
+	}
+	
+	assert(sanalysis && tanalysis);
+
+	bool isSwapped = false;
+	if( tnodes.size() > snodes.size() )
+	{
+		std::swap(sg, tg);
+		std::swap(snodes, tnodes);
+		std::swap(sanalysis, tanalysis);
+		isSwapped = true;
+	}
+
+	VectorPairings resolved;
+
+	for(size_t i = 0; i < snodes.size(); i++)
+	{
+		QString sid = snodes[i], tid;
+		double minDist = DBL_MAX;
+		Vector3 sCenter = sanalysis->centers.row(i);
+
+		for(size_t j = 0; j < tnodes.size(); j++)
+		{
+			double dist = (sCenter - tanalysis->centers.row(j).transpose()).norm();
+			if(dist < minDist){
+				minDist = dist;
+				tid = tnodes[j];
+			}
+		}
+
+		if( isSwapped ) std::swap( sid, tid );
+		
+		resolved.push_back( Pairing( QVector<QString>()<< sid, QVector<QString>()<< tid ) );
+	}
+
+	allResolved.push_back( resolved );
+
+	return allResolved;
+}
+
 QVector<VectorPairings> PathsGenerator::manyToMany(Structure::Graph * sg, Structure::Graph * tg, QVector<QString> snodes, QVector<QString> tnodes)
 {
     QVector<VectorPairings> allResolved;
@@ -299,7 +382,7 @@ QVector<VectorPairings> PathsGenerator::manyToMany(Structure::Graph * sg, Struct
             Vector3 ps = sg->getNode(sid)->controlPoints().front();
 
             double minDist = DBL_MAX;
-            QString bestID;
+            QString bestTID;
 
             for(auto tid: sortedB){
                 //Array1D_Vector3 tPoints = tg->getNode(tid)->controlPoints();
@@ -310,11 +393,11 @@ QVector<VectorPairings> PathsGenerator::manyToMany(Structure::Graph * sg, Struct
                 // Closest
                 if(dist < minDist){
                     minDist = dist;
-                    bestID = tid;
+                    bestTID = tid;
                 }
             }
 
-            resolved.push_back( Pairing( QVector<QString>()<< sid, QVector<QString>()<< bestID ) );
+            resolved.push_back( Pairing( QVector<QString>()<< sid, QVector<QString>()<< bestTID ) );
         }
 
         allResolved.push_back( resolved );
@@ -450,7 +533,7 @@ Assignments PathsGenerator::allAssignments( QVector< QVector<QString> > sgroups,
             QVector< QVector<VectorPairings> > manyManyResolution;
 
             for(auto candidate : manyManyCases)
-                manyManyResolution.push_back( manyToMany(sg, tg, candidate.first, candidate.second) );
+                manyManyResolution.push_back( manyToMany2(sg, tg, candidate.first, candidate.second) );
 
             blitz::CartesianProduct< QVector<VectorPairings>, QVector<VectorPairings> > product( manyManyResolution );
 
@@ -487,6 +570,9 @@ PathsGenerator::PathsGenerator(Structure::Graph * source, Structure::Graph * tar
 
     // Visualization
     if(true) visualizeDifferenceMatrix(m, source, target);
+
+	// Prepare symmetry analysis
+	prepareSymmetryAnalysis( source, target );
 
     // Get all assignments
     Assignments assignments = allAssignments(source->nodesAsGroups(), target->nodesAsGroups(), m, source, target, K);

@@ -12,7 +12,11 @@ public:
                                std::vector< std::vector<double> > m, Structure::Graph *sg, Structure::Graph *tg, int K);
 
     QVector<VectorPairings> manyToMany(Structure::Graph *sg, Structure::Graph *tg,
-                                      QVector<QString> snodes, QVector<QString> tnodes);
+										QVector<QString> snodes, QVector<QString> tnodes);
+
+	void prepareSymmetryAnalysis(Structure::Graph * sg, Structure::Graph * tg);
+	QVector<VectorPairings> manyToMany2(Structure::Graph *sg, Structure::Graph *tg,
+										QVector<QString> snodes, QVector<QString> tnodes);
 
     VectorPairings splitMany(QVector<QString> A, QVector<QString> B);
 
@@ -28,4 +32,5 @@ public:
 
     std::vector< std::vector<double> > buildDifferenceMatrix(Structure::Graph *source, Structure::Graph *target);
     void visualizeDifferenceMatrix(std::vector< std::vector<double> > m, Structure::Graph *sg, Structure::Graph *tg);
+
 };
