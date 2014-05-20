@@ -149,6 +149,7 @@ public:
 		{
 			Array2D_Vector3 skeletonFrames;
 			Array1D_Vector3 boundary;
+			Array1D_Vector3 skeletonPoints;
 
 			// Render geometry as one solid blob to a 'buffer'
 			{
@@ -173,7 +174,7 @@ public:
 				{
 					// Sample node skeleton
 					double res = n->bbox().sizes().norm() * 0.1;
-					Array1D_Vector3 skeletonPoints = n->discretizedAsCurve( res );
+					skeletonPoints = n->discretizedAsCurve( res );
 
 					// Project skeleton to screen space
 					for(auto & p : skeletonPoints)
@@ -248,12 +249,22 @@ public:
 							Vector3d isect;
 							bool isIntersect = closestIntersectionPolygon(rayOrigin, rayDirection, boundary, isect);
 							
+							// Hack to fix edge case, highly twisted skeleton
+							{
+								Vector3d isect_other;
+								if(closestIntersectionPolygon(rayOrigin + rayDirection * 1e-5, rayDirection, skeletonPoints, isect_other))
+								{
+									isect = closestPoint(rayOrigin, boundary);
+									isIntersect = false;
+								}
+							}
+
 							sampledBoundary.push_back( isect );
 
-							if( isIntersect && isVisualDebug )
+							if( !isIntersect && isVisualDebug )
 							{
-								//QPainter painter(&debugImage);
-								//drawArrow( rayOrigin, isect, Qt::blue, painter, 10 );
+								QPainter painter(&debugImage);
+								drawArrow( rayOrigin, isect, Qt::blue, painter, 10 );
 							}
 
 							rayDirection = rotatedVec( rayDirection, -delta, Vector3d(0,0,1) );
@@ -285,7 +296,7 @@ public:
 							Vector3d isect;
 							bool isIntersect = closestIntersectionPolygon(rayOrigin, rayDirection, boundary, isect);
 
-							if( isVisualDebug && isIntersect )
+							if( !isIntersect && isVisualDebug )
 							{
 								QPainter painter(&debugImage);
 								drawArrow( rayOrigin, isect, Qt::blue, painter, 6 );
