@@ -143,7 +143,11 @@ Array1D_Vector3 Sheet::discretizedAsCurve(Scalar resolution)
     Vector3 uDir = surface.mCtrlPoint.front().back() - surface.mCtrlPoint.front().front();
     Vector3 vDir = surface.mCtrlPoint.back().front() - surface.mCtrlPoint.front().front();
 
-    bool isU = uDir.norm() > vDir.norm();
+    double projux = abs(dot(Vector3d(1,0,0), uDir.normalized()));
+    double projvx = abs(dot(Vector3d(1,0,0), vDir.normalized()));
+
+    //bool isU = uDir.norm() > vDir.norm();
+	bool isU = projux > projvx;
 
     if( isU )
     {

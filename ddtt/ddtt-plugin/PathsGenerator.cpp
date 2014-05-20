@@ -616,7 +616,10 @@ PathsGenerator::PathsGenerator(Structure::Graph * source, Structure::Graph * tar
         path.pairs = a;
         path.pairsDebug = pairsDebugging( path.pairs );
 
-        path.gcorr = new GraphCorresponder(source, target);
+		Structure::Graph * sourceCopy = new Structure::Graph(*source);
+		Structure::Graph * targetCopy = new Structure::Graph(*target);
+
+        path.gcorr = new GraphCorresponder(sourceCopy, targetCopy);
 
         int i = 0;
 

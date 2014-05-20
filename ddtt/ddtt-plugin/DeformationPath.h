@@ -4,6 +4,7 @@
 #include "Scheduler.h"
 #include "TopoBlender.h"
 #include "SynthesisManager.h"
+class ProjectedStructureGraph;
 
 typedef QMap< QString,QVariant > PropertyMap;
 typedef QPair< QVector<QString>, QVector<QString> > Pairing;
@@ -33,11 +34,14 @@ public:
 
 	QVector<Structure::Graph*> samples;
 
+	QVector<ProjectedStructureGraph*> projected;
+
 	void execute();
 
 	// Visualization
 	void renderSamples();
 	void renderProxies();
+	void renderProjected();
 
 	// Experimental
 	void badMorphing();

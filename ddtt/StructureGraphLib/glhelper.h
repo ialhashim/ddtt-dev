@@ -72,8 +72,9 @@ inline void drawArrow(Eigen::Vector3d p0, Eigen::Vector3d p1, QColor c, QPainter
 	QLineF line(QPoint(p0[0], p0[1]), QPoint(p1[0], p1[1]));
 	painter.setPen(QPen(c));
 	painter.drawLine(line);
+	if(line.length() < 1e-3) return;
 	static const double Pi = 3.14159265358979323846264338327950288419717, TwoPi = 2.0 * Pi;
-	double angle = std::acos(line.dx() / line.length());
+	double angle = std::acos(line.dx() / std::max(1e-3,line.length()));
 	if (line.dy() >= 0) angle = TwoPi - angle;
 	QPointF destArrowP1 = line.pointAt(1) + QPointF(sin(angle - Pi / 3) * arrowSize,cos(angle - Pi / 3) * arrowSize);
 	QPointF destArrowP2 = line.pointAt(1) + QPointF(sin(angle - Pi + Pi / 3) * arrowSize,cos(angle - Pi + Pi / 3) * arrowSize);

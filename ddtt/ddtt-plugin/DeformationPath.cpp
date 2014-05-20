@@ -1,6 +1,7 @@
 #include <QApplication>
 #include "DeformationPath.h"
 #include "SynthesisManager.h"
+#include "ProjectedStructureGraph.h"
 
 SynthesisManager * smanager = NULL;
 Q_DECLARE_METATYPE(SynthesisManager *)
@@ -83,6 +84,20 @@ void DeformationPath::renderProxies()
 	for(auto & g : scheduler->allGraphs) g->moveBottomCenterToOrigin( true );
 
 	property["synthManager"].setValue( smanager );
+
+	qApp->restoreOverrideCursor();
+	QCursor::setPos(QCursor::pos());
+
+	property["isReady"].setValue( true );
+}
+
+void DeformationPath::renderProjected()
+{	
+	if(!gcorr) return;
+	qApp->setOverrideCursor(Qt::WaitCursor);
+
+	projected.push_back( new ProjectedStructureGraph(gcorr->sg, 256, true) );
+	projected.push_back( new ProjectedStructureGraph(gcorr->tg, 256, true) );
 
 	qApp->restoreOverrideCursor();
 	QCursor::setPos(QCursor::pos());

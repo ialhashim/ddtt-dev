@@ -91,7 +91,10 @@ void DeformPathItemWidget::init()
 		executeButton = new QPushButton("Execute..");
 		sublayout->addWidget(executeButton);
 		connect(executeButton, &QPushButton::clicked, [=](){ 
-			path->execute(); 
+			this->setEnabled(false);
+			//path->execute();
+			path->renderProjected();
+			this->setEnabled(true);
 		});
 
 		layout->addLayout( sliderlayout );
@@ -114,4 +117,6 @@ void DeformPathItemWidget::sliderValueChanged(int val)
 
 	if( !path->scheduler.isNull() && path->scheduler->allGraphs.size() )
 		path->si = (double(val) / slider->maximum()) * (path->scheduler->allGraphs.size()-1);
+	else
+		path->si = val;
 }

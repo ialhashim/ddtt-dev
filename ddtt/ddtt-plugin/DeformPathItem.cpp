@@ -3,6 +3,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsView>
 #include "SynthesisManager.h"
+#include "ProjectedStructureGraph.h"
 
 static inline QString shortName(QString name){
 	if(name.length() < 3) return name;
@@ -112,6 +113,16 @@ void DeformPathItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *, 
 		painter->setPen( QPen(Qt::green, 2) );	painter->drawRect( srect );
 		painter->setPen( QPen(Qt::blue, 2) );	painter->drawRect( trect );
 		painter->setPen( QPen(Qt::black, 2) );	painter->drawRect( inbetween );
+	}
+
+	// Draw projected in between if any
+	{
+		bool isTopoBlend = !path->scheduler.isNull() && path->scheduler->allGraphs.size() && path->property["isReady"].toBool();
+		if( !isTopoBlend && path->projected.size() )
+		{
+			double t = double(path->si) / 99;
+			painter->drawImage(inbetween, path->projected.front()->drawBlendedImage(path->projected.back(), path->gcorr, t));
+		}
 	}
 
 	// Draw score

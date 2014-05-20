@@ -88,6 +88,42 @@ namespace SoftwareRenderer{
 		}
 	}
 
+	inline void DrawBlineThick(Eigen::MatrixXd & m, Eigen::Vector3d point0, Eigen::Vector3d point1, double color, int thickness = 3)
+	{
+		int x0 = (int)point0.x();
+		int y0 = (int)point0.y();
+		int x1 = (int)point1.x();
+		int y1 = (int)point1.y();
+
+		auto dx = std::abs(x1 - x0);
+		auto dy = std::abs(y1 - y0);
+		auto sx = (x0 < x1) ? 1 : -1;
+		auto sy = (y0 < y1) ? 1 : -1;
+		auto err = dx - dy;
+
+		while (true) {
+			if(x0 < 0 || x0 > m.cols() - 1 || y0 < 0 || y0 > m.rows() - 1) {} 
+			else 
+			{
+				for(int i = -thickness; i <= thickness; i++)
+				{	
+					for(int j = -thickness; j <= thickness; j++)
+					{
+						int xx0 = x0 + j; 
+						int yy0 = y0 + i;
+						if(xx0 < 0 || xx0 > m.cols() - 1 || yy0 < 0 || yy0 > m.rows() - 1){}
+						else m(yy0, xx0) = color;
+					}
+				}
+			}
+
+			if ((x0 == x1) && (y0 == y1)) break;
+			auto e2 = 2 * err;
+			if (e2 > -dy) { err -= dy; x0 += sx; }
+			if (e2 < dx) { err += dx; y0 += sy; }
+		}
+	}
+
 	// Clamping values to keep them between 0 and 1
 	inline double Clamp(double value, double min = 0, double max = 1){
 		return std::max(min, std::min(value, max));
