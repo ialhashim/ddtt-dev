@@ -1,10 +1,8 @@
 // Adapted from https://github.com/Forceflow/ooc_svo_builder
-
 #pragma once
 #include <stack>
 
 #include <Eigen/Core>
-
 #include "SurfaceMeshModel.h"
 
 #include "morton.h"
@@ -97,7 +95,7 @@ struct BasicTriangle{
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
-void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t morton_start, const uint64_t morton_end, 
+inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t morton_start, const uint64_t morton_end, 
 		const double unitlength, std::vector<char> & voxels, vector<VoxelData> &data, size_t &nfilled) 
 {
 	voxels.clear();
@@ -255,7 +253,7 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	return AABox<Vector3>(mesh_min, mesh_max);
 }
 
-VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & unitlength, size_t gridsize = 512 )
+inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & unitlength, size_t gridsize = 512, bool isMakeSolid = false )
 {
 	VoxelContainer container;
 
@@ -286,12 +284,64 @@ VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & unitlength
 	// Move mesh back to original position
 	for(auto v : mesh->vertices()) points[v] += corner;
 
+	if( isMakeSolid )
+	{	
+		// Original set of surface voxels
+		std::vector<char> surface_voxels = voxels; 
+
+		// Flood fill from the outside walls
+		std::stack<uint64_t> stack;
+		for(int u = 0; u < gridsize; u++){
+			for(int v = 0; v < gridsize; v++){
+				stack.push( mortonEncode_LUT(u, v, 0) );
+				stack.push( mortonEncode_LUT(0, u, v) );
+				stack.push( mortonEncode_LUT(v, 0, u) );
+
+				stack.push( mortonEncode_LUT(u, v, (unsigned int)gridsize-1) );
+				stack.push( mortonEncode_LUT((unsigned int)gridsize-1, u, v) );
+				stack.push( mortonEncode_LUT(v, (unsigned int)gridsize-1, u) );
+			}
+		}
+
+		// Flood fill (do we need to visit corners as well??)
+		while( !stack.empty() )
+		{
+			uint64_t curVox = stack.top();
+			stack.pop();
+
+			if( voxels.at(curVox) == EMPTY_VOXEL )
+			{
+				voxels.at(curVox) = FULL_VOXEL;
+
+				unsigned int x,y,z;
+				mortonDecode(curVox, x, y, z);
+
+				if(x < gridsize - 1) stack.push( mortonEncode_LUT(x+1,y,z) );
+				if(y < gridsize - 1) stack.push( mortonEncode_LUT(x,y+1,z) );
+				if(z < gridsize - 1) stack.push( mortonEncode_LUT(x,y,z+1) );
+
+				if(x > 0) stack.push( mortonEncode_LUT(x-1,y,z) );
+				if(y > 0) stack.push( mortonEncode_LUT(x,y-1,z) );
+				if(z > 0) stack.push( mortonEncode_LUT(x,y,z-1) );
+			}
+		}
+
+		std::vector<VoxelData> inside;
+
+		for(uint64_t m = 0; m < morton_part; m++){
+			if(voxels[m] == EMPTY_VOXEL || surface_voxels[m] == FULL_VOXEL)
+				inside.push_back( VoxelData(m) );
+		}
+
+		container.data = inside;
+	}
+
 	return container;
 }
 
 enum BooleanOperation{ BOOL_UNION, BOOL_DIFFERENCE, BOOL_INTERSECTION, BOOL_XOR };
 
-vector<VoxelData> ComputeVoxelizationCSG( SurfaceMeshModel * meshA, SurfaceMeshModel * meshB, 
+inline vector<VoxelData> ComputeVoxelizationCSG( SurfaceMeshModel * meshA, SurfaceMeshModel * meshB, 
 										 double & unitlength, size_t gridsize = 1024, BooleanOperation operation = BOOL_UNION )
 {	
 	// Find bounding box of the two

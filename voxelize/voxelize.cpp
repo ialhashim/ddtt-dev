@@ -9,6 +9,7 @@
 void voxelize::initParameters(RichParameterSet *pars)
 {
 	pars->addParam(new RichInt("Resolution", 128, "Resolution"));
+	pars->addParam(new RichBool("Solid", false, "Solid"));
 	pars->addParam(new RichBool("Intersection", false, "Intersection"));
 	pars->addParam(new RichInt("Operation", 0, "Operation"));
 	pars->addParam(new RichBool("Visualize", true, "Visualize"));
@@ -74,7 +75,7 @@ void voxelize::applyFilter(RichParameterSet *pars)
 		QElapsedTimer timer; timer.start();
 
 		double unitlength = 1.0;
-		VoxelContainer voxels = ComputeVoxelization( mesh(), unitlength, gridsize );
+		VoxelContainer voxels = ComputeVoxelization( mesh(), unitlength, gridsize, pars->getBool("Solid") );
 
 		mainWindow()->setStatusBarMessage( QString("Time (%1 ms) / Count (%2 voxels)").arg(timer.elapsed()).arg(voxels.data.size()));
 
