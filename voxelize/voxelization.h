@@ -25,6 +25,14 @@ struct AABox {
 	}
 };
 
+struct BasicTriangle{
+	BasicTriangle() { counter = 0; v0_color = v1_color = v2_color = Vector3(0,0,0); }
+	void setPoint(Vector3 p){ if(counter == 0) v0 = p; if(counter == 1) v1 = p; if(counter == 2) v2 = p; counter++; }
+	Vector3 v0, v1, v2;
+	Vector3 v0_color, v1_color, v2_color;
+	int counter;
+};
+
 // Intersection methods
 inline AABox<Vector3> computeBoundingBox(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2){
 	AABox<Vector3> answer; 
@@ -49,9 +57,6 @@ template <typename T> T clampval(const T& value, const T& low, const T& high) {
   return value < low ? low : (value > high ? high : value); 
 }
 
-// sizeof(VoxelData would work too)
-const size_t VOXELDATA_SIZE = sizeof(uint64_t)+2 * (3 * sizeof(double));
-
 #define EMPTY_VOXEL 0
 #define FULL_VOXEL 1
 #define OUTER_VOXEL 2
@@ -70,26 +75,13 @@ struct VoxelData{
 	VoxelData() : morton(0), normal(Vector3()), color(Vector3()){}
 	VoxelData(uint64_t morton, Vector3 normal = Vector3(0,0,0), Vector3 color = Vector3(0,0,0)) : morton(morton), normal(normal), color(color){}
 
-	bool operator > (const VoxelData &a) const{
-		return morton > a.morton;
-	}
-
-	bool operator < (const VoxelData &a) const{
-		return morton < a.morton;
-	}
+	bool operator > (const VoxelData &a) const{	return morton > a.morton; }
+	bool operator < (const VoxelData &a) const{	return morton < a.morton; }
 };
 
 struct VoxelContainer{
 	std::vector<VoxelData> data;
 	Vector3 translation;
-};
-
-struct BasicTriangle{
-	BasicTriangle() { counter = 0; v0_color = v1_color = v2_color = Vector3(0,0,0); }
-	void setPoint(Vector3 p){ if(counter == 0) v0 = p; if(counter == 1) v1 = p; if(counter == 2) v2 = p; counter++; }
-	Vector3 v0, v1, v2;
-	Vector3 v0_color, v1_color, v2_color;
-	int counter;
 };
 
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
@@ -102,6 +94,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 	voxels.resize(morton_end - morton_start, EMPTY_VOXEL);
 
 	data.clear();
+	data.reserve(50000);
 
 	// compute partition min and max in grid coords
 	AABox< Eigen::Matrix<unsigned int, 3, 1> > p_bbox_grid;
@@ -113,13 +106,12 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 	Vector3 delta_p(unitlength, unitlength, unitlength);
 
 	Vector3VertexProperty points = mesh->vertex_coordinates();
-	Vector3FaceProperty fnormals = mesh->face_normals();
 
 	// voxelize every triangle
 	for(auto f : mesh->faces())
 	{
 		BasicTriangle t;
-		for(auto vi : mesh->vertices(f)) t.setPoint(points[vi]);
+		for(auto vi : mesh->vertices(f)) t.setPoint( points[vi] );
 
 		// compute triangle bbox in world and grid
 		AABox<Vector3> t_bbox_world = computeBoundingBox(t.v0, t.v1, t.v2);
@@ -145,6 +137,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 		Vector3 e2 = t.v0 - t.v2;
 		Vector3 to_normalize = (e0).cross(e1);
 		Vector3 n = (to_normalize).normalized(); // triangle normal
+
 		// PLANE TEST PROPERTIES
 		Vector3 c = Vector3(0.0, 0.0, 0.0); // critical point
 		if (n[X] > 0) { c[X] = unitlength; }
@@ -152,6 +145,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 		if (n[Z] > 0) { c[Z] = unitlength; }
 		double d1 = n.dot(c - t.v0);
 		double d2 = n.dot((delta_p - c) - t.v0);
+
 		// PROJECTION TEST PROPERTIES
 		// XY plane
 		Eigen::Vector2d n_xy_e0 = Eigen::Vector2d(-1.0*e0[Y], e0[X]);
@@ -224,7 +218,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 					if ((n_zx_e2.dot(p_zx) + d_xz_e2) < 0.0){ continue; }
 
 					voxels[index - morton_start] = FULL_VOXEL;
-					data.push_back(VoxelData(index, fnormals[f], average3Vec(t.v0_color, t.v1_color, t.v2_color))); // we ignore data limits for colored voxelization
+					data.push_back(VoxelData(index, n));
 
 					nfilled++;
 					continue;
@@ -237,6 +231,9 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 {
 	Eigen::AlignedBox3d mesh_bbox = mesh->bbox();
+
+	// Numerical stability : but why we need this?
+	mesh_bbox = mesh_bbox.extend( ((mesh_bbox.max() - mesh_bbox.center()) * (1 + 1e-12)) + mesh_bbox.center() );
 
 	Vector3 mesh_min = mesh_bbox.min();
 	Vector3 mesh_max = mesh_bbox.max();
