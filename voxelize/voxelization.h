@@ -81,6 +81,11 @@ struct VoxelData{
 	}
 };
 
+struct VoxelContainer{
+	std::vector<VoxelData> data;
+	Vector3 translation;
+};
+
 struct BasicTriangle{
 	BasicTriangle() { counter = 0; v0_color = v1_color = v2_color = Vector3(0,0,0); }
 	void setPoint(Vector3 p){ if(counter == 0) v0 = p; if(counter == 1) v1 = p; if(counter == 2) v2 = p; counter++; }
@@ -250,29 +255,38 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	return AABox<Vector3>(mesh_min, mesh_max);
 }
 
-vector<VoxelData> ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize = 1024 )
+VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & unitlength, size_t gridsize = 512 )
 {
+	VoxelContainer container;
+
+	// Move mesh to positive world
+	Vector3VertexProperty points = mesh->vertex_coordinates();
+	Vector3 corner = mesh->bbox().min();
+	Vector3 delta = mesh->bbox().center() - corner;
+	for(auto v : mesh->vertices()) points[v] -= corner;
+	
 	AABox<Vector3> mesh_bbox = createMeshBBCube( mesh );
 
-	double unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
+	unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
 	uint64_t morton_part = (gridsize * gridsize * gridsize);
 
 	// Storage for voxel on/off
 	std::vector<char> voxels; 
 
-	vector<VoxelData> data; // Dynamic storage for voxel data
-
 	// morton codes for this partition
 	uint64_t start = 0;
 	uint64_t end = morton_part;
-
 	size_t nfilled = 0;
 
 	// VOXELIZATION
-	// voxelize partition
-	voxelize_schwarz_method(mesh, start, end, unitlength, voxels, data, nfilled);
+	voxelize_schwarz_method(mesh, start, end, unitlength, voxels, container.data, nfilled);
 
-	return data;
+	container.translation = corner;
+
+	// Move mesh back to original position
+	for(auto v : mesh->vertices()) points[v] += corner;
+
+	return container;
 }
 
 enum BooleanOperation{ BOOL_UNION, BOOL_DIFFERENCE, BOOL_INTERSECTION, BOOL_XOR };

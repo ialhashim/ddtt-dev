@@ -8,8 +8,8 @@
 
 void voxelize::initParameters(RichParameterSet *pars)
 {
-	pars->addParam(new RichInt("Resolution", 32, "Resolution"));
-	pars->addParam(new RichBool("Intersection", true, "Intersection"));
+	pars->addParam(new RichInt("Resolution", 128, "Resolution"));
+	pars->addParam(new RichBool("Intersection", false, "Intersection"));
 	pars->addParam(new RichInt("Operation", 0, "Operation"));
 	pars->addParam(new RichBool("Visualize", true, "Visualize"));
 }
@@ -71,41 +71,25 @@ void voxelize::applyFilter(RichParameterSet *pars)
 	}
 	else
 	{
-		Vector3VertexProperty points = mesh()->vertex_coordinates();
-		Vector3 corner = mesh()->bbox().min();
-		Vector3 delta = mesh()->bbox().center() - corner;
-
-		for(auto v : mesh()->vertices()){
-			points[v] -= corner;
-		}
-
 		QElapsedTimer timer; timer.start();
 
-		vector<VoxelData> data = ComputeVoxelization( mesh(), gridsize );
+		double unitlength = 1.0;
+		VoxelContainer voxels = ComputeVoxelization( mesh(), unitlength, gridsize );
 
-		mainWindow()->setStatusBarMessage( QString("Time (%1 ms)").arg(timer.elapsed()) );
+		mainWindow()->setStatusBarMessage( QString("Time (%1 ms) / Count (%2 voxels)").arg(timer.elapsed()).arg(voxels.data.size()));
 
-		Eigen::AlignedBox3d mesh_bbox = mesh()->bbox();
-		double unitlength = (mesh_bbox.max()[0] - mesh_bbox.min()[0]) / (double)gridsize;
-
-		starlab::CubeSoup * cs = new starlab::CubeSoup;
+		starlab::CubeSoup * cs = new starlab::CubeSoup(1.0, false);
 
 		std::vector<Vector3> centers;
 
-		for(auto voxel : data)
+		for(auto voxel : voxels.data)
 		{
 			unsigned int x,y,z;
 
 			mortonDecode(voxel.morton, z, y, x);
 
-			Vector3 p = Vector3(Vector3(x,y,z) * unitlength) + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
-			p += corner;
-
+			Vector3 p = voxels.translation + Vector3(Vector3(x,y,z) * unitlength) + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
 			centers.push_back( p );
-		}
-
-		for(auto v : mesh()->vertices()){
-			points[v] += corner;
 		}
 
 		if(pars->getBool("Visualize"))
