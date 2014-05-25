@@ -1,6 +1,8 @@
 // Adapted from https://github.com/Forceflow/ooc_svo_builder
 #pragma once
 #include <stack>
+#include <queue>
+#include <set>
 
 #include <Eigen/Core>
 #include "SurfaceMeshModel.h"
@@ -80,9 +82,85 @@ struct VoxelData{
 };
 
 struct VoxelContainer{
-	std::vector<VoxelData> data;
+	std::vector<VoxelData> data, aux;
 	Vector3 translation;
+	double unitlength;
+	size_t gridsize;
+	bool isSolid;
+	std::vector< std::vector<Eigen::Vector3d> > quads;
 };
+
+inline std::vector<Eigen::Vector3d> voxelQuad(Eigen::Vector3i direction, double length = 1.0)
+{
+	static double n[6][3] = {{-1.0,  0.0, 0.0},{0.0, 1.0, 0.0},{1.0, 0.0,  0.0},
+							 { 0.0, -1.0, 0.0},{0.0, 0.0, 1.0},{0.0, 0.0, -1.0}};
+	static int faces[6][4] ={{0, 1, 2, 3},{3, 2, 6, 7},{7, 6, 5, 4},
+							 {4, 5, 1, 0},{5, 6, 2, 1},{7, 4, 0, 3}};
+	Eigen::Vector3d v[8];
+	v[0][0] = v[1][0] = v[2][0] = v[3][0] = -length / 2;
+	v[4][0] = v[5][0] = v[6][0] = v[7][0] =  length / 2;
+	v[0][1] = v[1][1] = v[4][1] = v[5][1] = -length / 2;
+	v[2][1] = v[3][1] = v[6][1] = v[7][1] =  length / 2;
+	v[0][2] = v[3][2] = v[4][2] = v[7][2] = -length / 2;
+	v[1][2] = v[2][2] = v[5][2] = v[6][2] =  length / 2;
+
+	std::vector<Eigen::Vector3d> quad;
+	for(int i = 0; i < 6; i++){
+		if( n[i][0] == direction[0] && n[i][1] == direction[1] && n[i][2] == direction[2] ){
+			for(int vi = 0; vi < 4; vi++) quad.push_back( v[ faces[i][vi] ] );
+			break;
+		}
+	}
+	return quad;
+}
+
+inline std::vector< std::vector<uint64_t> > voxelPath(Eigen::Vector3i center, Eigen::Vector3i corner){
+	std::vector< std::vector<uint64_t> > paths(6);
+
+	bool isRight = corner.x() > center.x();
+	bool isFront = corner.y() > center.y();
+	bool isTop = corner.z() > center.z();
+
+	if( center.z() == corner.z() ){
+		paths.resize(2);
+		paths[0].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z()) );
+		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
+		return paths;
+	}
+	if( center.x() == corner.x() ){
+		paths.resize(2);
+		paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
+		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		return paths;
+	}
+	if( center.y() == corner.y() ){
+		paths.resize(2);
+		paths[0].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z()) );
+		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		return paths;
+	}
+
+	paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
+	paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
+
+	paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z())  );
+	paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+
+	paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y()						, corner.z() + (isTop ? -1 : 1)) );
+	paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y()	+ (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
+
+	paths[3].push_back( mortonEncode_LUT(corner.x()						, corner.y(), corner.z() + (isTop ? -1 : 1)) );
+	paths[3].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+
+
+	paths[4].push_back( mortonEncode_LUT(corner.x()						, corner.y() + (isFront ? -1 : 1), corner.z()) );
+	paths[4].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
+
+	paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y()					 , corner.z()) );
+	paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
+
+	return paths;
+}
 
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
@@ -250,7 +328,7 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	return AABox<Vector3>(mesh_min, mesh_max);
 }
 
-inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & unitlength, size_t gridsize = 512, bool isMakeSolid = false )
+inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize = 512, bool isMakeSolid = false, bool isManifoldReady = true )
 {
 	VoxelContainer container;
 
@@ -262,7 +340,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & uni
 	
 	AABox<Vector3> mesh_bbox = createMeshBBCube( mesh );
 
-	unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
+	container.unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
 	uint64_t morton_part = (gridsize * gridsize * gridsize);
 
 	// Storage for voxel on/off
@@ -274,63 +352,240 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, double & uni
 	size_t nfilled = 0;
 
 	// VOXELIZATION
-	voxelize_schwarz_method(mesh, start, end, unitlength, voxels, container.data, nfilled);
+	voxelize_schwarz_method(mesh, start, end, container.unitlength, voxels, container.data, nfilled);
 
 	container.translation = corner;
 
 	// Move mesh back to original position
 	for(auto v : mesh->vertices()) points[v] += corner;
 
+	container.isSolid = isMakeSolid;
+
 	if( isMakeSolid )
 	{	
-		// Original set of surface voxels
-		std::vector<char> surface_voxels = voxels; 
+		// Original set of surface voxels (sparse representation)
+		std::set<uint64_t> surface_voxels;
+		for(uint64_t m = 0; m < morton_part; m++) if(voxels.at(m) == FULL_VOXEL) surface_voxels.insert(m);
 
 		// Flood fill from the outside walls
-		std::stack<uint64_t> stack;
+		std::vector<uint64_t> outer;
 		for(int u = 0; u < gridsize; u++){
 			for(int v = 0; v < gridsize; v++){
-				stack.push( mortonEncode_LUT(u, v, 0) );
-				stack.push( mortonEncode_LUT(0, u, v) );
-				stack.push( mortonEncode_LUT(v, 0, u) );
+				outer.push_back( mortonEncode_LUT(u, v, 0) );
+				outer.push_back( mortonEncode_LUT(0, u, v) );
+				outer.push_back( mortonEncode_LUT(v, 0, u) );
 
-				stack.push( mortonEncode_LUT(u, v, (unsigned int)gridsize-1) );
-				stack.push( mortonEncode_LUT((unsigned int)gridsize-1, u, v) );
-				stack.push( mortonEncode_LUT(v, (unsigned int)gridsize-1, u) );
+				outer.push_back( mortonEncode_LUT(u, v, (unsigned int)gridsize-1) );
+				outer.push_back( mortonEncode_LUT((unsigned int)gridsize-1, u, v) );
+				outer.push_back( mortonEncode_LUT(v, (unsigned int)gridsize-1, u) );
 			}
 		}
 
-		// Flood fill (do we need to visit corners as well??)
-		while( !stack.empty() )
+		// Split into 8 chunks
+		int h = (int)gridsize / 2; 
+		std::vector<Eigen::AlignedBox3i> chunk( 8 );
+		chunk[0] = Eigen::AlignedBox3i( Eigen::Vector3i(0,0,0), Eigen::Vector3i(h-1,h-1,h-1) ); // Top
+		chunk[1] = Eigen::AlignedBox3i( chunk[0].min() + Eigen::Vector3i(h,0,0), chunk[0].max() + Eigen::Vector3i(h,0,0) );
+		chunk[2] = Eigen::AlignedBox3i( chunk[1].min() + Eigen::Vector3i(0,h,0), chunk[1].max() + Eigen::Vector3i(0,h,0) );
+		chunk[3] = Eigen::AlignedBox3i( chunk[2].min() - Eigen::Vector3i(h,0,0), chunk[2].max() - Eigen::Vector3i(h,0,0) );
+		chunk[4] = Eigen::AlignedBox3i( chunk[0].min() + Eigen::Vector3i(0,0,h), chunk[0].max() + Eigen::Vector3i(0,0,h) );	// Bottom
+		chunk[5] = Eigen::AlignedBox3i( chunk[1].min() + Eigen::Vector3i(0,0,h), chunk[1].max() + Eigen::Vector3i(0,0,h) );
+		chunk[6] = Eigen::AlignedBox3i( chunk[2].min() + Eigen::Vector3i(0,0,h), chunk[2].max() + Eigen::Vector3i(0,0,h) );
+		chunk[7] = Eigen::AlignedBox3i( chunk[3].min() + Eigen::Vector3i(0,0,h), chunk[3].max() + Eigen::Vector3i(0,0,h) );
+
+		// Assign wall voxels to their chunks
+		std::vector< std::queue<uint64_t> > wall( chunk.size() );
+		for(auto m : outer)
 		{
-			uint64_t curVox = stack.top();
-			stack.pop();
-
-			if( voxels.at(curVox) == EMPTY_VOXEL )
-			{
-				voxels.at(curVox) = FULL_VOXEL;
-
-				unsigned int x,y,z;
-				mortonDecode(curVox, x, y, z);
-
-				if(x < gridsize - 1) stack.push( mortonEncode_LUT(x+1,y,z) );
-				if(y < gridsize - 1) stack.push( mortonEncode_LUT(x,y+1,z) );
-				if(z < gridsize - 1) stack.push( mortonEncode_LUT(x,y,z+1) );
-
-				if(x > 0) stack.push( mortonEncode_LUT(x-1,y,z) );
-				if(y > 0) stack.push( mortonEncode_LUT(x,y-1,z) );
-				if(z > 0) stack.push( mortonEncode_LUT(x,y,z-1) );
+			unsigned int x,y,z;
+			mortonDecode(m, x, y, z);
+			for(size_t i = 0; i < chunk.size(); i++){
+				if( chunk[i].contains( Eigen::Vector3i(x,y,z) ) ){
+					wall[i].push(m); break;
+				}
 			}
 		}
 
-		std::vector<VoxelData> inside;
+		#pragma omp parallel for
+		for(int i = 0; i < (int)wall.size(); i++)
+		{
+			std::queue<uint64_t> & queue = wall[i];
 
-		for(uint64_t m = 0; m < morton_part; m++){
-			if(voxels[m] == EMPTY_VOXEL || surface_voxels[m] == FULL_VOXEL)
-				inside.push_back( VoxelData(m) );
+			// Flood fill (do we need to visit diagonals as well??)
+			while( !queue.empty() )
+			{
+				uint64_t curVox = queue.front();
+				queue.pop();
+
+				const uint64_t vox = voxels.at(curVox);
+
+				if( vox == EMPTY_VOXEL )
+				{
+					voxels.at(curVox) = FULL_VOXEL;
+
+					unsigned int x,y,z;
+					mortonDecode(curVox, x, y, z);
+
+					Eigen::Vector3i vox(x,y,z);
+					//if( chunk.at(i).contains(vox)  )
+					{
+						if(x < gridsize - 1) queue.push( mortonEncode_LUT(x+1,y,z) );
+						if(y < gridsize - 1) queue.push( mortonEncode_LUT(x,y+1,z) );
+						if(z < gridsize - 1) queue.push( mortonEncode_LUT(x,y,z+1) );
+
+						if(x > 0) queue.push( mortonEncode_LUT(x-1,y,z) );
+						if(y > 0) queue.push( mortonEncode_LUT(x,y-1,z) );
+						if(z > 0) queue.push( mortonEncode_LUT(x,y,z-1) );
+					}
+				}
+			}
 		}
 
-		container.data = inside;
+		// Now carve out surface
+		for(auto s : surface_voxels) voxels[s] = EMPTY_VOXEL;
+
+		// Solid voxels to surface
+		if( isManifoldReady )
+		{
+			// First ensure voxels result in watertight surface
+			bool isFixing = true;
+			while( isFixing )
+			{
+				isFixing = false;
+
+				// Test six sides of a voxel on surface
+				for(auto s : surface_voxels)
+				{
+					unsigned int x,y,z;
+					mortonDecode(s, x, y, z);
+
+					// Examine my neighborhood
+					for(int u = -1; u <= 1; u++){
+						for(int v = -1; v <= 1; v++){
+							for(int w = -1; w <= 1; w++){
+								if(u == 0 && v == 0 && w == 0) continue; // skip myself
+
+								Eigen::Vector3i c(x + u, y + v, z + w);
+
+								// Skip outside grid
+								if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+								if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;;
+
+								if( voxels[mortonEncode_LUT( c.x(), c.y(), c.z() )] != EMPTY_VOXEL ) continue;
+
+								// Get possible paths from voxel to current corner
+								auto paths = voxelPath( Eigen::Vector3i(x,y,z), c );
+								int filled = 0;
+								for(auto path : paths){
+									int dist = 0;
+									for(auto step : path) dist += (voxels[step] == EMPTY_VOXEL) ? 1 : 0;
+									if(dist == path.size()) filled++;
+								}
+
+								// Expand when no path connects the corner and current voxel
+								if( !filled ){
+									for(auto path : paths){
+										for(auto step : path){
+											isFixing = true;
+											voxels[step] = EMPTY_VOXEL;
+											surface_voxels.insert( step );
+											if(false) container.aux.push_back( VoxelData(step, Vector3(0,0,1)) ); // DEBUG
+										}
+									}
+								}
+
+								// Unfilled diagonal case
+								if( paths.size() > 2 && filled == 2 ){
+									std::vector<uint64_t> d(4);
+									d[0] = mortonEncode_LUT(x, y + v, z + w); d[1] = mortonEncode_LUT(x + u, y, z);
+									d[2] = mortonEncode_LUT(x + u, y, z + w); d[3] = mortonEncode_LUT(x, y + v, z);
+
+									if( (voxels[d[0]] != EMPTY_VOXEL && voxels[d[1]] != EMPTY_VOXEL) || 
+										(voxels[d[2]] != EMPTY_VOXEL && voxels[d[3]] != EMPTY_VOXEL) ){
+										for(int i = 0; i < 2; i++){
+											isFixing = true;
+											voxels[d[i]] = EMPTY_VOXEL;
+											surface_voxels.insert( d[i] );
+											if(false) container.aux.push_back( VoxelData(d[i], Vector3(0,0,1)) ); // DEBUG
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// Collect inner voxels
+			container.data.clear();
+			for(uint64_t m = 0; m < morton_part; m++){
+				if(voxels[m] == EMPTY_VOXEL)
+					container.data.push_back( VoxelData(m) );
+			}
+
+			// Collect set of pair voxels (inside / outside)
+			std::vector< std::pair<uint64_t,uint64_t> > surface;
+			for(auto voxel : container.data)
+			{					
+				unsigned int x,y,z;
+				mortonDecode(voxel.morton, x, y, z);
+
+				std::vector<uint64_t> neigh;
+				if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
+				if(y < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y+1,z) );
+				if(z < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y,z+1) );
+
+				if(x > 0) neigh.push_back( mortonEncode_LUT(x-1,y,z) );
+				if(y > 0) neigh.push_back( mortonEncode_LUT(x,y-1,z) );
+				if(z > 0) neigh.push_back( mortonEncode_LUT(x,y,z-1) );
+
+				// Collect pair of voxels at surface
+				for(auto n : neigh){
+					if(voxels[n] != voxels[voxel.morton])
+						surface.push_back( std::make_pair(voxel.morton, n) );
+				}
+			}
+
+			std::vector< std::pair<uint64_t, Eigen::Vector3i> > allQuads;
+
+			// Also similarly add quads from boundary voxels
+			for(auto s : surface_voxels){
+				unsigned int v[3];
+				mortonDecode(s, v[2], v[1], v[0]);
+				bool isBoundary = (v[0] == 0 || v[1] == 0 || v[2] == 0) || 
+					(v[0] == gridsize-1 || v[1] == gridsize-1 || v[2] == gridsize-1);
+				if( isBoundary ){
+					for(int i = 0; i < 3; i++){
+						Eigen::Vector3i d(0,0,0);
+						if(v[i] == 0) d[i] = -1;
+						else if(v[i] == gridsize-1) d[i] = 1;
+						if(d[0]!=0||d[1]!=0||d[2]!=0) allQuads.push_back( std::make_pair(s, d) );
+					}
+				}
+			}
+
+			// Prepare set of quads
+			for(auto s : surface){
+				unsigned int v[3], w[3];
+				mortonDecode(s.first, v[0], v[1], v[2]);
+				mortonDecode(s.second, w[0], w[1], w[2]);
+				Eigen::Vector3i direction (int(w[2])-int(v[2]), int(w[1])-int(v[1]), int(w[0])-int(v[0]));
+				allQuads.push_back( std::make_pair(s.first, direction) );
+			}
+
+			// Generate surface quads in world coordinates
+			double unitlength = container.unitlength;	
+			Eigen::Vector3d delta = container.translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+
+			for(auto p : allQuads)
+			{			
+				unsigned int v[3];
+				mortonDecode(p.first, v[0], v[1], v[2]);
+				std::vector<Eigen::Vector3d> quad = voxelQuad( p.second, unitlength );
+				for(auto & p : quad) p += Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
+				container.quads.push_back( quad );
+			}
+		}
 	}
 
 	return container;
