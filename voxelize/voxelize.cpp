@@ -147,7 +147,7 @@ inline void projectToSurface( SurfaceMeshModel * mesh, SurfaceMeshModel * orgina
 
 void voxelize::initParameters(RichParameterSet *pars)
 {
-	pars->addParam(new RichInt("Resolution", 16, "Resolution"));
+	pars->addParam(new RichInt("Resolution", 64, "Resolution"));
 	pars->addParam(new RichBool("Solid", false, "Solid"));
 	pars->addParam(new RichBool("Manifold", false, "Manifold"));
 	pars->addParam(new RichBool("Project", false, "Project"));

@@ -325,7 +325,7 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	return AABox<Vector3>(mesh_min, mesh_max);
 }
 
-inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize = 512, bool isMakeSolid = false, bool isManifoldReady = true )
+inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize, bool isMakeSolid, bool isManifoldReady )
 {
 	VoxelContainer container;
 
@@ -581,6 +581,15 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 				std::vector<Eigen::Vector3d> quad = voxelQuad( p.second, unitlength );
 				for(auto & p : quad) p += Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
 				container.quads.push_back( quad );
+			}
+		}
+		else
+		{
+			// Collect inner voxels
+			container.data.clear();
+			for(uint64_t m = 0; m < morton_part; m++){
+				if(voxels[m] == EMPTY_VOXEL)
+					container.data.push_back( VoxelData(m) );
 			}
 		}
 	}
