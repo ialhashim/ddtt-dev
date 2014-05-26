@@ -60,11 +60,95 @@ inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m)
 	for(auto face: faces) m->add_face(face);
 }
 
+inline Vector3 findNearestPoint(SurfaceMeshModel * mesh, SurfaceMeshModel * original_mesh, 
+								NanoKdTree * kdtree, const Vector3& _point, SurfaceMeshModel::Face& _fh, double* _dbest)
+{
+	Vector3VertexProperty orig_points = original_mesh->vertex_property<Vector3>( VPOINT );
+
+	double fc = original_mesh->bbox().diagonal().norm() * 2;
+	Vector3  p_best = Vector3(fc,fc,fc) + Vector3(original_mesh->bbox().center());
+	SurfaceMeshModel::Scalar d_best = (_point - p_best).squaredNorm();
+	SurfaceMeshModel::Face fh_best;
+
+	if( true )
+	{
+		foreach(Face f, original_mesh->faces())
+		{
+			Surface_mesh::Vertex_around_face_circulator cfv_it = original_mesh->vertices(f);
+
+			// Assume triangular
+			const Vector3& pt0 = orig_points[   cfv_it];
+			const Vector3& pt1 = orig_points[ ++cfv_it];
+			const Vector3& pt2 = orig_points[ ++cfv_it];
+
+			Vector3 ptn = _point;
+
+			//SurfaceMeshModel::Scalar d = distPointTriangleSquared( _point, pt0, pt1, pt2, ptn );
+			SurfaceMeshModel::Scalar d = ClosestPointTriangle( _point, pt0, pt1, pt2, ptn );
+
+			if( d < d_best)
+			{
+				d_best = d;
+				p_best = ptn;
+
+				fh_best = f;
+			}
+		}
+	} else {
+		KDResults matches;
+		kdtree->k_closest(_point, 32, matches);
+
+		foreach(KDResultPair match, matches){
+			foreach(Halfedge h, original_mesh->onering_hedges(Vertex((int)match.first))){
+				Face f = original_mesh->face(h);
+				if(!mesh->is_valid(f)) continue;
+				SurfaceMeshModel::Vertex_around_face_circulator cfv_it = original_mesh->vertices( f );
+
+				// Assume triangular
+				const Vector3& pt0 = orig_points[   cfv_it],pt1 = orig_points[ ++cfv_it],pt2 = orig_points[ ++cfv_it];
+
+				Vector3 ptn = _point;
+				SurfaceMeshModel::Scalar d = ClosestPointTriangle( _point, pt0, pt1, pt2, ptn );
+				if( d < d_best){
+					d_best = d;
+					p_best = ptn;
+					fh_best = f;
+				}
+			}
+		}
+	}
+
+	_fh = fh_best;
+	if(_dbest) *_dbest = sqrt(d_best);
+	return p_best;
+}
+
+inline void projectToSurface( SurfaceMeshModel * mesh, SurfaceMeshModel * orginal_mesh, double maxDistance )
+{
+	SurfaceMeshModel::Vertex_iterator v_it;
+	SurfaceMeshModel::Vertex_iterator v_end = mesh->vertices_end();
+	Vector3VertexProperty points = mesh->vertex_coordinates();
+	Vector3VertexProperty original_points = orginal_mesh->vertex_coordinates();
+
+	// Build KD-tree
+	NanoKdTree kdtree;
+	foreach(Vertex v, mesh->vertices()) kdtree.addPoint(original_points[v]);
+	kdtree.build();
+
+	for (v_it = mesh->vertices_begin(); v_it != v_end; ++v_it){
+		SurfaceMeshModel::Face fhNear;
+		double distance;
+		Vector3 pNear = findNearestPoint(mesh, orginal_mesh, &kdtree, points[v_it], fhNear, &distance);
+		if( distance < maxDistance ) points[v_it] = pNear;
+	}
+}
+
 void voxelize::initParameters(RichParameterSet *pars)
 {
 	pars->addParam(new RichInt("Resolution", 16, "Resolution"));
 	pars->addParam(new RichBool("Solid", false, "Solid"));
 	pars->addParam(new RichBool("Manifold", false, "Manifold"));
+	pars->addParam(new RichBool("Project", false, "Project"));
 	pars->addParam(new RichInt("Smooth", 0, "Smooth"));
 	pars->addParam(new RichBool("Intersection", false, "Intersection"));
 	pars->addParam(new RichInt("Operation", 0, "Operation"));
@@ -74,8 +158,6 @@ void voxelize::initParameters(RichParameterSet *pars)
 void voxelize::applyFilter(RichParameterSet *pars)
 {
 	drawArea()->clear();
-
-	drawArea()->setAxisIsDrawn();
 
 	size_t gridsize = pars->getInt("Resolution");
 
@@ -181,6 +263,11 @@ void voxelize::applyFilter(RichParameterSet *pars)
 				}
 			}
 			if( hasHoles ) mainWindow()->setStatusBarMessage( QString("Holes are found in mesh") );
+
+			if(pars->getBool("Project"))
+			{
+				projectToSurface( newMesh, mesh(), voxels.unitlength * 5 );
+			}
 		}
 
 		if(pars->getBool("Visualize"))

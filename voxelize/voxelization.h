@@ -114,7 +114,7 @@ inline std::vector<Eigen::Vector3d> voxelQuad(Eigen::Vector3i direction, double 
 	return quad;
 }
 
-inline std::vector< std::vector<uint64_t> > voxelPath(Eigen::Vector3i center, Eigen::Vector3i corner){
+inline std::vector< std::vector<uint64_t> > voxelPath(Eigen::Vector3i center, Eigen::Vector3i corner, size_t gridsize){
 	std::vector< std::vector<uint64_t> > paths(6);
 
 	bool isRight = corner.x() > center.x();
@@ -125,40 +125,37 @@ inline std::vector< std::vector<uint64_t> > voxelPath(Eigen::Vector3i center, Ei
 		paths.resize(2);
 		paths[0].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z()) );
 		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
-		return paths;
-	}
-	if( center.x() == corner.x() ){
+	}else if( center.x() == corner.x() ){
 		paths.resize(2);
 		paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
 		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
-		return paths;
-	}
-	if( center.y() == corner.y() ){
+	}else if( center.y() == corner.y() ){
 		paths.resize(2);
 		paths[0].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z()) );
 		paths[1].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
-		return paths;
+	}else{
+		paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
+		paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
+		paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z())  );
+		paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y()	+ (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
+		paths[3].push_back( mortonEncode_LUT(corner.x(), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		paths[3].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
+		paths[4].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
+		paths[4].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
+		paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z()) );
+		paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
 	}
-
-	paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z()) );
-	paths[0].push_back( mortonEncode_LUT(corner.x(), corner.y() + (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
-
-	paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z())  );
-	paths[1].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
-
-	paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y()						, corner.z() + (isTop ? -1 : 1)) );
-	paths[2].push_back( mortonEncode_LUT(corner.x(), corner.y()	+ (isFront ? -1 : 1), corner.z() + (isTop ? -1 : 1)) );
-
-	paths[3].push_back( mortonEncode_LUT(corner.x()						, corner.y(), corner.z() + (isTop ? -1 : 1)) );
-	paths[3].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y(), corner.z() + (isTop ? -1 : 1)) );
-
-
-	paths[4].push_back( mortonEncode_LUT(corner.x()						, corner.y() + (isFront ? -1 : 1), corner.z()) );
-	paths[4].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
-
-	paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y()					 , corner.z()) );
-	paths[5].push_back( mortonEncode_LUT(corner.x() + (isRight ? -1 : 1), corner.y() + (isFront ? -1 : 1), corner.z()) );
-
+	for(auto & path : paths){
+		bool isValid = true;
+		for(auto step : path) {
+			unsigned int x,y,z;
+			mortonDecode(step,x,y,z);
+			if( x > gridsize-1 || y > gridsize-1 || z > gridsize-1 ) isValid = false;
+		}
+		if( !isValid ) path.clear();
+	}
 	return paths;
 }
 
@@ -474,7 +471,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 								if( voxels[mortonEncode_LUT( c.x(), c.y(), c.z() )] != EMPTY_VOXEL ) continue;
 
 								// Get possible paths from voxel to current corner
-								auto paths = voxelPath( Eigen::Vector3i(x,y,z), c );
+								auto paths = voxelPath( Eigen::Vector3i(x,y,z), c, gridsize );
 								int filled = 0;
 								for(auto path : paths){
 									int dist = 0;
