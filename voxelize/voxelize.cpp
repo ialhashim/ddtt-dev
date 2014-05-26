@@ -7,6 +7,8 @@
 #include "voxelize.h"
 #include "voxelization.h"
 
+#include "mc.h"
+
 #include "NanoKdTree.h"
 inline void snapCloseVertices( std::vector<SurfaceMesh::Vector3> & vertices, double threshold ){
 	NanoKdTree tree;
@@ -149,6 +151,7 @@ void voxelize::initParameters(RichParameterSet *pars)
 	pars->addParam(new RichBool("Solid", false, "Solid"));
 	pars->addParam(new RichBool("Manifold", false, "Manifold"));
 	pars->addParam(new RichBool("Project", false, "Project"));
+	pars->addParam(new RichBool("Marching", false, "Marching"));
 	pars->addParam(new RichInt("Smooth", 0, "Smooth"));
 	pars->addParam(new RichBool("Intersection", false, "Intersection"));
 	pars->addParam(new RichInt("Operation", 0, "Operation"));
@@ -268,6 +271,79 @@ void voxelize::applyFilter(RichParameterSet *pars)
 			{
 				projectToSurface( newMesh, mesh(), voxels.unitlength * 5 );
 			}
+		}
+
+		if(pars->getBool("Marching"))
+		{
+			ScalarVolume volume = initScalarVolume( gridsize, 1.0 );
+
+			for(auto voxel : voxels.data)
+			{
+				unsigned int x,y,z;
+				mortonDecode(voxel.morton, x, y, z);
+
+				volume[x+MC_VOLUME_PADDING][y+MC_VOLUME_PADDING][z+MC_VOLUME_PADDING] = -1;
+			}
+
+			// Smooth volume
+			int smoothIterations = pars->getInt("Smooth");
+			for(int i = 0; i < smoothIterations; i++)
+			{
+				for(int z = 1; z < volume.size()-1; z++){
+					for(int y = 1; y < volume[z].size()-1; y++){
+						for(int x = 1; x < volume[z][y].size()-1; x++)
+						{
+							double sum = 0;
+							int count = 0;
+
+							for(int u = -1; u <= 1; u++){
+								for(int v = -1; v <= 1; v++){
+									for(int w = -1; w <= 1; w++){
+										sum += volume[x+u][y+v][z+w];
+										count++;
+									}
+								}
+							}
+
+							volume[x][y][z] = sum / count;
+						}
+					}
+				}
+			}
+
+			SurfaceMeshModel * newMesh = new SurfaceMeshModel("marching_cubes.obj", "marching_cubes");
+
+			int voffset = 0;
+			for( auto tri : march( volume, 0.5 ) ){
+				std::vector<Vertex> quad_verts;
+				for(int i = 0; i < 3; i++){
+					Vector3 p = Vector3(tri[i].x,tri[i].y,tri[i].z);
+
+					p = (p * voxels.unitlength) + voxels.translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+
+					newMesh->add_vertex( p );
+					quad_verts.push_back( Vertex(voffset + i) );
+				}
+				newMesh->add_face( quad_verts );
+				voffset += 3;
+			}
+
+			meregeVertices( newMesh );
+
+			// Smooth if requested
+			//SurfaceMeshHelper h(newMesh);
+			//h.smoothVertexProperty<Vector3>(VPOINT, pars->getInt("Smooth"), Vector3(0,0,0));
+
+			// remove any exciting
+			SurfaceMeshModel * oldMesh = (SurfaceMeshModel *) document()->getModel( newMesh->name );
+			if( oldMesh ) document()->deleteModel( oldMesh );
+
+			// Prepare then add to document
+			newMesh->updateBoundingBox();
+			newMesh->update_face_normals();
+			newMesh->update_vertex_normals();
+
+			document()->addModel( newMesh );
 		}
 
 		if(pars->getBool("Visualize"))
