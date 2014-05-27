@@ -331,6 +331,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 
 	// Move mesh to positive world
 	Vector3VertexProperty points = mesh->vertex_coordinates();
+	mesh->updateBoundingBox();
 	Vector3 corner = mesh->bbox().min();
 	Vector3 delta = mesh->bbox().center() - corner;
 	for(auto v : mesh->vertices()) points[v] -= corner;
@@ -603,6 +604,8 @@ inline vector<VoxelData> ComputeVoxelizationCSG( SurfaceMeshModel * meshA, Surfa
 										 double & unitlength, size_t gridsize = 1024, BooleanOperation operation = BOOL_UNION )
 {	
 	// Find bounding box of the two
+	meshA->updateBoundingBox();
+	meshB->updateBoundingBox();
 	Eigen::AlignedBox3d all_bbox = meshA->bbox().merged(meshB->bbox());
 	Vector3 corner = all_bbox.min();
 
