@@ -23,8 +23,7 @@ class MyDrawArea : public QGLViewer
 {
 	Q_OBJECT
 public:
-    MyDrawArea(SurfaceMesh::SurfaceMeshModel * mesh, QString filename) : m(mesh), filename(filename)
-		{ isDeleted = false; isDrawWireframe = true; }
+    MyDrawArea(SurfaceMesh::SurfaceMeshModel * mesh, QString filename);
 	~MyDrawArea();
 
 	void draw();
@@ -38,6 +37,8 @@ public:
 	bool isDeleted;
 
 	bool isDrawWireframe;
+	bool isDoubleLight;
+	QColor bg, fg;
 
 	// Undo
 	std::vector< SurfaceMesh::Vector3 > oldVertices;

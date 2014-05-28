@@ -44,6 +44,17 @@ inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m){
 		for(auto face: faces) m->add_face(face);
 }
 
+MyDrawArea::MyDrawArea(SurfaceMesh::SurfaceMeshModel * mesh, QString filename) : m(mesh), filename(filename)
+{
+	isDeleted = false; 
+	isDrawWireframe = true; 
+	isDoubleLight = false;
+
+	bg = QColor(51,51,51);
+	fg = QColor(255,255,255);
+}
+
+
 void MyDrawArea::draw()
 {
 	SurfaceMesh::SurfaceMeshModel * mesh = m;
@@ -56,6 +67,13 @@ void MyDrawArea::draw()
 		mesh->update_vertex_normals();
 		mesh->setProperty("hasNormals",true);
 	}
+
+	if(isDoubleLight){
+		glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+	}
+
+	glClearColor( bg.redF(), bg.greenF(), bg.blueF(), bg.alphaF() );
+	glClear(GL_COLOR_BUFFER_BIT);
 
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -75,7 +93,8 @@ void MyDrawArea::draw()
 		glEnable( GL_POLYGON_OFFSET_FILL );
 		glPolygonOffset( 1, 1 );
 
-		glColor3f(1,1,1);
+		glColor3f(fg.redF(),fg.greenF(),fg.blueF());
+
 		glBegin(GL_TRIANGLES);
 		for (fit=mesh->faces_begin(); fit!=fend; ++fit){
 			glNormal3d( fnormals[fit][0], fnormals[fit][1], fnormals[fit][2] );
@@ -133,8 +152,10 @@ void MyDrawArea::draw()
 
     glPushAttrib(GL_ALL_ATTRIB_BITS);
     startScreenCoordinatesSystem();
-    glColor3d(1,1,1);
-    renderText(10,20, QFileInfo(filename).baseName());
+    glColor3d(0,0,0);
+	renderText(11,21, QFileInfo(filename).baseName());
+	glColor3d(1,1,1);
+	renderText(10,20, QFileInfo(filename).baseName());
     stopScreenCoordinatesSystem();
     glPopAttrib();
 

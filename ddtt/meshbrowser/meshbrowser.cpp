@@ -109,6 +109,70 @@ MeshBrowser::MeshBrowser(QWidget *parent) : QWidget(parent), ui(new Ui::MeshBrow
 		ui->deleteList->clear();
 	});
 
+	connect(ui->generateThumbnails, &QPushButton::released, [=](){
+		foreach(QString filename, database)
+		{
+			SurfaceMesh::SurfaceMeshModel m(filename, QFileInfo(filename).baseName());
+			m.read( qPrintable(filename) );
+
+			Vector3VertexProperty points = m.vertex_coordinates();
+
+			/// Normalize, center, and move to base
+			cleanUp(&m);
+
+			MyDrawArea * viewer = new MyDrawArea(&m, filename);
+
+			if( !QFileInfo(filename).exists() ){
+				viewer->isDeleted = true;
+				continue;
+			}
+
+			viewer->setMinimumSize(256,256);
+			viewer->setMaximumSize(256,256);
+			
+			viewer->bg = QColor(255,255,255);
+			viewer->fg = QColor(160,160,200);
+			viewer->isDrawWireframe = false;
+			viewer->isDoubleLight = true;
+
+			viewer->show();
+
+			{
+				Eigen::AlignedBox3d bbox = m.bbox();
+				viewer->camera()->setSceneRadius(m.bbox().sizes().norm() * 2);
+				viewer->camera()->setUpVector(qglviewer::Vec(0,0,1));
+				viewer->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
+				viewer->camera()->lookAt(qglviewer::Vec());
+				viewer->camera()->showEntireScene();
+				double S = bbox.sizes().norm() * 0.2;
+				bbox.extend(bbox.min() + (Vector3(-1,-1,-1) * S));
+				bbox.extend(bbox.max() + (Vector3(1,1,1) * S));
+				viewer->camera()->setRevolveAroundPoint(qglviewer::Vec(bbox.center()));
+				viewer->camera()->setSceneCenter(qglviewer::Vec(bbox.center()));
+				viewer->camera()->fitBoundingBox(qglviewer::Vec(bbox.min().data()),qglviewer::Vec(bbox.max().data()));
+			}
+
+			QFileInfo meshFileInfo( filename );
+			QString meshname = meshFileInfo.baseName();
+			QString path = meshFileInfo.absolutePath();
+			QString thumbImgFilename = QString("%1.png").arg(path + "/" + meshname);
+
+			qApp->processEvents();
+
+			viewer->raise();
+			viewer->makeCurrent();
+			viewer->grabFrameBuffer().save( thumbImgFilename );
+
+			qApp->processEvents();
+
+			viewer->hide();
+			delete viewer;
+
+			qApp->processEvents();
+		}
+
+	});
+
 	connect(ui->genBinaryImgsButton, &QPushButton::released, [=](){
 		if(database.empty()) return;
 
@@ -200,6 +264,8 @@ void MeshBrowser::loadMeshes()
 			cleanUp(m);
 
             MyDrawArea * viewer = new MyDrawArea(m, filename);
+
+			viewer->setForegroundColor(QColor(255,255,255));
 
 			if( !QFileInfo(filename).exists() ){
 				viewer->isDeleted = true;
