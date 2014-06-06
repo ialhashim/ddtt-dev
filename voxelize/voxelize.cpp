@@ -287,6 +287,7 @@ void voxelize::applyFilter(RichParameterSet *pars)
 
 			// Smooth volume
 			int smoothIterations = pars->getInt("Smooth");
+			ScalarVolume smoothVolume = volume;
 			for(int i = 0; i < smoothIterations; i++)
 			{
 				for(int z = 1; z < volume.size()-1; z++){
@@ -305,11 +306,12 @@ void voxelize::applyFilter(RichParameterSet *pars)
 								}
 							}
 
-							volume[x][y][z] = sum / count;
+							smoothVolume[x][y][z] = sum / count;
 						}
 					}
 				}
 			}
+			volume = smoothVolume;
 
 			SurfaceMeshModel * newMesh = new SurfaceMeshModel("marching_cubes.obj", "marching_cubes");
 
