@@ -4,6 +4,7 @@
 void repair::initParameters(RichParameterSet *pars)
 {
 	pars->addParam(new RichFloat("MaxAspectRatio", 20, "Max aspect ratio"));
+	pars->addParam(new RichBool("CloseHoles", true, "Close Holes"));
 	pars->addParam(new RichBool("Visualize", true, "Visualize"));
 }
 
@@ -37,6 +38,59 @@ Scalar triangleAspectRatio( const Vector3& _v0, const Vector3& _v1, const Vector
 void repair::applyFilter(RichParameterSet *pars)
 {
 	Vector3VertexProperty points = mesh()->vertex_coordinates();
+
+	if( pars->getBool("CloseHoles") )
+	{
+		Surface_mesh::Halfedge_property<bool> hvisisted = mesh()->halfedge_property<bool>("h:visisted", false);
+
+		std::vector< std::vector<Halfedge> > holes;
+
+		for(Halfedge h : mesh()->halfedges()){
+			if( !mesh()->is_boundary(h) || hvisisted[h] ) continue;
+
+			std::vector<Halfedge> hole;
+
+			Halfedge hinit = h;
+			h = mesh()->next_halfedge(h);
+
+			while( h != hinit ) {
+				hole.push_back( h );
+				hvisisted[h] = true;
+				h = mesh()->next_halfedge(h);
+			}
+			hole.push_back( h );
+
+			holes.push_back(hole);
+		}
+
+		Vector3VertexProperty points = mesh()->vertex_coordinates();
+
+		for(std::vector<Halfedge> hole : holes){
+			std::vector<Vertex> holeVerts;
+			for(auto h : hole){
+				Vertex v = mesh()->to_vertex(h);
+				holeVerts.push_back(v);
+			}
+
+			// Compute hole center
+			Vector3 center(0,0,0);
+			for(auto v: holeVerts) center += points[v];
+			center /= holeVerts.size();
+
+			Vertex c = mesh()->add_vertex(center);
+
+			for(size_t vi = 0; vi < holeVerts.size(); vi++){
+				std::vector<Vertex> face;
+
+				face.push_back( holeVerts[vi] );
+				face.push_back( holeVerts[(vi+1) % holeVerts.size()] );
+				face.push_back( c );
+
+				mesh()->add_face(face);
+			}
+		}
+	}
+
 	ScalarFaceProperty faspect = mesh()->face_property("f:aspect", 1.0);
 
 	// Remove degenerate faces
