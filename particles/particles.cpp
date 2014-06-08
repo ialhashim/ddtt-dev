@@ -5,19 +5,33 @@
 #include <QOpenGLShaderProgram>
 #include <QWidget>
 #include "particles-widget.h"
+#include "ui_particles-widget.h"
 
 #define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
 
 QTimer * timer = NULL;
 
+#include "myglobals.h"
+
 void particles::create()
 {
+	if( widget ) return;
+
     ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
 
-    widget = new ParticlesWidget();
+	ParticlesWidget * pw = new ParticlesWidget();
+    widget = pw;
 
     dockwidget->setWidget( widget );
     mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+
+	// Test
+	connect(pw->ui->testButton, &QPushButton::released, [=]{
+		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
+		//drawArea()->update();
+
+
+	});
 }
 
 void particles::decorate()

@@ -17,6 +17,6 @@ public:
 	std::vector<ParticleMesh*> pmeshes;
 	bool isReady;
 
-private:
+//private:
     Ui::ParticlesWidget *ui;
 };

@@ -11,7 +11,7 @@ class particles: public SurfaceMeshModePlugin{
     QIcon icon(){ return QIcon(":/images/particles.png"); }
 
 public:
-    particles() { widget = NULL; }
+    particles() : widget(NULL) {}
 
     // Main functionality
     void create();
