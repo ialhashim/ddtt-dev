@@ -27,6 +27,7 @@ struct AABox {
 	}
 };
 
+template<typename Vector3>
 struct BasicTriangle{
 	BasicTriangle() { counter = 0; v0_color = v1_color = v2_color = Vector3(0,0,0); }
 	void setPoint(Vector3 p){ if(counter == 0) v0 = p; if(counter == 1) v1 = p; if(counter == 2) v2 = p; counter++; }
@@ -36,6 +37,7 @@ struct BasicTriangle{
 };
 
 // Intersection methods
+template<typename Vector3>
 inline AABox<Vector3> computeBoundingBox(const Vector3 &v0, const Vector3 &v1, const Vector3 &v2){
 	AABox<Vector3> answer; 
 	answer.min[0] = std::min(v0[0],std::min(v1[0],v2[0]));
@@ -47,6 +49,7 @@ inline AABox<Vector3> computeBoundingBox(const Vector3 &v0, const Vector3 &v1, c
 	return answer;
 }
 
+template<typename Vector3>
 inline Vector3 average3Vec(const Vector3 v0, const Vector3 v1, const Vector3 v2){
 	Vector3 answer;
 	for (size_t i = 0; i < 3; i++){
@@ -69,34 +72,52 @@ template <typename T> T clampval(const T& value, const T& low, const T& high) {
 
 // This struct defines VoxelData for our voxelizer.
 // This is the main memory hogger: the less data you store here, the better.
+template<typename Vector3>
 struct VoxelData{
 	uint64_t morton;
 	Vector3 color;
 	Vector3 normal;
+	bool isOuter;
 	
-	VoxelData() : morton(0), normal(Vector3()), color(Vector3()){}
-	VoxelData(uint64_t morton, Vector3 normal = Vector3(0,0,0), Vector3 color = Vector3(0,0,0)) : morton(morton), normal(normal), color(color){}
+	VoxelData() : morton(0), normal(Vector3()), color(Vector3()), isOuter(true){}
+	VoxelData(uint64_t morton, bool isOuter, Vector3 normal = Vector3(0,0,0), Vector3 color = Vector3(0,0,0)) :
+		morton(morton), isOuter(isOuter), normal(normal), color(color){}
 
 	bool operator > (const VoxelData &a) const{	return morton > a.morton; }
 	bool operator < (const VoxelData &a) const{	return morton < a.morton; }
 };
 
+template<typename Vector3>
 struct VoxelContainer{
-	std::vector<VoxelData> data, aux;
+	std::vector< VoxelData<Vector3> > data, aux;
 	Vector3 translation;
 	double unitlength;
 	size_t gridsize;
 	bool isSolid;
-	std::vector< std::vector<Eigen::Vector3d> > quads;
+	std::vector<char> occupied;
+	std::vector< std::vector<Vector3> > quads;
+	std::vector< Vector3 > voxelCenters(){
+		std::vector< Vector3 > result;
+		for(auto voxel : data) result.push_back( voxelPos(voxel.morton) );
+		return result;
+	}
+	inline Vector3 voxelPos( uint64_t m ){
+		static Vector3 delta = translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+		unsigned int v[3];
+		mortonDecode(m, v[0], v[1], v[2]);
+		return Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
+	}
+	void findOccupied(){ occupied.resize(gridsize*gridsize*gridsize, EMPTY_VOXEL); for(auto & v : data) occupied[v.morton] = FULL_VOXEL; }
 };
 
-inline std::vector<Eigen::Vector3d> voxelQuad(Eigen::Vector3i direction, double length = 1.0)
+template<typename Vector3>
+inline std::vector<Vector3> voxelQuad(Eigen::Vector3i direction, double length = 1.0)
 {
 	static double n[6][3] = {{-1.0,  0.0, 0.0},{0.0, 1.0, 0.0},{1.0, 0.0,  0.0},
 							 { 0.0, -1.0, 0.0},{0.0, 0.0, 1.0},{0.0, 0.0, -1.0}};
 	static int faces[6][4] ={{0, 1, 2, 3},{3, 2, 6, 7},{7, 6, 5, 4},
 							 {4, 5, 1, 0},{5, 6, 2, 1},{7, 4, 0, 3}};
-	Eigen::Vector3d v[8];
+	Vector3 v[8];
 	v[0][0] = v[1][0] = v[2][0] = v[3][0] = -length / 2;
 	v[4][0] = v[5][0] = v[6][0] = v[7][0] =  length / 2;
 	v[0][1] = v[1][1] = v[4][1] = v[5][1] = -length / 2;
@@ -104,7 +125,7 @@ inline std::vector<Eigen::Vector3d> voxelQuad(Eigen::Vector3i direction, double 
 	v[0][2] = v[3][2] = v[4][2] = v[7][2] = -length / 2;
 	v[1][2] = v[2][2] = v[5][2] = v[6][2] =  length / 2;
 
-	std::vector<Eigen::Vector3d> quad;
+	std::vector<Vector3> quad;
 	for(int i = 0; i < 6; i++){
 		if( n[i][0] == direction[0] && n[i][1] == direction[1] && n[i][2] == direction[2] ){
 			for(int vi = 0; vi < 4; vi++) quad.push_back( v[ faces[i][vi] ] );
@@ -162,8 +183,9 @@ inline std::vector< std::vector<uint64_t> > voxelPath(Eigen::Vector3i center, Ei
 // Implementation of algorithm from http://research.michael-schwarz.com/publ/2010/vox/ (Schwarz & Seidel)
 // Adapted for mortoncode -based subgrids
 
+template<typename Vector3>
 inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t morton_start, const uint64_t morton_end, 
-		const double unitlength, std::vector<char> & voxels, vector<VoxelData> &data, size_t &nfilled) 
+		const double unitlength, std::vector<char> & voxels, vector< VoxelData<Vector3> > &data, size_t &nfilled) 
 {
 	voxels.clear();
 	voxels.resize(morton_end - morton_start, EMPTY_VOXEL);
@@ -185,8 +207,8 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 	// voxelize every triangle
 	for(auto f : mesh->faces())
 	{
-		BasicTriangle t;
-		for(auto vi : mesh->vertices(f)) t.setPoint( points[vi] );
+		BasicTriangle<Vector3> t;
+		for(auto vi : mesh->vertices(f)) t.setPoint( points[vi].cast<Vector3::Scalar>() );
 
 		// compute triangle bbox in world and grid
 		AABox<Vector3> t_bbox_world = computeBoundingBox(t.v0, t.v1, t.v2);
@@ -219,7 +241,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 		if (n[Y] > 0) { c[Y] = unitlength; }
 		if (n[Z] > 0) { c[Z] = unitlength; }
 		double d1 = n.dot(c - t.v0);
-		double d2 = n.dot((delta_p - c) - t.v0);
+		double d2 = n.dot(Vector3(delta_p - c) - t.v0);
 
 		// PROJECTION TEST PROPERTIES
 		// XY plane
@@ -293,7 +315,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 					if ((n_zx_e2.dot(p_zx) + d_xz_e2) < 0.0){ continue; }
 
 					voxels[index - morton_start] = FULL_VOXEL;
-					data.push_back(VoxelData(index, n));
+					data.push_back(VoxelData<Vector3>(index, true, n));
 
 					nfilled++;
 					continue;
@@ -303,6 +325,7 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 	}
 }
 
+template<typename Vector3>
 inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 {
 	Eigen::AlignedBox3d mesh_bbox = mesh->bbox();
@@ -310,8 +333,8 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	// Numerical stability : but why we need this?
 	mesh_bbox = mesh_bbox.extend( ((mesh_bbox.max() - mesh_bbox.center()) * (1 + 1e-12)) + mesh_bbox.center() );
 
-	Vector3 mesh_min = mesh_bbox.min();
-	Vector3 mesh_max = mesh_bbox.max();
+	Vector3 mesh_min = mesh_bbox.min().cast<Vector3::Scalar>();
+	Vector3 mesh_max = mesh_bbox.max().cast<Vector3::Scalar>();
 
 	Vector3 lengths = mesh_max - mesh_min;
 
@@ -325,20 +348,22 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 	return AABox<Vector3>(mesh_min, mesh_max);
 }
 
-inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize, bool isMakeSolid, bool isManifoldReady )
+template<typename Vector3>
+inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize, bool isMakeSolid, bool isManifoldReady )
 {
-	VoxelContainer container;
+	VoxelContainer<Vector3> container;
 
 	// Move mesh to positive world
 	Vector3VertexProperty points = mesh->vertex_coordinates();
 	mesh->updateBoundingBox();
-	Vector3 corner = mesh->bbox().min();
-	Vector3 delta = mesh->bbox().center() - corner;
-	for(auto v : mesh->vertices()) points[v] -= corner;
+	Vector3 corner = mesh->bbox().min().cast<Vector3::Scalar>();
+	Vector3 delta = mesh->bbox().center().cast<Vector3::Scalar>() - corner;
+	for(auto v : mesh->vertices()) points[v] -= corner.cast<double>();
 	
-	AABox<Vector3> mesh_bbox = createMeshBBCube( mesh );
+	AABox<Vector3> mesh_bbox = createMeshBBCube<Vector3>( mesh );
 
 	container.unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
+	container.gridsize = gridsize;
 	uint64_t morton_part = (gridsize * gridsize * gridsize);
 
 	// Storage for voxel on/off
@@ -355,7 +380,10 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 	container.translation = corner;
 
 	// Move mesh back to original position
-	for(auto v : mesh->vertices()) points[v] += corner;
+	for(auto v : mesh->vertices()) points[v] += corner.cast<double>();
+
+	// Voxels on surface are marked as so
+	for(auto & v : container.data) v.isOuter = true;
 
 	container.isSolid = isMakeSolid;
 
@@ -404,6 +432,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 			}
 		}
 
+		// Do parallel flood-fill
 		#pragma omp parallel for
 		for(int i = 0; i < (int)wall.size(); i++)
 		{
@@ -487,7 +516,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 											isFixing = true;
 											voxels[step] = EMPTY_VOXEL;
 											surface_voxels.insert( step );
-											if(false) container.aux.push_back( VoxelData(step, Vector3(0,0,1)) ); // DEBUG
+											//if(false) container.aux.push_back( VoxelData<Vector3>(step, true) ); // DEBUG
 										}
 									}
 								}
@@ -504,7 +533,7 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 											isFixing = true;
 											voxels[d[i]] = EMPTY_VOXEL;
 											surface_voxels.insert( d[i] );
-											if(false) container.aux.push_back( VoxelData(d[i], Vector3(0,0,1)) ); // DEBUG
+											//if(false) container.aux.push_back( VoxelData<Vector3>(d[i], true) ); // DEBUG
 										}
 									}
 								}
@@ -515,10 +544,11 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 			}
 
 			// Collect inner voxels
-			container.data.clear();
+			container.data.clear(); // remove surface voxels
 			for(uint64_t m = 0; m < morton_part; m++){
-				if(voxels[m] == EMPTY_VOXEL)
-					container.data.push_back( VoxelData(m) );
+				if(voxels[m] == EMPTY_VOXEL){
+					container.data.push_back( VoxelData<Vector3>(m, (surface_voxels.find(m) != surface_voxels.end())) );
+				}
 			}
 
 			// Collect set of pair voxels (inside / outside)
@@ -573,27 +603,80 @@ inline VoxelContainer ComputeVoxelization( SurfaceMeshModel * mesh, size_t grids
 
 			// Generate surface quads in world coordinates
 			double unitlength = container.unitlength;	
-			Eigen::Vector3d delta = container.translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+			Vector3 delta = container.translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
 
 			for(auto p : allQuads)
 			{			
 				unsigned int v[3];
 				mortonDecode(p.first, v[0], v[1], v[2]);
-				std::vector<Eigen::Vector3d> quad = voxelQuad( p.second, unitlength );
+				std::vector<Vector3> quad = voxelQuad<Vector3>( p.second, unitlength );
 				for(auto & p : quad) p += Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
 				container.quads.push_back( quad );
 			}
 		}
 		else
 		{
-			// Collect inner voxels
+			// Just collect voxels
 			container.data.clear();
 			for(uint64_t m = 0; m < morton_part; m++){
 				if(voxels[m] == EMPTY_VOXEL)
-					container.data.push_back( VoxelData(m) );
+					container.data.push_back( VoxelData<Vector3>(m, (surface_voxels.find(m) != surface_voxels.end())) );
 			}
 		}
 	}
 
 	return container;
+}
+
+#include "NanoKdTree.h"
+inline void snapCloseVertices( std::vector<SurfaceMesh::Vector3> & vertices, double threshold ){
+	NanoKdTree tree;
+	for(auto p : vertices) tree.addPoint(p);
+	tree.build();
+	for(auto & p : vertices){
+		KDResults matches;
+		tree.ball_search(p, threshold, matches);
+		for(auto m : matches) vertices[m.first] = p;
+	}
+} 
+
+inline bool CompareVector3(const Vector3& p, const Vector3& q){ 
+	if(p.x() == q.x()){
+		if(p.y() == q.y()) return p.z() < q.z();	
+		return p.y() < q.y();
+	}
+	return p.x() < q.x();
+}
+
+inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m)
+{
+	// Collect original vertices
+	std::vector<SurfaceMesh::Vector3> original;
+	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
+	for( auto v : m->vertices() ) original.push_back( points[v] );
+
+	// Snap close vertices, sort them, then remove duplicates
+	snapCloseVertices( original, 1e-12 );	
+	std::vector<SurfaceMesh::Vector3> clean = original;
+	std::sort( clean.begin(), clean.end(), CompareVector3);
+	clean.erase( std::unique(clean.begin(), clean.end()), clean.end() );
+
+	// Find new ids
+	std::vector<size_t> xrefs( original.size(), 0 );
+	for (size_t i = 0; i != original.size(); i += 1)
+		xrefs[i] = std::lower_bound(clean.begin(), clean.end(), original[i], CompareVector3) - clean.begin();
+
+	// Replace face vertices
+	std::vector< std::vector<SurfaceMesh::Vertex> > faces;
+	for(auto f: m->faces()){
+		std::vector<SurfaceMesh::Vertex> faceverts;
+		for(auto v: m->vertices(f)) faceverts.push_back( SurfaceMesh::Vertex((int)xrefs[ v.idx() ]) );
+		faceverts.erase( std::unique(faceverts.begin(), faceverts.end()), faceverts.end() );
+		if(faceverts.size() == 3) faces.push_back(faceverts); // skip degenerate faces
+	}
+
+	// Rebuild
+	m->clear();
+	for(auto v: clean) m->add_vertex(v);
+	for(auto face: faces) m->add_face(face);
 }

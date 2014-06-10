@@ -19,4 +19,7 @@ public:
 
 //private:
     Ui::ParticlesWidget *ui;
+
+signals:
+	void shapesLoaded();
 };

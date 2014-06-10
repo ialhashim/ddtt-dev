@@ -10,13 +10,19 @@ HEADERS += \
     particles.h \
     particles-widget.h \
     ParticleMesh.h \
-    Particle.h
+    Particle.h \
+    Raytracing.h
 
 SOURCES += \
     particles.cpp \
     particles-widget.cpp \
     ParticleMesh.cpp \
-    Particle.cpp
+    Particle.cpp \
+    Raytracing.cpp
 
 FORMS       += particles-widget.ui
 RESOURCES   += particles.qrc
+
+
+# External library
+win32:LIBS += -L"$$_PRO_FILE_PWD_/embree2/"

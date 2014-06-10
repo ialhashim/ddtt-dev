@@ -1,21 +1,33 @@
 #include "particles.h"
 #include "particles-widget.h"
+#include "ui_particles-widget.h"
 #include "interfaces/ModePluginDockWidget.h"
+#include <omp.h>
+#include <numeric>
+
+#include "SurfaceMeshModel.h"
+#include "SurfaceMeshHelper.h"
+using namespace SurfaceMesh;
 
 #include <QOpenGLShaderProgram>
 #include <QWidget>
-#include "particles-widget.h"
-#include "ui_particles-widget.h"
+#include <QFileDialog>
 
 #define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
-
 QTimer * timer = NULL;
 
+#include "ParticleMesh.h"
 #include "myglobals.h"
+
+#include "Raytracing.h"
+
+#include "kmeans.h"
 
 void particles::create()
 {
 	if( widget ) return;
+
+	//drawArea()->setAxisIsDrawn(true);
 
     ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
 
@@ -25,12 +37,174 @@ void particles::create()
     dockwidget->setWidget( widget );
     mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
-	// Test
+	// General Tests
 	connect(pw->ui->testButton, &QPushButton::released, [=]{
 		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
 		//drawArea()->update();
 
+	});
 
+	// Load and process shapes:
+	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
+		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
+		for(auto filename : files){
+			SurfaceMeshModel fromMesh;
+			fromMesh.read( filename.toStdString() );
+			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, 256 ) );
+			//document()->addModel(pw->pmeshes.back()->surface_mesh);
+		}
+		emit( pw->shapesLoaded() );
+	});
+
+	// Post-processing
+	connect(pw, &ParticlesWidget::shapesLoaded, [=]{
+		//for(auto s : pw->pmeshes) document()->addModel( s->surface_mesh );
+
+		mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
+		qApp->processEvents();
+
+        int perSampleRaysCount = 360;
+        std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+
+		typedef clustering::l2norm_squared< std::vector<double> > dist_fn;
+
+		if( true )
+		{
+			for(auto & s : pw->pmeshes)
+			{
+				std::vector< Eigen::Vector3f > rayOrigins;
+				std::vector< Eigen::Vector3f > rayDirections;
+
+				for(auto & p : s->particles)
+				{
+					for(auto d : sampledRayDirections)
+					{
+						rayOrigins.push_back( p.pos.cast<float>() );
+						rayDirections.push_back( d.cast<float>() );
+					}
+				}
+
+				// Smooth mesh
+				//SurfaceMeshHelper h(s->surface_mesh);
+				//h.smoothVertexProperty<Vector3>(VPOINT, 3, Vector3(0,0,0));
+
+				raytracing::Raytracing<Eigen::Vector3f> rt(s->surface_mesh, rayOrigins, rayDirections);
+
+				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayOrigins.size() ).arg( rt.time ) );
+
+				double maxDistSurface = -DBL_MAX;
+
+				std::vector< std::vector<double> > & desc = (s->desc = std::vector< std::vector<double> >( s->particles.size() ));
+
+				for(auto & p : s->particles)
+				{
+					std::vector<double> descriptor( perSampleRaysCount );
+					for(int i = 0; i < perSampleRaysCount; i++){
+						descriptor[i] = rt.hits[p.id * perSampleRaysCount + i].distance;
+					}
+
+					desc[p.id] = descriptor;
+				}
+
+				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(desc, 6);
+				km.run(100, 0.01);
+
+				for(auto & p : s->particles)
+				{
+					// Test clustering
+					p.flag = (int) km.clusters()[p.id];
+
+					std::vector<double> descriptor = desc[p.id];
+
+					p.alpha = *std::min_element( descriptor.begin(), descriptor.end() );
+					maxDistSurface = std::max( maxDistSurface, p.alpha );
+
+					//p.measure = ;
+					int idx = std::max_element( descriptor.begin(), descriptor.end() ) - descriptor.begin();
+					p.direction = sampledRayDirections[idx].normalized();
+				}
+
+				for(auto & p : s->particles)
+				{
+					p.alpha = pow(p.alpha / maxDistSurface, 2);
+				}
+
+				// Debug
+				{
+					starlab::LineSegments * vs = new starlab::LineSegments;
+					for(auto particle : s->particles) 
+					{		
+						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
+
+						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
+					}
+					//s->debug.push_back(vs);
+				}
+			}
+
+		}
+
+		/// [ Correspondence ] match particles
+		{
+			for(size_t i = 0; i < pw->pmeshes.size(); i++){
+				for(size_t j = i+1; j < pw->pmeshes.size(); j++){
+					NanoKdTree * itree = pw->pmeshes[i]->kdtree;
+					NanoKdTree * jtree = pw->pmeshes[j]->kdtree;
+
+					for(auto & iparticle : pw->pmeshes[i]->particles)
+					{
+						if( true )
+						{
+							iparticle.correspondence = jtree->closest( iparticle.relativePos );
+						}
+						else
+						{
+							// Experiment
+							KDResults matches;
+							jtree->ball_search( iparticle.relativePos, 0.2, matches );
+
+							QMap<double, int> measures;
+							for(auto p : matches) 
+							{
+								double weight = p.second;
+								//double dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
+								double dist = 1;
+								measures[ weight * dist ] = p.first;
+							}
+							iparticle.correspondence = measures[ measures.keys().front() ];
+						}
+					}
+
+					for(auto & jparticle : pw->pmeshes[j]->particles)
+					{
+						if( true )
+						{
+							jparticle.correspondence = itree->closest( jparticle.relativePos );
+						}
+						else
+						{
+							// Experiment
+							KDResults matches;
+							itree->ball_search( jparticle.relativePos, 0.2, matches );
+
+							QMap<double, int> measures;
+							for(auto p : matches) 
+							{
+								double weight = p.second;
+								//double dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
+								double dist = 1;
+								measures[ weight * dist ] = p.first;
+							}
+							jparticle.correspondence = measures[ measures.keys().front() ];
+						}
+					}
+				}
+			}
+			pw->isReady = true;
+		}
+
+		drawArea()->update();
 	});
 }
 
@@ -38,6 +212,15 @@ void particles::decorate()
 {
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return;
+
+	// Evaluation
+	for( auto s : pwidget->pmeshes )
+	{
+		s->drawParticles();
+		s->drawDebug( *drawArea() );
+	}
+
+	return;
 
 	// Experimental
 	static bool isForward = true;
@@ -49,17 +232,18 @@ void particles::decorate()
 	// Prepare scene once
 	Eigen::AlignedBox3d largeBox;
 	for(auto pmesh : pwidget->pmeshes) largeBox.extend(pmesh->bbox);
-	if(drawArea()->sceneRadius() < largeBox.sizes().norm()){
+	if(timer == NULL){
 		drawArea()->setSceneRadius( largeBox.sizes().norm() * 2 );
 		drawArea()->showEntireScene();
 
 		timer = new QTimer;
-		connect(timer, &QTimer::timeout, [=]() {drawArea()->updateGL();});
+		connect(timer, &QTimer::timeout, [=]() { drawArea()->update(); });
 		timer->start(30);
 	}
 
 	//for(auto pmesh : pwidget->pmeshes) pmesh->drawParticles();
-	
+	for(auto pmesh : pwidget->pmeshes) pmesh->drawDebug( *drawArea() );
+
 	// Collect points
 	std::vector<Eigen::Vector3f> mixedPoints;
 	for(size_t i = 0; i < pwidget->pmeshes.size(); i++)

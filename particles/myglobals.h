@@ -14,7 +14,7 @@ typedef Eigen::Vector3d Vector3Type;
 //    Richard Swinbank, James Purser,
 //    Fibonacci grids: A novel approach to global modelling. July 2006
 //
-std::vector< Vector3Type > sphere_fibonacci_points ( int n = 100 )
+inline std::vector< Vector3Type > sphere_fibonacci_points ( int n = 100 )
 {
 	double cphi;
 	double i_r8,n_r8;
