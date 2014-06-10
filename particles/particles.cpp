@@ -213,19 +213,22 @@ void particles::decorate()
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return;
 
-	// Evaluation
-	for( auto s : pwidget->pmeshes )
+	if(pwidget->pmeshes.size() < 2) 
 	{
-		s->drawParticles();
-		s->drawDebug( *drawArea() );
-	}
+		// Evaluation
+		for( auto s : pwidget->pmeshes )
+		{
+			s->drawParticles();
+			s->drawDebug( *drawArea() );
+		}
 
-	return;
+		return;
+	}
 
 	// Experimental
 	static bool isForward = true;
 	static double alpha = 0;
-	if(isForward) alpha += 0.01; else alpha -= 0.01;
+	if(isForward) alpha += 0.005; else alpha -= 0.005;
 	if(alpha > 1.0){alpha = 1.0;isForward = false;}
 	if(alpha < 0.0){alpha = 0.0;isForward = true;}
 
@@ -238,7 +241,7 @@ void particles::decorate()
 
 		timer = new QTimer;
 		connect(timer, &QTimer::timeout, [=]() { drawArea()->update(); });
-		timer->start(30);
+		timer->start(20);
 	}
 
 	//for(auto pmesh : pwidget->pmeshes) pmesh->drawParticles();
