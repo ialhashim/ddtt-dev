@@ -1,0 +1,14 @@
+include($$[STARLAB])
+include($$[SURFACEMESH])
+StarlabTemplate(none)
+
+TARGET = spherelib
+TEMPLATE = lib
+CONFIG += staticlib
+
+SOURCES += spherelib.cpp
+HEADERS += spherelib.h
+
+# Build options
+CONFIG(debug, debug|release) {CFG = debug} else {CFG = release}
+DESTDIR = $$PWD/$$CFG/lib

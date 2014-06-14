@@ -12,6 +12,7 @@ using namespace SurfaceMesh;
 #include <QOpenGLShaderProgram>
 #include <QWidget>
 #include <QFileDialog>
+#include <QElapsedTimer>
 
 #define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
 QTimer * timer = NULL;
@@ -72,41 +73,49 @@ void particles::create()
 		{
 			for(auto & s : pw->pmeshes)
 			{
-				std::vector< Eigen::Vector3f > rayOrigins;
-				std::vector< Eigen::Vector3f > rayDirections;
-
-				for(auto & p : s->particles)
-				{
-					for(auto d : sampledRayDirections)
-					{
-						rayOrigins.push_back( p.pos.cast<float>() );
-						rayDirections.push_back( d.cast<float>() );
-					}
-				}
+				QElapsedTimer timer; timer.start();
 
 				// Smooth mesh
-				//SurfaceMeshHelper h(s->surface_mesh);
-				//h.smoothVertexProperty<Vector3>(VPOINT, 3, Vector3(0,0,0));
-
-				raytracing::Raytracing<Eigen::Vector3f> rt(s->surface_mesh, rayOrigins, rayDirections);
-
-				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayOrigins.size() ).arg( rt.time ) );
-
-				double maxDistSurface = -DBL_MAX;
-
-				std::vector< std::vector<double> > & desc = (s->desc = std::vector< std::vector<double> >( s->particles.size() ));
-
-				for(auto & p : s->particles)
 				{
-					std::vector<double> descriptor( perSampleRaysCount );
-					for(int i = 0; i < perSampleRaysCount; i++){
-						descriptor[i] = rt.hits[p.id * perSampleRaysCount + i].distance;
-					}
-
-					desc[p.id] = descriptor;
+					//SurfaceMeshHelper h(s->surface_mesh);
+					//h.smoothVertexProperty<Vector3>(VPOINT, 3, Vector3(0,0,0));
 				}
 
-				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(desc, 6);
+				// Accelerated raytracing
+				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+
+				int rayCount = 0;
+				double maxDistSurface = -DBL_MAX;
+
+				// Hit results are saved as vector of distances
+				std::vector< std::vector<double> > & descriptor = (s->desc = std::vector< std::vector<double> >( 
+					s->particles.size(), std::vector<double>(perSampleRaysCount,0.0) ));
+
+				// Shoot rays around all particles
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					const auto & p = s->particles[pi];
+
+					int r = 0;
+					for(auto d : sampledRayDirections)
+					{
+						descriptor[pi][r++] = rt.hit( p.pos, d ).distance;
+						rayCount++;
+					}
+				}
+
+				// Align descriptors based on magnitudes
+				{
+
+				}
+
+				// Report
+				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
+
+
+				// k-means clustering
+				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(descriptor, 6);
 				km.run(100, 0.01);
 
 				for(auto & p : s->particles)
@@ -114,13 +123,13 @@ void particles::create()
 					// Test clustering
 					p.flag = (int) km.clusters()[p.id];
 
-					std::vector<double> descriptor = desc[p.id];
+					std::vector<double> desc = descriptor[p.id];
 
-					p.alpha = *std::min_element( descriptor.begin(), descriptor.end() );
+					p.alpha = *std::min_element( desc.begin(), desc.end() );
 					maxDistSurface = std::max( maxDistSurface, p.alpha );
 
 					//p.measure = ;
-					int idx = std::max_element( descriptor.begin(), descriptor.end() ) - descriptor.begin();
+					int idx = std::max_element( desc.begin(), desc.end() ) - desc.begin();
 					p.direction = sampledRayDirections[idx].normalized();
 				}
 

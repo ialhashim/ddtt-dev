@@ -18,9 +18,10 @@ template<typename Vector3>
 class Raytracing
 {
 public:
-    Raytracing( SurfaceMesh::SurfaceMeshModel * mesh, std::vector<Vector3> & rayOrigins, std::vector<Vector3> & rayDirections );
-    std::vector<RayHit> hits;
-    int time;
+    Raytracing( SurfaceMesh::SurfaceMeshModel * mesh );
+	~Raytracing();
+	inline RayHit hit( const Vector3& rayOrigin, const Vector3& rayDireciton );
+	void * accelerator;
 };
 
 }
