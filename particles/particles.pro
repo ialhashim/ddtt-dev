@@ -23,6 +23,13 @@ SOURCES += \
 FORMS       += particles-widget.ui
 RESOURCES   += particles.qrc
 
+# Build options
+CONFIG(debug, debug|release) {CFG = debug} else {CFG = release}
+DESTDIR = $$PWD/$$CFG/lib
+
+# Sphere library
+LIBS += -L$$PWD/../spherelib/$$CFG/lib -lspherelib
+INCLUDEPATH += ../spherelib
 
 # External library
 win32:LIBS += -L"$$_PRO_FILE_PWD_/embree2/"

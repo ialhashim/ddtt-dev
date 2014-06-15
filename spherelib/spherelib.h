@@ -45,12 +45,14 @@ struct RadialGrid{
 	std::vector< std::vector<double> > front_values;
 	std::vector< std::vector<double> > back_values;
 	double average;
+	Vector3 majorAxis;
 
 	RadialGrid(){ sectors = tracks = 0; average = 0; }
-	static RadialGrid createGrid(const std::vector<Vector3> & projected, int numTracks = 10, int numSectors = 40 );
-
+	static RadialGrid createGrid(const std::vector<Vector3> & projected, int numTracks, int numSectors, Vector3 majorAxis = Vector3(0,0,1));
 	void rotate( int steps = 1 );
 	void align();
+
+	std::vector<double> alignedValues();
 
 	// DEBUG:
 	void draw(QPainter & painter);
@@ -63,7 +65,6 @@ struct Sphere{
     SurfaceMesh::SurfaceMeshModel::Scalar radius;
     Vector3 center;
 	int numPoints;
-	Vector3 majorAxis;
 	Spherelib::RadialGrid grid;
 
     Sphere(int resolution = 4, Vector3 center = Vector3(0,0,0), double radius = 1.0 );

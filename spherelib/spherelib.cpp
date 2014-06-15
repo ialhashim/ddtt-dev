@@ -137,7 +137,7 @@ Spherelib::Sphere::Sphere( int resolution, Vector3 center, double radius ) : cen
 std::vector<Spherelib::Sphere::Vector3> Spherelib::Sphere::rays()
 {
 	std::vector<Spherelib::Sphere::Vector3> result;
-	for(int v = 0; v < numPoints; v++) geometry->vertex_property<Vector3>("v:point")[Surface_mesh::Vertex(v)];
+	for(int v = 0; v < numPoints; v++) result.push_back(geometry->vertex_property<Vector3>("v:point")[Surface_mesh::Vertex(v)]);
 	return result;
 }
 
@@ -230,12 +230,12 @@ void Spherelib::Sphere::assignLocalFrame( int tracks, int sectors )
 
 	std::vector<double> values = this->values();
 	SurfaceMesh::Vertex major( std::max_element(values.begin(),values.end()) - values.begin() );
-	majorAxis = points[major];
 
-	Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(majorAxis, Vector3(0,0,1));
+	Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(points[major], Vector3(0,0,1));
 
 	// Discretized
 	grid = Spherelib::Sphere::createGrid(values, tracks, sectors);
+	grid.majorAxis = points[major];
 
 	// Align to computed local frame
 	//grid.align();
@@ -246,7 +246,7 @@ Spherelib::RadialGrid Spherelib::Sphere::createGrid( const std::vector<double> &
 	const Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
 
 	SurfaceMesh::Vertex majorVert( std::max_element(fromValues.begin(),fromValues.end()) - fromValues.begin() );
-	Vector3 mainAxis = points[majorVert];
+	Vector3 majorAxis = points[majorVert];
 
 	Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(majorAxis, Vector3(0,0,1));
 
@@ -268,14 +268,15 @@ Spherelib::RadialGrid Spherelib::Sphere::createGrid( const std::vector<double> &
 		projected[v.idx()] = pj;
 	}
 
-	return Spherelib::RadialGrid::createGrid (projected, tracks, sectors);
+	return Spherelib::RadialGrid::createGrid (projected, tracks, sectors, majorAxis);
 }
 
-Spherelib::RadialGrid Spherelib::RadialGrid::createGrid(const std::vector<Vector3> & projected, int numTracks, int numSectors)
+Spherelib::RadialGrid Spherelib::RadialGrid::createGrid(const std::vector<Vector3> & projected, int numTracks, int numSectors, Vector3 majorAxis)
 {
 	RadialGrid grid;
 	grid.tracks = numTracks;
 	grid.sectors = numSectors;
+	grid.majorAxis = majorAxis;
 
 	grid.front_values.resize( numTracks, std::vector<double>(numSectors, 0) );
 	grid.back_values = grid.front_values;
@@ -372,11 +373,18 @@ void Spherelib::RadialGrid::align()
 			denominator += weights[i];
 		}
 
-		double weighted_step = (numerator / denominator);
-		final_step = int(weighted_step);
-		//qDebug() << "Weighted step:" << QString::number(weighted_step) << ", int Step: " << QString::number(final_step);
+		if(denominator == 0)
+		{
+			final_step = 0;
+		}
+		else
+		{
+			double weighted_step = (numerator / denominator);
+			final_step = int(weighted_step);
+			//qDebug() << "Weighted step:" << QString::number(weighted_step) << ", int Step: " << QString::number(final_step);
 
-		rotate( final_step );
+			rotate( final_step );
+		}
 	}
 }
 
@@ -433,4 +441,14 @@ void Spherelib::RadialGrid::draw(QPainter & painter)
 
 		deltaY += height;
 	}
+}
+
+std::vector<double> Spherelib::RadialGrid::alignedValues()
+{
+	this->align();
+
+	std::vector<double> result;
+    for(auto & track : front_values)result.insert(result.end(), track.begin(), track.end());
+    for(auto & track : back_values)result.insert(result.end(), track.begin(), track.end());
+	return result;
 }

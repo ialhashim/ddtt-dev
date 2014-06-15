@@ -24,6 +24,8 @@ QTimer * timer = NULL;
 
 #include "kmeans.h"
 
+#include "spherelib.h"
+
 void particles::create()
 {
 	if( widget ) return;
@@ -42,7 +44,6 @@ void particles::create()
 	connect(pw->ui->testButton, &QPushButton::released, [=]{
 		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
 		//drawArea()->update();
-
 	});
 
 	// Load and process shapes:
@@ -51,12 +52,16 @@ void particles::create()
 		for(auto filename : files){
 			SurfaceMeshModel fromMesh;
 			fromMesh.read( filename.toStdString() );
-			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, 256 ) );
+			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
 			//document()->addModel(pw->pmeshes.back()->surface_mesh);
 		}
 		emit( pw->shapesLoaded() );
 	});
 
+	connect(pw->ui->processShapesButton, &QPushButton::released, [=]{
+		emit( pw->shapesLoaded() );
+	});
+	
 	// Post-processing
 	connect(pw, &ParticlesWidget::shapesLoaded, [=]{
 		//for(auto s : pw->pmeshes) document()->addModel( s->surface_mesh );
@@ -64,8 +69,11 @@ void particles::create()
 		mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
 		qApp->processEvents();
 
-        int perSampleRaysCount = 360;
-        std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+		/// Fixed set of ray directions:
+        //std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+		Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
+		std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
+		size_t perSampleRaysCount = sampledRayDirections.size();
 
 		typedef clustering::l2norm_squared< std::vector<double> > dist_fn;
 
@@ -75,21 +83,14 @@ void particles::create()
 			{
 				QElapsedTimer timer; timer.start();
 
-				// Smooth mesh
-				{
-					//SurfaceMeshHelper h(s->surface_mesh);
-					//h.smoothVertexProperty<Vector3>(VPOINT, 3, Vector3(0,0,0));
-				}
-
 				// Accelerated raytracing
 				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
 
 				int rayCount = 0;
-				double maxDistSurface = -DBL_MAX;
 
 				// Hit results are saved as vector of distances
 				std::vector< std::vector<double> > & descriptor = (s->desc = std::vector< std::vector<double> >( 
-					s->particles.size(), std::vector<double>(perSampleRaysCount,0.0) ));
+					s->particles.size(), std::vector<double>( perSampleRaysCount ) ));
 
 				// Shoot rays around all particles
 				#pragma omp parallel for
@@ -100,43 +101,49 @@ void particles::create()
 					int r = 0;
 					for(auto d : sampledRayDirections)
 					{
-						descriptor[pi][r++] = rt.hit( p.pos, d ).distance;
+						raytracing::RayHit hit = rt.hit( p.pos, d );
+
+						// when we miss, typically shouldn't happen
+						if( !hit.isHit ) hit.distance = 0;
+
+						descriptor[pi][r++] = hit.distance;
 						rayCount++;
 					}
 				}
 
-				// Align descriptors based on magnitudes
-				{
-
-				}
 
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
+				timer.restart();
+
+
+				// Align descriptors based on magnitudes
+				for(auto & p : s->particles)
+				{
+					std::vector<double> & desc = descriptor[p.id];
+
+					auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
+					
+					desc = grid.alignedValues();
+
+					p.direction = grid.majorAxis;
+				}
+
+				// Report
+				mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
+				timer.restart();
 
 
 				// k-means clustering
-				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(descriptor, 6);
+				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(descriptor, pw->ui->kclusters->value());
 				km.run(100, 0.01);
 
 				for(auto & p : s->particles)
 				{
 					// Test clustering
 					p.flag = (int) km.clusters()[p.id];
-
-					std::vector<double> desc = descriptor[p.id];
-
-					p.alpha = *std::min_element( desc.begin(), desc.end() );
-					maxDistSurface = std::max( maxDistSurface, p.alpha );
-
-					//p.measure = ;
-					int idx = std::max_element( desc.begin(), desc.end() ) - desc.begin();
-					p.direction = sampledRayDirections[idx].normalized();
 				}
 
-				for(auto & p : s->particles)
-				{
-					p.alpha = pow(p.alpha / maxDistSurface, 2);
-				}
 
 				// Debug
 				{
@@ -173,7 +180,7 @@ void particles::create()
 							KDResults matches;
 							jtree->ball_search( iparticle.relativePos, 0.2, matches );
 
-							QMap<double, int> measures;
+							QMap<double, size_t> measures;
 							for(auto p : matches) 
 							{
 								double weight = p.second;
@@ -197,7 +204,7 @@ void particles::create()
 							KDResults matches;
 							itree->ball_search( jparticle.relativePos, 0.2, matches );
 
-							QMap<double, int> measures;
+							QMap<double, size_t> measures;
 							for(auto p : matches) 
 							{
 								double weight = p.second;
