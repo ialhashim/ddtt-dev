@@ -115,7 +115,7 @@
    <item row="3" column="1">
     <widget class="QSpinBox" name="bands">
      <property name="minimum">
-      <number>1</number>
+      <number>0</number>
      </property>
      <property name="maximum">
       <number>120</number>

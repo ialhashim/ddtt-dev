@@ -219,15 +219,19 @@ public:
 	{
 		std::vector<double> output( n_bands, 0.0 );
 
-		// pre-compute all SH coefficients for this sample 
 		for(int l=0; l < n_bands; ++l) 
 		{
 			double norm2 = 0;
 
-			for(int m = -l; m <= l; ++m) { 
+            for(int m = -l; m <= l; ++m)
+            {
 				int index = l*(l+1)+m; 
 				double r = coeffs[index];
-				norm2 += (r*r);
+
+                if(index == 0)
+                    norm2 += (r*r);
+                else
+                    norm2 += (r*r)*2;
 			}
 
 			output[l] = std::sqrt( norm2 );

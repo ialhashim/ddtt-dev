@@ -25,7 +25,6 @@ RESOURCES   += particles.qrc
 
 # Build options
 CONFIG(debug, debug|release) {CFG = debug} else {CFG = release}
-DESTDIR = $$PWD/$$CFG/lib
 
 # Sphere library
 LIBS += -L$$PWD/../spherelib/$$CFG/lib -lspherelib
