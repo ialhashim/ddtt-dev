@@ -79,7 +79,7 @@ void particles::create()
 		size_t perSampleRaysCount = sampledRayDirections.size();
 
 		// Rotation invariant descriptor
-		SphericalHarmonic<Vector3> sh( pw->ui->bands->value() );
+		SphericalHarmonic<Vector3> sh( std::max(1,pw->ui->bands->value()) );
 		std::vector< SHSample<Vector3> > sh_samples;
 		sh.SH_setup_spherical( sampledRayDirections, sh_samples );
 
@@ -133,31 +133,34 @@ void particles::create()
 					global_min = std::min(global_min, min_desc);
 				}
 
-				// Align descriptors based on magnitudes
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				// Rotation invariant description
+				if( pw->ui->bands->value() > 0 )
 				{
-					auto & p = s->particles[pi];
-
-					std::vector<double> & desc = descriptor[p.id];
-
-					// Normalize response
-					if( pw->ui->normalizeSphereFn->isChecked() )
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						double max_desc = *std::max_element(desc.begin(),desc.end());
-						double min_desc = *std::min_element(desc.begin(),desc.end());
-						for(auto & d : desc) d /= max_desc;
+						auto & p = s->particles[pi];
 
-						p.alpha = min_desc / global_min;
+						std::vector<double> & desc = descriptor[p.id];
+
+						// Normalize response
+						if( pw->ui->normalizeSphereFn->isChecked() )
+						{
+							double max_desc = *std::max_element(desc.begin(),desc.end());
+							double min_desc = *std::min_element(desc.begin(),desc.end());
+							for(auto & d : desc) d /= max_desc;
+
+							p.alpha = min_desc / global_min;
+						}
+
+						std::vector<double> coeff;
+						sh.SH_project_function(desc, sh_samples, coeff);
+						desc = sh.SH_signature(coeff);
+
+						//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
+						//desc = grid.alignedValues();
+						//p.direction = grid.majorAxis;
 					}
-
-					std::vector<double> coeff;
-					sh.SH_project_function(desc, sh_samples, coeff);
-					desc = sh.SH_signature(coeff);
-
-					//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
-					//desc = grid.alignedValues();
-					//p.direction = grid.majorAxis;
 				}
 
 				// Report
