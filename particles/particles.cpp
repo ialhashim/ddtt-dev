@@ -25,6 +25,7 @@ QTimer * timer = NULL;
 #include "kmeans.h"
 
 #include "spherelib.h"
+#include "SphericalHarmonic.h"
 
 void particles::create()
 {
@@ -71,9 +72,16 @@ void particles::create()
 
 		/// Fixed set of ray directions:
         //std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+
+		// Uniform sampling on the sphere
 		Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
 		std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
 		size_t perSampleRaysCount = sampledRayDirections.size();
+
+		// Rotation invariant descriptor
+		SphericalHarmonic<Vector3> sh( pw->ui->bands->value() );
+		std::vector< SHSample<Vector3> > sh_samples;
+		sh.SH_setup_spherical( sampledRayDirections, sh_samples );
 
 		typedef clustering::l2norm_squared< std::vector<double> > dist_fn;
 
@@ -116,17 +124,40 @@ void particles::create()
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
 				timer.restart();
 
-
-				// Align descriptors based on magnitudes
+				// Inner voxels more visible
+				double global_min = DBL_MAX;
 				for(auto & p : s->particles)
 				{
 					std::vector<double> & desc = descriptor[p.id];
+					double min_desc = *std::min_element(desc.begin(),desc.end());
+					global_min = std::min(global_min, min_desc);
+				}
 
-					auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
-					
-					desc = grid.alignedValues();
+				// Align descriptors based on magnitudes
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					auto & p = s->particles[pi];
 
-					p.direction = grid.majorAxis;
+					std::vector<double> & desc = descriptor[p.id];
+
+					// Normalize response
+					if( pw->ui->normalizeSphereFn->isChecked() )
+					{
+						double max_desc = *std::max_element(desc.begin(),desc.end());
+						double min_desc = *std::min_element(desc.begin(),desc.end());
+						for(auto & d : desc) d /= max_desc;
+
+						p.alpha = min_desc / global_min;
+					}
+
+					std::vector<double> coeff;
+					sh.SH_project_function(desc, sh_samples, coeff);
+					desc = sh.SH_signature(coeff);
+
+					//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
+					//desc = grid.alignedValues();
+					//p.direction = grid.majorAxis;
 				}
 
 				// Report
