@@ -211,6 +211,8 @@ void particles::create()
 					spheres.back().setValues( descriptor[idx] );
 					spheres.back().normalizeValues();
 				}
+                else
+                    spheres.clear();
 
 				// Rotation invariant description
 				if( pw->ui->bands->value() > 0 )
