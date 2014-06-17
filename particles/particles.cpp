@@ -204,8 +204,13 @@ void particles::create()
 				}
 
 				// Extract one of the descriptors
-				spheres.back().setValues( descriptor[10] );
-				spheres.back().normalizeValues();
+				int selectedParticle = pw->ui->selectedParticle->value();
+				if(selectedParticle >= 0)
+				{
+					int idx = std::min(selectedParticle, (int)s->particles.size()- 1);
+					spheres.back().setValues( descriptor[idx] );
+					spheres.back().normalizeValues();
+				}
 
 				// Rotation invariant description
 				if( pw->ui->bands->value() > 0 )
