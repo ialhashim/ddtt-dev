@@ -138,6 +138,58 @@ void particles::create()
 					}
 				}
 
+				// Average of neighbors
+				int avgNeighIters = pw->ui->avgNeighIters->value();
+				if( avgNeighIters )
+				{
+					size_t gridsize = s->grid.gridsize;
+
+					for(int it = 0; it < avgNeighIters; it++)
+					{
+						auto smoothDesc = descriptor;
+						{
+							for(auto & p : s->particles)
+							{
+								std::vector<double> sum( descriptor[p.id].size(), 0 );
+								int count = 0;
+
+								unsigned int x,y,z;
+								mortonDecode(p.morton, x, y, z);
+
+								for(int u = -1; u <= 1; u++){
+									for(int v = -1; v <= 1; v++){
+										for(int w = -1; w <= 1; w++)
+										{
+											Eigen::Vector3i c(x + u, y + v, z + w);
+
+											// Skip outside grid
+											if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+											if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
+
+											uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
+											if(!s->grid.occupied[ mcode ]) continue;
+
+											size_t nj = s->mortonToParticleID[ mcode ];
+
+											std::vector<double> nei = descriptor[nj];
+
+											// Add this neighbor to sum
+											for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
+											count++;
+										}
+									}
+								}
+
+								// divide over count
+								for(size_t j = 0; j < sum.size(); j++) sum[j] /= count;
+
+								smoothDesc[p.id] = sum;
+							}
+						}
+						descriptor = smoothDesc;
+					}
+				}
+
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
 				timer.restart();
