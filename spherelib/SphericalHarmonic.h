@@ -1,9 +1,5 @@
 /**
-* Copyright(C) 2009-2012                
-* @author Jing HUANG
-* @file SphericalHarmonic.h
-* @brief 
-* @date 1/2/2011
+* Code by: Robin Green and others
 */
 
 #pragma once
