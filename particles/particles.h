@@ -18,6 +18,8 @@ public:
     void destroy(){}
     void decorate();
 
+	bool keyPressEvent(QKeyEvent*);
+
     QWidget * widget;
 
     // Always usable

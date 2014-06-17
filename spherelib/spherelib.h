@@ -69,14 +69,16 @@ struct Sphere{
 
     Sphere(int resolution = 4, Vector3 center = Vector3(0,0,0), double radius = 1.0 );
 
-	std::vector<Vector3> rays();
-	std::vector<double> values();
+	std::vector<Vector3> rays() const;
+	std::vector<double> values() const;
+	void setValues(const std::vector<double>& newValues);
 
 	// Experimental / debug
 	void fillRandom();	
 	void fillPattern();
 	void smoothValues( int iterations = 1 );
 	void normalizeValues();
+	void draw();
 
 	// Grid related
 	void assignLocalFrame( int tracks, int sectors );

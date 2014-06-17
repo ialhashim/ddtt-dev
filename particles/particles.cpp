@@ -27,6 +27,8 @@ QTimer * timer = NULL;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 
+std::vector<Spherelib::Sphere> spheres;
+
 void particles::create()
 {
 	if( widget ) return;
@@ -78,6 +80,10 @@ void particles::create()
 		std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
 		size_t perSampleRaysCount = sampledRayDirections.size();
 
+		// DEBUG:
+		spheres.clear();
+		spheres.push_back( sphere );
+
 		// Rotation invariant descriptor
 		SphericalHarmonic<Vector3> sh( std::max(1,pw->ui->bands->value()) );
 		std::vector< SHSample<Vector3> > sh_samples;
@@ -119,6 +125,18 @@ void particles::create()
 					}
 				}
 
+				// Smooth returned results
+				int smoothIters = pw->ui->fnSmoothIters->value();
+				if( smoothIters )
+				{
+					for(auto & p : s->particles)
+					{
+						std::vector<double> & desc = descriptor[p.id];
+						sphere.setValues(desc);
+						sphere.smoothValues( smoothIters );
+						desc = sphere.values();
+					}
+				}
 
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
@@ -132,6 +150,10 @@ void particles::create()
 					double min_desc = *std::min_element(desc.begin(),desc.end());
 					global_min = std::min(global_min, min_desc);
 				}
+
+				// Extract one of the descriptors
+				spheres.back().setValues( descriptor[10] );
+				spheres.back().normalizeValues();
 
 				// Rotation invariant description
 				if( pw->ui->bands->value() > 0 )
@@ -263,6 +285,11 @@ void particles::decorate()
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return;
 
+	for(auto & sphere : spheres)
+	{
+		sphere.draw();
+	}
+
 	if(pwidget->pmeshes.size() < 2) 
 	{
 		// Evaluation
@@ -382,4 +409,13 @@ void particles::decorate()
 		program->disableAttributeArray( location["vertex"] );
 		program->release();
 	}
+}
+
+bool particles::keyPressEvent(QKeyEvent*e)
+{
+	if(e->key() == Qt::Key_Space)
+		spheres.clear();
+
+	drawArea()->update();
+	return true;
 }

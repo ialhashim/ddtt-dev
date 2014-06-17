@@ -2,6 +2,7 @@
 #include <random>
 
 #include <QPainter>
+#include <QGLWidget>
 
 int Spherelib::SphereMaker::addVertex(const Spherelib::SphereMaker::Vector3 &p)
 {
@@ -134,7 +135,7 @@ Spherelib::Sphere::Sphere( int resolution, Vector3 center, double radius ) : cen
 	numPoints = geometry->n_vertices();
 }
 
-std::vector<Spherelib::Sphere::Vector3> Spherelib::Sphere::rays()
+std::vector<Spherelib::Sphere::Vector3> Spherelib::Sphere::rays() const
 {
 	std::vector<Spherelib::Sphere::Vector3> result;
 	for(int v = 0; v < numPoints; v++) result.push_back(geometry->vertex_property<Vector3>("v:point")[Surface_mesh::Vertex(v)]);
@@ -215,12 +216,18 @@ void Spherelib::Sphere::normalizeValues()
 	for( auto v : geometry->vertices() ) vprop[v] = (vprop[v]-bounds.first) / range;
 }
 
-std::vector<double> Spherelib::Sphere::values()
+std::vector<double> Spherelib::Sphere::values() const
 {
 	std::vector<double> values;
-	Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
+	const Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
 	for( auto v : geometry->vertices() ) values.push_back(vprop[v]);
 	return values;
+}
+
+void Spherelib::Sphere::setValues(const std::vector<double>& newValues)
+{
+	Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
+	for( auto v : geometry->vertices() ) vprop[v] = newValues[v.idx()];
 }
 
 void Spherelib::Sphere::assignLocalFrame( int tracks, int sectors )
@@ -269,6 +276,36 @@ Spherelib::RadialGrid Spherelib::Sphere::createGrid( const std::vector<double> &
 	}
 
 	return Spherelib::RadialGrid::createGrid (projected, tracks, sectors, majorAxis);
+}
+
+void Spherelib::Sphere::draw()
+{
+	geometry->updateBoundingBox();
+	geometry->update_face_normals();
+	geometry->update_vertex_normals();
+
+	Surface_mesh * mesh = geometry;
+	Surface_mesh::Vertex_property<Vector3> points = mesh->vertex_property<Vector3>("v:point");
+	Surface_mesh::Face_property<Vector3> fnormals = mesh->face_property<Vector3>("f:normal");
+	Surface_mesh::Face_iterator fit, fend = mesh->faces_end();
+	Surface_mesh::Vertex_around_face_circulator fvit, fvend;
+
+	std::vector<double> values = this->values();
+
+	glBegin(GL_TRIANGLES);
+	for (fit=mesh->faces_begin(); fit!=fend; ++fit){
+		glNormal3dv( fnormals[fit].data() );
+		fvit = fvend = mesh->vertices(fit);
+		do{ 
+			int vidx = SurfaceMesh::Vertex(fvit).idx();
+			double d = values[vidx];
+			glColor3d( d, d, d );
+			Vector3 p = points[fvit];
+			//p += (p * (d - 0.5) * 0.2);
+			glVertex3dv( p.data() );
+		} while (++fvit != fvend);
+	}
+	glEnd();
 }
 
 Spherelib::RadialGrid Spherelib::RadialGrid::createGrid(const std::vector<Vector3> & projected, int numTracks, int numSectors, Vector3 majorAxis)

@@ -2,6 +2,8 @@ include($$[STARLAB])
 include($$[SURFACEMESH])
 StarlabTemplate(none)
 
+QT += opengl
+
 TARGET = spherelib
 TEMPLATE = lib
 CONFIG += staticlib
