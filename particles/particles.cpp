@@ -52,13 +52,19 @@ void particles::create()
 	// Load and process shapes:
 	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
 		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
-		for(auto filename : files){
-			SurfaceMeshModel fromMesh;
+
+		for(auto filename : files)
+		{
+			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
 			fromMesh.read( filename.toStdString() );
-			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
-			//document()->addModel(pw->pmeshes.back()->surface_mesh);
+
+			ParticleMesh * pmesh = new ParticleMesh( &fromMesh, pw->ui->gridsize->value() );
+			pw->pmeshes.insert( pw->pmeshes.begin(), pmesh );
 		}
-		emit( pw->shapesLoaded() );
+
+		for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh);
+
+		//emit( pw->shapesLoaded() );
 	});
 
 	connect(pw->ui->processShapesButton, &QPushButton::released, [=]{
@@ -69,11 +75,15 @@ void particles::create()
 	connect(pw, &ParticlesWidget::shapesLoaded, [=]{
 		//for(auto s : pw->pmeshes) document()->addModel( s->surface_mesh );
 
+		pw->isReady = false;
+
+		QElapsedTimer allTimer; allTimer.start();
+
 		mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
 		qApp->processEvents();
 
 		/// Fixed set of ray directions:
-        //std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+		//std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
 
 		// Uniform sampling on the sphere
 		Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
@@ -82,14 +92,13 @@ void particles::create()
 
 		// DEBUG:
 		spheres.clear();
-		spheres.push_back( sphere );
+		int selectedParticle = pw->ui->selectedParticle->value();
+		if(selectedParticle >= 0) spheres.push_back( sphere );
 
 		// Rotation invariant descriptor
-		SphericalHarmonic<Vector3> sh( std::max(1,pw->ui->bands->value()) );
-		std::vector< SHSample<Vector3> > sh_samples;
+		SphericalHarmonic<Vector3,float> sh( std::max(1,pw->ui->bands->value()) );
+		std::vector< SHSample<Vector3,float> > sh_samples;
 		sh.SH_setup_spherical( sampledRayDirections, sh_samples );
-
-		typedef clustering::l2norm_squared< std::vector<double> > dist_fn;
 
 		if( true )
 		{
@@ -97,31 +106,33 @@ void particles::create()
 			{
 				QElapsedTimer timer; timer.start();
 
-				// Accelerated raytracing
-				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
-
+				// Hit results are saved as vector of distances
+				std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
+					s->particles.size(), std::vector<float>( perSampleRaysCount ) ));
+				
 				int rayCount = 0;
 
-				// Hit results are saved as vector of distances
-				std::vector< std::vector<double> > & descriptor = (s->desc = std::vector< std::vector<double> >( 
-					s->particles.size(), std::vector<double>( perSampleRaysCount ) ));
-
-				// Shoot rays around all particles
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				// Accelerated raytracing
 				{
-					const auto & p = s->particles[pi];
+					raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
 
-					int r = 0;
-					for(auto d : sampledRayDirections)
+					// Shoot rays around all particles
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						raytracing::RayHit hit = rt.hit( p.pos, d );
+						auto & p = s->particles[pi];
 
-						// when we miss, typically shouldn't happen
-						if( !hit.isHit ) hit.distance = 0;
+						int r = 0;
+						for(auto d : sampledRayDirections)
+						{
+							raytracing::RayHit hit = rt.hit( p.pos, d );
 
-						descriptor[pi][r++] = hit.distance;
-						rayCount++;
+							// when we miss, typically shouldn't happen
+							//if( !hit.isHit ) hit.distance = 0;
+
+							descriptor[pi][r++] = hit.distance;
+							rayCount++;
+						}
 					}
 				}
 
@@ -135,9 +146,12 @@ void particles::create()
 					{
 						auto smoothDesc = descriptor;
 						{
-							for(auto & p : s->particles)
+							#pragma omp parallel for
+							for(int pi = 0; pi < (int)s->particles.size(); pi++)
 							{
-								std::vector<double> sum( descriptor[p.id].size(), 0 );
+								const auto & p = s->particles[pi];
+
+								std::vector<float> sum( descriptor[p.id].size(), 0 );
 								int count = 0;
 
 								unsigned int x,y,z;
@@ -158,7 +172,7 @@ void particles::create()
 
 											size_t nj = s->mortonToParticleID[ mcode ];
 
-											std::vector<double> nei = descriptor[nj];
+											std::vector<float> nei = descriptor[nj];
 
 											// Add this neighbor to sum
 											for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
@@ -177,19 +191,6 @@ void particles::create()
 					}
 				}
 
-				// Smooth returned results
-				int smoothIters = pw->ui->fnSmoothIters->value();
-				if( smoothIters )
-				{
-					for(auto & p : s->particles)
-					{
-						std::vector<double> & desc = descriptor[p.id];
-						sphere.setValues(desc);
-						sphere.smoothValues( smoothIters );
-						desc = sphere.values();
-					}
-				}
-
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
 				timer.restart();
@@ -198,13 +199,12 @@ void particles::create()
 				double global_min = DBL_MAX;
 				for(auto & p : s->particles)
 				{
-					std::vector<double> & desc = descriptor[p.id];
+					std::vector<float> & desc = descriptor[p.id];
 					double min_desc = *std::min_element(desc.begin(),desc.end());
 					global_min = std::min(global_min, min_desc);
 				}
 
 				// Extract one of the descriptors
-				int selectedParticle = pw->ui->selectedParticle->value();
 				if(selectedParticle >= 0)
 				{
 					int idx = std::min(selectedParticle, (int)s->particles.size()- 1);
@@ -222,7 +222,9 @@ void particles::create()
 					{
 						auto & p = s->particles[pi];
 
-						std::vector<double> & desc = descriptor[p.id];
+						std::vector<float> & desc = descriptor[p.id];
+
+						p.direction = sampledRayDirections[ std::max_element(desc.begin(),desc.end()) - desc.begin() ];
 
 						// Normalize response
 						if( pw->ui->normalizeSphereFn->isChecked() )
@@ -234,13 +236,13 @@ void particles::create()
 							p.alpha = min_desc / global_min;
 						}
 
-						std::vector<double> coeff;
+						std::vector<float> coeff;
 						sh.SH_project_function(desc, sh_samples, coeff);
+						
 						desc = sh.SH_signature(coeff);
 
 						//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
 						//desc = grid.alignedValues();
-						//p.direction = grid.majorAxis;
 					}
 				}
 
@@ -248,35 +250,43 @@ void particles::create()
 				mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
 				timer.restart();
 
+				// Debug
+				{
+					/*starlab::LineSegments * vs = new starlab::LineSegments;
+					for(auto particle : s->particles){		
+						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
+						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
+					}
+					s->debug.push_back(vs);*/
+				}
+			}
+		}
 
-				// k-means clustering
-				clustering::kmeans< std::vector< std::vector<double> >, dist_fn > km(descriptor, pw->ui->kclusters->value());
+		// k-means clustering
+		if( true )
+		{
+			// Collect descriptors
+			for(auto & s : pw->pmeshes)
+			{
+				typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
+
+				clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(s->desc, pw->ui->kclusters->value());
 				km.run(100, 0.01);
 
 				for(auto & p : s->particles)
-				{
-					// Test clustering
 					p.flag = (int) km.clusters()[p.id];
-				}
-
-
-				// Debug
-				{
-					starlab::LineSegments * vs = new starlab::LineSegments;
-					for(auto particle : s->particles) 
-					{		
-						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
-						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
-
-						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
-					}
-					//s->debug.push_back(vs);
-				}
 			}
 
+			// Assign classes
+			//int pi = 0;
+			//for(auto & s : pw->pmeshes)
+			//	for(auto & p : s->particles)
+			//		p.flag = (int) km.clusters()[pi++];
 		}
 
 		/// [ Correspondence ] match particles
+		if( false )
 		{
 			for(size_t i = 0; i < pw->pmeshes.size(); i++){
 				for(size_t j = i+1; j < pw->pmeshes.size(); j++){
@@ -332,8 +342,12 @@ void particles::create()
 					}
 				}
 			}
-			pw->isReady = true;
 		}
+
+		// Report
+		mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
+
+		pw->isReady = true;
 
 		drawArea()->update();
 	});
@@ -349,14 +363,20 @@ void particles::decorate()
 		sphere.draw();
 	}
 
-	if(pwidget->pmeshes.size() < 2) 
+	//if(pwidget->pmeshes.size() < 2) 
 	{
+		glPushMatrix();
+
 		// Evaluation
 		for( auto s : pwidget->pmeshes )
 		{
 			s->drawParticles();
 			s->drawDebug( *drawArea() );
+
+			glTranslated(s->bbox.sizes().x() * 1.1, 0, 0);
 		}
+
+		glPopMatrix();
 
 		return;
 	}

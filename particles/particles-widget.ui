@@ -51,7 +51,7 @@
       <number>120</number>
      </property>
      <property name="value">
-      <number>10</number>
+      <number>0</number>
      </property>
     </widget>
    </item>
@@ -74,7 +74,7 @@
       <string>Normalize sphere fn.</string>
      </property>
      <property name="checked">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
     </widget>
    </item>
@@ -150,7 +150,11 @@
     </widget>
    </item>
    <item row="4" column="1">
-    <widget class="QSpinBox" name="avgNeighIters"/>
+    <widget class="QSpinBox" name="avgNeighIters">
+     <property name="value">
+      <number>1</number>
+     </property>
+    </widget>
    </item>
    <item row="4" column="0">
     <widget class="QLabel" name="avgNeighItersLabel">

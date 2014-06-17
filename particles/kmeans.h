@@ -37,11 +37,6 @@ void kmeans_init_plusplus(std::vector<index_t>& result, const collection_t& coll
 
     typedef typename collection_t::value_type item_t;
 
-//    typedef boost::mt19937                    rng_t;
-//    typedef boost::uniform_real<double>       unirand_t;
-//    rng_t rng;
-//    boost::variate_generator<rng_t&, unirand_t> unirand(rng, unirand_t(0.0, 1.0));
-
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
@@ -122,6 +117,7 @@ template <class collection_t, class dist_fn>
 class kmeans
 {
     typedef typename collection_t::value_type sample_t;
+	typedef typename sample_t::value_type scalar_t;
 
     public:
 
@@ -197,7 +193,7 @@ class kmeans
 				std::size_t k = _clusters[i];
 
 				// if it is the first assignment for that cluster, then zero the center
-				if (clustersize[k] == 0) std::fill(_centers[k].begin(), _centers[k].end(), 0);
+				if (clustersize[k] == 0) std::fill(_centers[k].begin(), _centers[k].end(), scalar_t(0));
 
 				add_operation(_centers[k], _collection[i]);
 				clustersize[k]++;

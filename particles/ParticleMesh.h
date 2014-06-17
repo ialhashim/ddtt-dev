@@ -21,12 +21,13 @@ public:
 
 	void drawParticles();
 	void drawDebug(QGLWidget & widget);
+	static QVector<QColor> rndcolors;
 
 	typedef Eigen::Vector3f VoxelVector;
 	VoxelContainer<VoxelVector> grid;
 	std::map<uint64_t,size_t> mortonToParticleID;
 
-	std::vector< std::vector<double> > desc;
+	std::vector< std::vector<float> > desc;
 
     std::vector<Particle> particles;
     double raidus;

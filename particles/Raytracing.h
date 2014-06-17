@@ -20,7 +20,7 @@ class Raytracing
 public:
     Raytracing( SurfaceMesh::SurfaceMeshModel * mesh );
 	~Raytracing();
-	inline RayHit hit( const Vector3& rayOrigin, const Vector3& rayDireciton );
+	inline RayHit hit( const Vector3& rayOrigin, const Vector3& rayDirection );
 	void * accelerator;
 };
 

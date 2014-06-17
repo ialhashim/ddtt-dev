@@ -22,7 +22,7 @@ raytracing::Raytracing<Vector3>::Raytracing( SurfaceMesh::SurfaceMeshModel * mes
     // Using Intel's accelerated ray tracer
     {
 		/* initialize ray tracing core */
-		rtcInit( "" );
+		rtcInit( NULL );
 
 		/* create scene */
 		RTCScene scene = rtcNewScene( RTC_SCENE_STATIC, RTC_INTERSECT1 );
@@ -65,17 +65,17 @@ raytracing::Raytracing<Vector3>::Raytracing( SurfaceMesh::SurfaceMeshModel * mes
     // Using an Octree
     {
         // Build octree
-        Octree octree = new Octree( mesh );
+        Octree * octree = new Octree( mesh );
 		accelerator = octree;
     }
     #endif
 }
 
 template<typename Vector3>
-raytracing::RayHit raytracing::Raytracing<Vector3>::hit( const Vector3& rayOrigin, const Vector3& rayDireciton )
+raytracing::RayHit raytracing::Raytracing<Vector3>::hit( const Vector3& rayOrigin, const Vector3& rayDirection )
 {
 #ifdef USE_EMBREE
-	Vector3 p(rayOrigin), d(rayDireciton);
+	Vector3 p(rayOrigin), d(rayDirection);
 	RTCScene scene = (RTCScene) accelerator;
 
 	/* initialize ray */
@@ -96,8 +96,8 @@ raytracing::RayHit raytracing::Raytracing<Vector3>::hit( const Vector3& rayOrigi
 #else
 	Octree * octree = (Octree*) accelerator;
 	int findex = -1;
-	Eigen::Vector3d isect = octree.closestIntersectionPoint(Ray(rayOrigin.cast<double>(), rayDirection.cast<double>()), &findex, true);
-	double dist = (isect - rayOrigins[i]).norm();
+	Vector3 isect = octree->closestIntersectionPoint(Ray(rayOrigin.cast<double>(), rayDirection.cast<double>()), &findex, true).cast<Vector3::Scalar>();
+	double dist = (isect - rayOrigin).norm();
 	return RayHit( dist, findex );
 #endif
 }
@@ -108,6 +108,7 @@ raytracing::Raytracing<Vector3>::~Raytracing()
 #ifdef USE_EMBREE
 	RTCScene scene = (RTCScene) accelerator;
 	rtcDeleteScene( scene );
+	rtcExit();
 #else
 	Octree * octree = (Octree*) accelerator;
 	delete octree;

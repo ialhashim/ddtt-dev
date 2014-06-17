@@ -148,7 +148,7 @@ void Spherelib::Sphere::fillRandom()
 	std::random_device rand_dev;          // Use random_device to get a random seed.
 	std::mt19937 rand_engine(rand_dev()); 
 
-	Surface_mesh::Vertex_property<double> values = geometry->vertex_property<double>("v:values", 0.0);
+	Surface_mesh::Vertex_property<float> values = geometry->vertex_property<float>("v:values", 0.0);
 	for(int i = 0; i < 10; i++)
 	{
 		Surface_mesh::Vertex rv( unif(rand_engine) * (numPoints-1) );
@@ -160,7 +160,7 @@ void Spherelib::Sphere::fillPattern()
 {
 	static int pattern = 0;
 
-	Surface_mesh::Vertex_property<double> values = geometry->vertex_property<double>("v:values", 0.0);
+	Surface_mesh::Vertex_property<float> values = geometry->vertex_property<float>("v:values", 0.0);
 	Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
 
 	for( auto v : geometry->vertices() )
@@ -185,11 +185,11 @@ void Spherelib::Sphere::fillPattern()
 
 void Spherelib::Sphere::smoothValues( int iterations )
 {
-	Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
+	Surface_mesh::Vertex_property<float> vprop = geometry->vertex_property<float>("v:values");
 
 	for(int i = 0; i < iterations; i++)
 	{
-		std::vector<double> newValues(geometry->n_vertices(), 0.0);
+		std::vector<float> newValues(geometry->n_vertices(), 0.0);
 
 		// average the values of neighbors
 		for( auto v : geometry->vertices() ){
@@ -205,44 +205,44 @@ void Spherelib::Sphere::smoothValues( int iterations )
 
 void Spherelib::Sphere::normalizeValues()
 {
-	Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
-	std::pair<double,double> bounds( DBL_MAX, -DBL_MAX );
+	Surface_mesh::Vertex_property<float> vprop = geometry->vertex_property<float>("v:values");
+	std::pair<float,float> bounds( FLT_MAX, -FLT_MAX );
 	for( auto v : geometry->vertices() ){
 		bounds.first = std::min(bounds.first, vprop[v]);
 		bounds.second = std::max(bounds.second, vprop[v]);
 	}
 
-	double range = bounds.second - bounds.first;
+	float range = bounds.second - bounds.first;
 	for( auto v : geometry->vertices() ) vprop[v] = (vprop[v]-bounds.first) / range;
 }
 
-std::vector<double> Spherelib::Sphere::values() const
+std::vector<float> Spherelib::Sphere::values() const
 {
-	std::vector<double> values;
-	const Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
+	std::vector<float> values;
+	const Surface_mesh::Vertex_property<float> vprop = geometry->vertex_property<float>("v:values");
 	for( auto v : geometry->vertices() ) values.push_back(vprop[v]);
 	return values;
 }
 
-void Spherelib::Sphere::setValues(const std::vector<double>& newValues)
+void Spherelib::Sphere::setValues(const std::vector<float>& newValues)
 {
-	Surface_mesh::Vertex_property<double> vprop = geometry->vertex_property<double>("v:values");
+	Surface_mesh::Vertex_property<float> vprop = geometry->vertex_property<float>("v:values");
 	for( auto v : geometry->vertices() ) vprop[v] = newValues[v.idx()];
 }
 
 void Spherelib::Sphere::assignLocalFrame( int tracks, int sectors )
 {
-	Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
-	Surface_mesh::Vertex_property<Vector3> projected = geometry->vertex_property<Vector3>("v:projected", Vector3(0,0,0));
+	//Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
+	//Surface_mesh::Vertex_property<Vector3> projected = geometry->vertex_property<Vector3>("v:projected", Vector3(0,0,0));
 
-	std::vector<double> values = this->values();
-	SurfaceMesh::Vertex major( std::max_element(values.begin(),values.end()) - values.begin() );
+	//std::vector<float> values = this->values();
+	//SurfaceMesh::Vertex major( std::max_element(values.begin(),values.end()) - values.begin() );
 
-	Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(points[major], Vector3(0,0,1));
+	//Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(points[major], Vector3(0,0,1));
 
 	// Discretized
-	grid = Spherelib::Sphere::createGrid(values, tracks, sectors);
-	grid.majorAxis = points[major];
+	//grid = Spherelib::Sphere::createGrid(values, tracks, sectors);
+	//grid.majorAxis = points[major];
 
 	// Align to computed local frame
 	//grid.align();
@@ -290,7 +290,7 @@ void Spherelib::Sphere::draw()
 	Surface_mesh::Face_iterator fit, fend = mesh->faces_end();
 	Surface_mesh::Vertex_around_face_circulator fvit, fvend;
 
-	std::vector<double> values = this->values();
+	std::vector<float> values = this->values();
 
 	glBegin(GL_TRIANGLES);
 	for (fit=mesh->faces_begin(); fit!=fend; ++fit){
@@ -298,7 +298,7 @@ void Spherelib::Sphere::draw()
 		fvit = fvend = mesh->vertices(fit);
 		do{ 
 			int vidx = SurfaceMesh::Vertex(fvit).idx();
-			double d = values[vidx];
+			float d = values[vidx];
 			glColor3d( d, d, d );
 			Vector3 p = points[fvit];
 			//p += (p * (d - 0.5) * 0.2);

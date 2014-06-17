@@ -70,8 +70,8 @@ struct Sphere{
     Sphere(int resolution = 4, Vector3 center = Vector3(0,0,0), double radius = 1.0 );
 
 	std::vector<Vector3> rays() const;
-	std::vector<double> values() const;
-	void setValues(const std::vector<double>& newValues);
+	std::vector<float> values() const;
+	void setValues(const std::vector<float>& newValues);
 
 	// Experimental / debug
 	void fillRandom();	

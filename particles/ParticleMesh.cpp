@@ -5,19 +5,17 @@
 #include "RenderObjectExt.h"
 #include <QGLWidget>
 
-QVector<QColor> rndColors(int count){
+inline QVector<QColor> rndColors(int count){
 	QVector<QColor> c;
 	for(int i = 0; i < count; i++) c << starlab::qRandomColor3();
 	return c;
 }
-QVector<QColor> rndcolors;
+
+QVector<QColor> ParticleMesh::rndcolors = rndColors(512);
 
 ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : 
 	raidus(particle_raidus), tranlsation(Eigen::Vector3d(0,0,0))
 {
-	// Debug:
-	rndcolors = rndColors(200);
-
 	// Voxelization
 	grid = ComputeVoxelization<VoxelVector>(mesh, gridsize, true, true);
 
