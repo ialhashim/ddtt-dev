@@ -219,15 +219,15 @@ public:
 		{
 			double norm2 = 0;
 
-            for(int m = -l; m <= l; ++m)
-            {
+			for(int m = -l; m <= l; ++m)
+			{
 				int index = l*(l+1)+m; 
 				double r = coeffs[index];
 
-                if(index == 0)
-                    norm2 += (r*r);
-                else
-                    norm2 += (r*r)*2;
+				if(index == 0)
+					norm2 += (r*r);
+				else
+					norm2 += (r*r)*2;
 			}
 
 			output[l] = std::sqrt( norm2 );
