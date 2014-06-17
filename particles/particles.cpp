@@ -125,19 +125,6 @@ void particles::create()
 					}
 				}
 
-				// Smooth returned results
-				int smoothIters = pw->ui->fnSmoothIters->value();
-				if( smoothIters )
-				{
-					for(auto & p : s->particles)
-					{
-						std::vector<double> & desc = descriptor[p.id];
-						sphere.setValues(desc);
-						sphere.smoothValues( smoothIters );
-						desc = sphere.values();
-					}
-				}
-
 				// Average of neighbors
 				int avgNeighIters = pw->ui->avgNeighIters->value();
 				if( avgNeighIters )
@@ -187,6 +174,19 @@ void particles::create()
 							}
 						}
 						descriptor = smoothDesc;
+					}
+				}
+
+				// Smooth returned results
+				int smoothIters = pw->ui->fnSmoothIters->value();
+				if( smoothIters )
+				{
+					for(auto & p : s->particles)
+					{
+						std::vector<double> & desc = descriptor[p.id];
+						sphere.setValues(desc);
+						sphere.smoothValues( smoothIters );
+						desc = sphere.values();
 					}
 				}
 
