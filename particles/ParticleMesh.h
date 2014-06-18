@@ -15,6 +15,8 @@ class ParticleMesh
 {
 public:
 	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
+	~ParticleMesh();
+
 	std::vector<Eigen::Vector3d> extractSurface();
 
 	void process();
@@ -35,7 +37,6 @@ public:
 	Eigen::AlignedBox3d bbox;
 
 	SurfaceMeshModel * surface_mesh;
-
 	NanoKdTree * kdtree;
 
 	QVector<RenderObject::Base*> debug;

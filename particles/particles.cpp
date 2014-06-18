@@ -1,7 +1,6 @@
 #include "particles.h"
 #include "particles-widget.h"
 #include "ui_particles-widget.h"
-#include "interfaces/ModePluginDockWidget.h"
 #include <omp.h>
 #include <numeric>
 
@@ -36,7 +35,6 @@ void particles::create()
 	//drawArea()->setAxisIsDrawn(true);
 
     ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
-
 	ParticlesWidget * pw = new ParticlesWidget();
     widget = pw;
 
@@ -58,299 +56,295 @@ void particles::create()
 			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
 			fromMesh.read( filename.toStdString() );
 
-			ParticleMesh * pmesh = new ParticleMesh( &fromMesh, pw->ui->gridsize->value() );
-			pw->pmeshes.insert( pw->pmeshes.begin(), pmesh );
+			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
 		}
 
-		for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh);
-
-		//emit( pw->shapesLoaded() );
-	});
-
-	connect(pw->ui->processShapesButton, &QPushButton::released, [=]{
 		emit( pw->shapesLoaded() );
 	});
-	
+
 	// Post-processing
-	connect(pw, &ParticlesWidget::shapesLoaded, [=]{
-		//for(auto s : pw->pmeshes) document()->addModel( s->surface_mesh );
+	connect(pw, SIGNAL(shapesLoaded()), SLOT(processShapes()));
+	connect(pw->ui->processShapesButton, SIGNAL(clicked()), SLOT(processShapes()));
+}
 
-		pw->isReady = false;
+void particles::processShapes()
+{
+	if(!widget) return;
 
-		QElapsedTimer allTimer; allTimer.start();
+	ParticlesWidget * pw = (ParticlesWidget *) widget;
+	pw->isReady = false;
 
-		mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
-		qApp->processEvents();
+	// Show voxelized meshes
+	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
 
-		/// Fixed set of ray directions:
-		//std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
+	QElapsedTimer allTimer; allTimer.start();
 
-		// Uniform sampling on the sphere
-		Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
-		std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
-		size_t perSampleRaysCount = sampledRayDirections.size();
+	mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
+	qApp->processEvents();
 
-		// DEBUG:
-		spheres.clear();
-		int selectedParticle = pw->ui->selectedParticle->value();
-		if(selectedParticle >= 0) spheres.push_back( sphere );
+	/// Fixed set of ray directions:
+	//std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
 
-		// Rotation invariant descriptor
-		SphericalHarmonic<Vector3,float> sh( std::max(1,pw->ui->bands->value()) );
-		std::vector< SHSample<Vector3,float> > sh_samples;
-		sh.SH_setup_spherical( sampledRayDirections, sh_samples );
+	// Uniform sampling on the sphere
+	Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
+	std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
+	size_t perSampleRaysCount = sampledRayDirections.size();
 
-		if( true )
+	// DEBUG:
+	spheres.clear();
+	int selectedParticle = pw->ui->selectedParticle->value();
+	if(selectedParticle >= 0) spheres.push_back( sphere );
+
+	// Rotation invariant descriptor
+	SphericalHarmonic<Vector3,float> sh( std::max(1,pw->ui->bands->value()) );
+	std::vector< SHSample<Vector3,float> > sh_samples;
+	sh.SH_setup_spherical( sampledRayDirections, sh_samples );
+
+	if( true )
+	{
+		for(auto & s : pw->pmeshes)
 		{
-			for(auto & s : pw->pmeshes)
-			{
-				QElapsedTimer timer; timer.start();
+			QElapsedTimer timer; timer.start();
 
-				// Hit results are saved as vector of distances
-				std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
-					s->particles.size(), std::vector<float>( perSampleRaysCount ) ));
+			// Hit results are saved as vector of distances
+			std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
+				s->particles.size(), std::vector<float>( perSampleRaysCount ) ));
 				
-				int rayCount = 0;
+			int rayCount = 0;
 
-				// Accelerated raytracing
+			// Accelerated raytracing
+			{
+				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+
+				// Shoot rays around all particles
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
-					raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+					auto & p = s->particles[pi];
 
-					// Shoot rays around all particles
-					#pragma omp parallel for
-					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					int r = 0;
+					for(auto d : sampledRayDirections)
 					{
-						auto & p = s->particles[pi];
+						raytracing::RayHit hit = rt.hit( p.pos, d );
 
-						int r = 0;
-						for(auto d : sampledRayDirections)
-						{
-							raytracing::RayHit hit = rt.hit( p.pos, d );
-
-							// when we miss, typically shouldn't happen
-							//if( !hit.isHit ) hit.distance = 0;
-
-							descriptor[pi][r++] = hit.distance;
-							rayCount++;
-						}
+						descriptor[pi][r++] = hit.distance;
+						rayCount++;
 					}
 				}
+			}
 
-				// Average of neighbors
-				int avgNeighIters = pw->ui->avgNeighIters->value();
-				if( avgNeighIters )
+			// Average of neighbors
+			int avgNeighIters = pw->ui->avgNeighIters->value();
+			if( avgNeighIters )
+			{
+				size_t gridsize = s->grid.gridsize;
+
+				for(int it = 0; it < avgNeighIters; it++)
 				{
-					size_t gridsize = s->grid.gridsize;
-
-					for(int it = 0; it < avgNeighIters; it++)
+					auto smoothDesc = descriptor;
 					{
-						auto smoothDesc = descriptor;
+						#pragma omp parallel for
+						for(int pi = 0; pi < (int)s->particles.size(); pi++)
 						{
-							#pragma omp parallel for
-							for(int pi = 0; pi < (int)s->particles.size(); pi++)
-							{
-								const auto & p = s->particles[pi];
+							const auto & p = s->particles[pi];
 
-								std::vector<float> sum( descriptor[p.id].size(), 0 );
-								int count = 0;
+							std::vector<float> sum( descriptor[p.id].size(), 0 );
+							int count = 0;
 
-								unsigned int x,y,z;
-								mortonDecode(p.morton, x, y, z);
+							unsigned int x,y,z;
+							mortonDecode(p.morton, x, y, z);
 
-								for(int u = -1; u <= 1; u++){
-									for(int v = -1; v <= 1; v++){
-										for(int w = -1; w <= 1; w++)
-										{
-											Eigen::Vector3i c(x + u, y + v, z + w);
+							for(int u = -1; u <= 1; u++){
+								for(int v = -1; v <= 1; v++){
+									for(int w = -1; w <= 1; w++)
+									{
+										Eigen::Vector3i c(x + u, y + v, z + w);
 
-											// Skip outside grid
-											if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
-											if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
+										// Skip outside grid
+										if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+										if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
 
-											uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
-											if(!s->grid.occupied[ mcode ]) continue;
+										uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
+										if(!s->grid.occupied[ mcode ]) continue;
 
-											size_t nj = s->mortonToParticleID[ mcode ];
+										size_t nj = s->mortonToParticleID[ mcode ];
 
-											std::vector<float> nei = descriptor[nj];
+										std::vector<float> nei = descriptor[nj];
 
-											// Add this neighbor to sum
-											for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
-											count++;
-										}
+										// Add this neighbor to sum
+										for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
+										count++;
 									}
 								}
-
-								// divide over count
-								for(size_t j = 0; j < sum.size(); j++) sum[j] /= count;
-
-								smoothDesc[p.id] = sum;
 							}
+
+							// divide over count
+							for(size_t j = 0; j < sum.size(); j++) sum[j] /= count;
+
+							smoothDesc[p.id] = sum;
 						}
-						descriptor = smoothDesc;
 					}
-				}
-
-				// Report
-				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
-				timer.restart();
-
-				// Inner voxels more visible
-				double global_min = DBL_MAX;
-				for(auto & p : s->particles)
-				{
-					std::vector<float> & desc = descriptor[p.id];
-					double min_desc = *std::min_element(desc.begin(),desc.end());
-					global_min = std::min(global_min, min_desc);
-				}
-
-				// Extract one of the descriptors
-				if(selectedParticle >= 0)
-				{
-					int idx = std::min(selectedParticle, (int)s->particles.size()- 1);
-					spheres.back().setValues( descriptor[idx] );
-					spheres.back().normalizeValues();
-				}
-                else
-                    spheres.clear();
-
-				// Rotation invariant description
-				if( pw->ui->bands->value() > 0 )
-				{
-					#pragma omp parallel for
-					for(int pi = 0; pi < (int)s->particles.size(); pi++)
-					{
-						auto & p = s->particles[pi];
-
-						std::vector<float> & desc = descriptor[p.id];
-
-						p.direction = sampledRayDirections[ std::max_element(desc.begin(),desc.end()) - desc.begin() ];
-
-						// Normalize response
-						if( pw->ui->normalizeSphereFn->isChecked() )
-						{
-							double max_desc = *std::max_element(desc.begin(),desc.end());
-							double min_desc = *std::min_element(desc.begin(),desc.end());
-							for(auto & d : desc) d /= max_desc;
-
-							p.alpha = min_desc / global_min;
-						}
-
-						std::vector<float> coeff;
-						sh.SH_project_function(desc, sh_samples, coeff);
-						
-						desc = sh.SH_signature(coeff);
-
-						//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
-						//desc = grid.alignedValues();
-					}
-				}
-
-				// Report
-				mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
-				timer.restart();
-
-				// Debug
-				{
-					/*starlab::LineSegments * vs = new starlab::LineSegments;
-					for(auto particle : s->particles){		
-						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
-						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
-						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
-					}
-					s->debug.push_back(vs);*/
+					descriptor = smoothDesc;
 				}
 			}
-		}
 
-		// k-means clustering
-		if( true )
-		{
-			// Collect descriptors
-			for(auto & s : pw->pmeshes)
+			// Report
+			mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
+			timer.restart();
+
+			// Inner voxels more visible
+			double global_min = DBL_MAX;
+			for(auto & p : s->particles)
 			{
-				typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
-
-				clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(s->desc, pw->ui->kclusters->value());
-				km.run(100, 0.01);
-
-				for(auto & p : s->particles)
-					p.flag = (int) km.clusters()[p.id];
+				std::vector<float> & desc = descriptor[p.id];
+				double min_desc = *std::min_element(desc.begin(),desc.end());
+				global_min = std::min(global_min, min_desc);
 			}
 
-			// Assign classes
-			//int pi = 0;
-			//for(auto & s : pw->pmeshes)
-			//	for(auto & p : s->particles)
-			//		p.flag = (int) km.clusters()[pi++];
-		}
+			// Extract one of the descriptors
+			if(selectedParticle >= 0)
+			{
+				int idx = std::min(selectedParticle, (int)s->particles.size()- 1);
+				spheres.back().setValues( descriptor[idx] );
+				spheres.back().normalizeValues();
+			}
+            else
+                spheres.clear();
 
-		/// [ Correspondence ] match particles
-		if( false )
-		{
-			for(size_t i = 0; i < pw->pmeshes.size(); i++){
-				for(size_t j = i+1; j < pw->pmeshes.size(); j++){
-					NanoKdTree * itree = pw->pmeshes[i]->kdtree;
-					NanoKdTree * jtree = pw->pmeshes[j]->kdtree;
+			// Rotation invariant description
+			if( pw->ui->bands->value() > 0 )
+			{
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					auto & p = s->particles[pi];
 
-					for(auto & iparticle : pw->pmeshes[i]->particles)
+					std::vector<float> & desc = descriptor[p.id];
+
+					p.direction = sampledRayDirections[ std::max_element(desc.begin(),desc.end()) - desc.begin() ];
+
+					// Normalize response
+					if( pw->ui->normalizeSphereFn->isChecked() )
 					{
-						if( true )
-						{
-							iparticle.correspondence = jtree->closest( iparticle.relativePos );
-						}
-						else
-						{
-							// Experiment
-							KDResults matches;
-							jtree->ball_search( iparticle.relativePos, 0.2, matches );
+						double max_desc = *std::max_element(desc.begin(),desc.end());
+						double min_desc = *std::min_element(desc.begin(),desc.end());
+						for(auto & d : desc) d /= max_desc;
 
-							QMap<double, size_t> measures;
-							for(auto p : matches) 
-							{
-								double weight = p.second;
-								//double dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
-								double dist = 1;
-								measures[ weight * dist ] = p.first;
-							}
-							iparticle.correspondence = measures[ measures.keys().front() ];
-						}
+						p.alpha = min_desc / global_min;
 					}
 
-					for(auto & jparticle : pw->pmeshes[j]->particles)
-					{
-						if( true )
-						{
-							jparticle.correspondence = itree->closest( jparticle.relativePos );
-						}
-						else
-						{
-							// Experiment
-							KDResults matches;
-							itree->ball_search( jparticle.relativePos, 0.2, matches );
+					std::vector<float> coeff;
+					sh.SH_project_function(desc, sh_samples, coeff);
+						
+					desc = sh.SH_signature(coeff);
 
-							QMap<double, size_t> measures;
-							for(auto p : matches) 
-							{
-								double weight = p.second;
-								//double dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
-								double dist = 1;
-								measures[ weight * dist ] = p.first;
-							}
-							jparticle.correspondence = measures[ measures.keys().front() ];
+					//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
+					//desc = grid.alignedValues();
+				}
+			}
+
+			// Report
+			mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
+			timer.restart();
+
+			// Debug
+			{
+				/*starlab::LineSegments * vs = new starlab::LineSegments;
+				for(auto particle : s->particles){		
+					Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+					color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
+					vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
+				}
+				s->debug.push_back(vs);*/
+			}
+		}
+	}
+
+	// k-means clustering
+	if( true )
+	{
+		// Collect descriptors
+		std::vector< std::vector<float> > allDesc;
+		for(auto & s : pw->pmeshes)
+			allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
+
+		// Cluster
+		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
+		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value());
+		km.run(100, 0.01);
+
+		// Assign classes
+		int pi = 0;
+		for(auto & s : pw->pmeshes)
+			for(auto & p : s->particles)
+				p.flag = (int) km.clusters()[pi++];
+	}
+
+	/// [ Correspondence ] match particles
+	if( false )
+	{
+		for(size_t i = 0; i < pw->pmeshes.size(); i++){
+			for(size_t j = i+1; j < pw->pmeshes.size(); j++){
+				NanoKdTree * itree = pw->pmeshes[i]->kdtree;
+				NanoKdTree * jtree = pw->pmeshes[j]->kdtree;
+
+				for(auto & iparticle : pw->pmeshes[i]->particles)
+				{
+					if( true )
+					{
+						iparticle.correspondence = jtree->closest( iparticle.relativePos );
+					}
+					else
+					{
+						// Experiment
+						KDResults matches;
+						jtree->ball_search( iparticle.relativePos, 0.2, matches );
+
+						QMap<double, size_t> measures;
+						for(auto p : matches) 
+						{
+							double weight = p.second;
+							//double dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
+							double dist = 1;
+							measures[ weight * dist ] = p.first;
 						}
+						iparticle.correspondence = measures[ measures.keys().front() ];
+					}
+				}
+
+				for(auto & jparticle : pw->pmeshes[j]->particles)
+				{
+					if( true )
+					{
+						jparticle.correspondence = itree->closest( jparticle.relativePos );
+					}
+					else
+					{
+						// Experiment
+						KDResults matches;
+						itree->ball_search( jparticle.relativePos, 0.2, matches );
+
+						QMap<double, size_t> measures;
+						for(auto p : matches) 
+						{
+							double weight = p.second;
+							//double dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
+							double dist = 1;
+							measures[ weight * dist ] = p.first;
+						}
+						jparticle.correspondence = measures[ measures.keys().front() ];
 					}
 				}
 			}
 		}
+	}
 
-		// Report
-		mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
+	// Report
+	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
 
-		pw->isReady = true;
+	pw->isReady = true;
 
-		drawArea()->update();
-	});
+	drawArea()->update();
 }
 
 void particles::decorate()

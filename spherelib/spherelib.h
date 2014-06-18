@@ -68,6 +68,7 @@ struct Sphere{
 	Spherelib::RadialGrid grid;
 
     Sphere(int resolution = 4, Vector3 center = Vector3(0,0,0), double radius = 1.0 );
+	~Sphere();
 
 	std::vector<Vector3> rays() const;
 	std::vector<float> values() const;

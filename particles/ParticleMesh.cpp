@@ -13,7 +13,7 @@ inline QVector<QColor> rndColors(int count){
 
 QVector<QColor> ParticleMesh::rndcolors = rndColors(512);
 
-ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : 
+ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
 	raidus(particle_raidus), tranlsation(Eigen::Vector3d(0,0,0))
 {
 	// Voxelization
@@ -33,9 +33,15 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
 			surface_mesh->add_face( quad_verts );
 			voffset += 4;
 		}
-		surface_mesh->garbage_collection();
+
 		surface_mesh->triangulate();
 		meregeVertices( surface_mesh );
+
+		for(auto v : surface_mesh->vertices())
+			if(surface_mesh->is_isolated(v))
+				surface_mesh->remove_vertex(v);
+
+		surface_mesh->garbage_collection();
 	}
 
 	// Remove outer most voxel
@@ -119,4 +125,10 @@ void ParticleMesh::drawParticles()
 void ParticleMesh::drawDebug(QGLWidget & widget)
 {
 	for(auto d : debug) d->draw( widget );
+}
+
+ParticleMesh::~ParticleMesh()
+{
+	if(surface_mesh) delete surface_mesh;
+	if(kdtree) delete kdtree;
 }

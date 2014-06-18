@@ -230,7 +230,7 @@ void Spherelib::Sphere::setValues(const std::vector<float>& newValues)
 	for( auto v : geometry->vertices() ) vprop[v] = newValues[v.idx()];
 }
 
-void Spherelib::Sphere::assignLocalFrame( int tracks, int sectors )
+void Spherelib::Sphere::assignLocalFrame( int /*tracks*/, int /*sectors*/ )
 {
 	//Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
 	//Surface_mesh::Vertex_property<Vector3> projected = geometry->vertex_property<Vector3>("v:projected", Vector3(0,0,0));
@@ -306,6 +306,11 @@ void Spherelib::Sphere::draw()
 		} while (++fvit != fvend);
 	}
 	glEnd();
+}
+
+Spherelib::Sphere::~Sphere()
+{
+	delete geometry;
 }
 
 Spherelib::RadialGrid Spherelib::RadialGrid::createGrid(const std::vector<Vector3> & projected, int numTracks, int numSectors, Vector3 majorAxis)

@@ -10,5 +10,7 @@ ParticlesWidget::ParticlesWidget(QWidget *parent) : QWidget(parent), ui(new Ui::
 
 ParticlesWidget::~ParticlesWidget()
 {
+	qDeleteAll(pmeshes);
+
     delete ui;
 }

@@ -102,7 +102,7 @@ struct VoxelContainer{
 		return result;
 	}
 	inline Vector3 voxelPos( uint64_t m ){
-		static Vector3 delta = translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+		Vector3 delta = translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
 		unsigned int v[3];
 		mortonDecode(m, v[0], v[1], v[2]);
 		return Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;

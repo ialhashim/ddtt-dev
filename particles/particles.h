@@ -2,6 +2,7 @@
 
 #include "SurfaceMeshPlugins.h"
 #include "RichParameterSet.h"
+#include "interfaces/ModePluginDockWidget.h"
 
 class particles: public SurfaceMeshModePlugin{
     Q_OBJECT
@@ -11,7 +12,7 @@ class particles: public SurfaceMeshModePlugin{
     QIcon icon(){ return QIcon(":/images/particles.png"); }
 
 public:
-    particles() : widget(NULL) {}
+    particles() : widget(NULL), dockwidget(NULL) {}
 
     // Main functionality
     void create();
@@ -21,7 +22,11 @@ public:
 	bool keyPressEvent(QKeyEvent*);
 
     QWidget * widget;
+	ModePluginDockWidget * dockwidget;
 
     // Always usable
     bool isApplicable() { return true; }
+
+public slots:
+	void processShapes();
 };
