@@ -71,6 +71,8 @@ struct Sphere{
 	~Sphere();
 
 	std::vector<Vector3> rays() const;
+	std::vector<size_t> antiRays() const;
+
 	std::vector<float> values() const;
 	void setValues(const std::vector<float>& newValues);
 

@@ -142,6 +142,33 @@ std::vector<Spherelib::Sphere::Vector3> Spherelib::Sphere::rays() const
 	return result;
 }
 
+std::vector<size_t> Spherelib::Sphere::antiRays() const
+{
+	Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
+
+	std::vector<size_t> result;
+
+	for(int v = 0; v < numPoints; v++) 
+	{
+		Vector3 ray =  points[Surface_mesh::Vertex(v)];
+		Vector3 antiray = Vector3(0,0,0) - ray;
+
+		double min_dist = std::numeric_limits<Vector3::Scalar>().max();
+		Surface_mesh::Vertex antiray_v;
+
+		for(int v = 0; v < numPoints; v++){
+			double dist = (points[Surface_mesh::Vertex(v)] - antiray).norm();
+			if(dist < min_dist){
+				min_dist = dist;
+				antiray_v = Surface_mesh::Vertex(v);
+			}
+		}
+
+		result.push_back( antiray_v.idx() );
+	}
+	return result;
+}
+
 void Spherelib::Sphere::fillRandom()
 {
 	std::uniform_real_distribution<double> unif(0.0, 1.0);

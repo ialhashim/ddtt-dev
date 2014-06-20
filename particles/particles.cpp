@@ -75,7 +75,7 @@ void particles::processShapes()
 	pw->isReady = false;
 
 	// Show voxelized meshes
-	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
+	for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
 
 	QElapsedTimer allTimer; allTimer.start();
 
@@ -88,6 +88,7 @@ void particles::processShapes()
 	// Uniform sampling on the sphere
 	Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
 	std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
+	std::vector< size_t > antiRays = sphere.antiRays();
 	size_t perSampleRaysCount = sampledRayDirections.size();
 
 	// DEBUG:
@@ -116,6 +117,12 @@ void particles::processShapes()
 			{
 				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
 
+				std::vector<Vector3> dbgpnts(s->particles.size(), Vector3(0,0,0));
+
+				NanoKdTree tree;
+				for(auto p : s->grid.pointsOutside()) tree.addPoint(p.cast<double>());
+				tree.build();
+
 				// Shoot rays around all particles
 				#pragma omp parallel for
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
@@ -130,7 +137,30 @@ void particles::processShapes()
 						descriptor[pi][r++] = hit.distance;
 						rayCount++;
 					}
+
+					std::vector<float> desc = descriptor[pi];
+
+					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+					{
+						Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
+						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
+
+						Vector3 midpoint = (start + end) * 0.5;
+
+						double radius = (start - end).norm() / 2;
+						radius = std::max(radius, s->grid.unitlength);
+
+						// Search for an inner ball
+						KDResults matches;
+						if( tree.ball_search(midpoint, radius, matches) == 0 )
+							dbgpnts[pi] = midpoint;
+					}
 				}
+
+				starlab::PointSoup * ps = new starlab::PointSoup;
+				for(auto p : dbgpnts) ps->addPoint(Vector3(p));
+				drawArea()->deleteAllRenderObjects();
+				drawArea()->addRenderObject(ps);
 			}
 
 			// Average of neighbors
@@ -352,6 +382,8 @@ void particles::decorate()
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return;
 
+	return;
+
 	for(auto & sphere : spheres)
 	{
 		sphere.draw();
@@ -372,7 +404,6 @@ void particles::decorate()
 
 		glPopMatrix();
 
-		return;
 	}
 
 	// Experimental

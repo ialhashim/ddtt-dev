@@ -108,6 +108,53 @@ struct VoxelContainer{
 		return Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
 	}
 	void findOccupied(){ occupied.resize(gridsize*gridsize*gridsize, EMPTY_VOXEL); for(auto & v : data) occupied[v.morton] = FULL_VOXEL; }
+	std::vector< Vector3 > pointsOutside()
+	{
+		std::vector< Vector3 > result;
+
+		Vector3 delta = translation + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+
+		if(occupied.empty()) findOccupied();
+
+		for(auto voxel : data)
+		{					
+			unsigned int x,y,z;
+			mortonDecode(voxel.morton, x, y, z);
+
+			std::vector<uint64_t> neigh;
+			if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
+			if(y < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y+1,z) );
+			if(z < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y,z+1) );
+			if(x > 0) neigh.push_back( mortonEncode_LUT(x-1,y,z) );
+			if(y > 0) neigh.push_back( mortonEncode_LUT(x,y-1,z) );
+			if(z > 0) neigh.push_back( mortonEncode_LUT(x,y,z-1) );
+
+			// Voxels at surface
+			for(auto n : neigh){
+				if(occupied[n] != occupied[voxel.morton]){
+					// We add center of empty neighbors
+					result.push_back( voxelPos(n) );
+				}
+			}
+
+			// Case where voxel is at the boundary of grid
+			unsigned int v[] = { x, y, z };
+			bool isBoundary = (x == 0 || y == 0 || z == 0) || (v[0] == gridsize-1 || v[1] == gridsize-1 || v[2] == gridsize-1);
+			if( isBoundary ){
+				for(int i = 0; i < 3; i++){
+					Eigen::Vector3i d(0,0,0);
+					if(v[i] == 0) d[i] = -1;
+					else if(v[i] == gridsize-1) d[i] = 1;
+					if(d[0]!=0||d[1]!=0||d[2]!=0){
+						d += Eigen::Vector3i(x,y,z);
+						result.push_back( Vector3(d[2] * unitlength, d[1] * unitlength, d[0] * unitlength) + delta );
+					}
+				}
+			}
+		}
+
+		return result;
+	}
 };
 
 template<typename Vector3>
@@ -587,7 +634,8 @@ inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, siz
 						Eigen::Vector3i d(0,0,0);
 						if(v[i] == 0) d[i] = -1;
 						else if(v[i] == gridsize-1) d[i] = 1;
-						if(d[0]!=0||d[1]!=0||d[2]!=0) allQuads.push_back( std::make_pair(s, d) );
+						if(d[0]!=0||d[1]!=0||d[2]!=0) 
+							allQuads.push_back( std::make_pair(s, d) );
 					}
 				}
 			}
