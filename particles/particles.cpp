@@ -138,22 +138,46 @@ void particles::processShapes()
 						rayCount++;
 					}
 
-					std::vector<float> desc = descriptor[pi];
-
-					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+					if(true)
 					{
-						Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
-						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
+						std::vector<float> desc = descriptor[pi];
 
-						Vector3 midpoint = (start + end) * 0.5;
+						std::vector<Vector3> midPoints( sampledRayDirections.size() );
 
-						double radius = (start - end).norm() / 2;
-						radius = std::max(radius, s->grid.unitlength);
+						size_t minMatches = tree.cloud.pts.size();
+						size_t minIdx = 0;
+						double minRadius = 0;
 
-						// Search for an inner ball
-						KDResults matches;
-						if( tree.ball_search(midpoint, radius, matches) == 0 )
-							dbgpnts[pi] = midpoint;
+						for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+						{
+							Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
+							Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
+
+							Vector3 midpoint = (start + end) * 0.5;
+
+							midPoints[idx] = midpoint;
+
+							double radius = (start - end).norm() / 2;
+							radius = std::max(radius, s->grid.unitlength);
+
+							// Search for an inner ball
+							KDResults matches;
+							//tree.ball_search(midpoint, radius, matches);
+							tree.k_closest(midpoint, 1, matches);
+
+							double d = std::sqrt(matches.front().second);
+
+							if(d > radius)
+							{
+								minMatches = matches.size();
+								minIdx = idx;
+								minRadius = radius;
+							}
+						}
+
+						//if(minRadius > s->grid.unitlength)
+						if(minRadius != 0)
+							dbgpnts[pi] = midPoints[minIdx];
 					}
 				}
 
