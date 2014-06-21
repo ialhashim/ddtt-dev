@@ -82,8 +82,8 @@ raytracing::RayHit raytracing::Raytracing<Vector3>::hit( const Vector3& rayOrigi
 	RTCRay ray;
 	ray.org[0] = p[0]; ray.org[1] = p[1]; ray.org[2] = p[2];
 	ray.dir[0] = d[0]; ray.dir[1] = d[1]; ray.dir[2] = d[2];
-	ray.tnear = 0.0f;
-	ray.tfar = std::numeric_limits<float>::infinity();
+	ray.tnear = Vector3::Scalar(0);
+	ray.tfar = std::numeric_limits<Vector3::Scalar>::infinity();
 	ray.geomID = RTC_INVALID_GEOMETRY_ID;
 	ray.primID = RTC_INVALID_GEOMETRY_ID;
 	ray.mask = -1;

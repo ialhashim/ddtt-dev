@@ -3,6 +3,7 @@
 #include "ui_particles-widget.h"
 #include <omp.h>
 #include <numeric>
+#include <cmath>
 
 #include "SurfaceMeshModel.h"
 #include "SurfaceMeshHelper.h"
@@ -26,7 +27,11 @@ QTimer * timer = NULL;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 
-std::vector<Spherelib::Sphere> spheres;
+#ifdef WIN32
+namespace std{ int isfinite(double x) {return _finite(x);} }
+#endif
+
+std::vector<Spherelib::Sphere*> spheres;
 
 void particles::create()
 {
@@ -34,12 +39,12 @@ void particles::create()
 
 	//drawArea()->setAxisIsDrawn(true);
 
-    ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
+	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
 	ParticlesWidget * pw = new ParticlesWidget();
-    widget = pw;
+	widget = pw;
 
-    dockwidget->setWidget( widget );
-    mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+	dockwidget->setWidget( widget );
+	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
 	// General Tests
 	connect(pw->ui->testButton, &QPushButton::released, [=]{
@@ -77,26 +82,18 @@ void particles::processShapes()
 	if(pw->pmeshes.empty()) return;
 
 	// Show voxelized meshes
-	for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
+	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
 
 	QElapsedTimer allTimer; allTimer.start();
 
 	mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
 	qApp->processEvents();
 
-	/// Fixed set of ray directions:
-	//std::vector< Eigen::Vector3d > sampledRayDirections = sphere_fibonacci_points( perSampleRaysCount );
-
 	// Uniform sampling on the sphere
 	Spherelib::Sphere sphere( pw->ui->sphereResolution->value() );
 	std::vector< Eigen::Vector3d > sampledRayDirections  = sphere.rays();
 	std::vector< size_t > antiRays = sphere.antiRays();
 	size_t perSampleRaysCount = sampledRayDirections.size();
-
-	// DEBUG:
-	spheres.clear();
-	int selectedParticle = pw->ui->selectedParticle->value();
-	if(selectedParticle >= 0) spheres.push_back( sphere );
 
 	// Rotation invariant descriptor
 	SphericalHarmonic<Vector3,float> sh( std::max(1,pw->ui->bands->value()) );
@@ -107,26 +104,32 @@ void particles::processShapes()
 	{
 		for(auto & s : pw->pmeshes)
 		{
+			s->debug.clear();
+
 			QElapsedTimer timer; timer.start();
 
 			// Hit results are saved as vector of distances
 			std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
 				s->particles.size(), std::vector<float>( perSampleRaysCount ) ));
-				
+
 			int rayCount = 0;
 
-			// Accelerated raytracing
+			// Shooting rays from inside the volume
 			{
-				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
-
+				// Medial points record
 				std::vector<Eigen::Vector3f> ma_point(s->particles.size(), Eigen::Vector3f(0,0,0));
 				std::vector<bool> ma_point_active(s->particles.size(), false);
 				std::vector<float> ma_point_rad(s->particles.size(), 0);
 				size_t gridsize = s->grid.gridsize;
+				std::vector< std::vector<float> > ma_descriptor( s->particles.size() );
 
+				// Points just outside the volume
 				NanoKdTree tree;
 				for(auto p : s->grid.pointsOutside(0)) tree.addPoint(p.cast<double>());
 				tree.build();
+
+				// Accelerated raytracing
+				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
 
 				// Shoot rays around all particles
 				#pragma omp parallel for
@@ -142,55 +145,112 @@ void particles::processShapes()
 						descriptor[pi][r++] = hit.distance;
 						rayCount++;
 					}
+				}
 
-					// Compute medial points
-					if( true )
+				// Average of neighbors
+				int avgNeighIters = pw->ui->avgNeighIters->value();
+				if( avgNeighIters )
+				{
+					size_t gridsize = s->grid.gridsize;
+
+					for(int it = 0; it < avgNeighIters; it++)
 					{
-						std::vector<float> & desc = descriptor[pi];
-
-						size_t minIdx = 0;
-						Vector3 maPoint = p.pos;
-
-						double maxRadius = -DBL_MAX;
-
-						std::vector<bool> isVisisted( sampledRayDirections.size(), false );
-
-						for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+						auto smoothDesc = descriptor;
 						{
-							if(isVisisted[antiRays[idx]]) continue;
-							isVisisted[antiRays[idx]] = true;
-
-							Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
-							Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
-							Vector3 midpoint = (start + end) * 0.5;
-
-							double radius = ((start - end).norm() / 2);
-
-							// Search for an inner ball
-							KDResults matches;
-							tree.k_closest(midpoint, 1, matches);
-							double d2 = matches.front().second;
-
-							bool isInside = d2 > pow(radius, 2);
-
-							if(isInside && radius > maxRadius)
+							#pragma omp parallel for
+							for(int pi = 0; pi < (int)s->particles.size(); pi++)
 							{
-								minIdx = idx;
-								maxRadius = radius;
-								maPoint = midpoint;
+								const auto & p = s->particles[pi];
+
+								std::vector<float> sum( descriptor[p.id].size(), 0 );
+								int count = 0;
+
+								unsigned int x,y,z;
+								mortonDecode(p.morton, x, y, z);
+
+								for(int u = -1; u <= 1; u++){
+									for(int v = -1; v <= 1; v++){
+										for(int w = -1; w <= 1; w++)
+										{
+											Eigen::Vector3i c(x + u, y + v, z + w);
+
+											// Skip outside grid
+											if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+											if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
+
+											uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
+											if(!s->grid.occupied[ mcode ]) continue;
+
+											size_t nj = s->mortonToParticleID[ mcode ];
+
+											std::vector<float> nei = descriptor[nj];
+
+											// Add this neighbor to sum
+											for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
+											count++;
+										}
+									}
+								}
+
+								// divide over count
+								for(size_t j = 0; j < sum.size(); j++) sum[j] /= count;
+
+								smoothDesc[p.id] = sum;
 							}
 						}
-
-						if( maxRadius > 0 )
-						{
-							ma_point[pi] = maPoint.cast<float>();
-							ma_point_rad[pi] = maxRadius;
-							ma_point_active[pi] = true;
-						}
+						descriptor = smoothDesc;
 					}
 				}
 
-				// Filter out less medial points
+				// Compute medial points
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					const auto & p = s->particles[pi];
+
+					std::vector<float> & desc = descriptor[pi];
+
+					size_t minIdx = 0;
+					Vector3 maPoint = p.pos;
+					double maxRadius = -DBL_MAX;
+					std::vector<bool> isVisisted( sampledRayDirections.size(), false );
+
+					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+					{
+						if(isVisisted[antiRays[idx]]) continue;
+						isVisisted[antiRays[idx]] = true;
+
+						Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
+						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
+						Vector3 midpoint = (start + end) * 0.5;
+
+						double radius = ((start - end).norm() / 2);
+
+						// Search for an inner ball
+						KDResults matches;
+						tree.k_closest(midpoint, 1, matches);
+						double d2 = matches.front().second;
+
+						bool isInside = d2 > pow(radius, 2);
+
+						if(isInside && radius > maxRadius)
+						{
+							minIdx = idx;
+							maxRadius = radius;
+							maPoint = midpoint;
+						}
+					}
+
+					// Found a medial point
+					if( maxRadius > 0 )
+					{
+						ma_point[pi] = maPoint.cast<float>();
+						ma_point_rad[pi] = maxRadius;
+						ma_point_active[pi] = true;
+					}
+				}
+
+				// Filter out not so medial points
 				if( true )
 				{
 					#pragma omp parallel for
@@ -224,70 +284,74 @@ void particles::processShapes()
 					}
 				}
 
-				starlab::PointSoup * ps = new starlab::PointSoup;
-				float maxVal = -1;
-				for(size_t i = 0; i < ma_point_active.size(); i++) maxVal = std::max(maxVal, ma_point_rad[i]);
-				for(size_t i = 0; i < ma_point_active.size(); i++) {
-					if(ma_point_active[i]){
-						ps->addPoint(Vector3(ma_point[i].cast<double>()), starlab::qtJetColor(ma_point_rad[i], 0, maxVal));
-					}
-				}
-				drawArea()->deleteAllRenderObjects();
-				drawArea()->addRenderObject(ps);
-			}
-
-			// Average of neighbors
-			int avgNeighIters = pw->ui->avgNeighIters->value();
-			if( avgNeighIters )
-			{
-				size_t gridsize = s->grid.gridsize;
-
-				for(int it = 0; it < avgNeighIters; it++)
+				// DEBUG: medial points
+				if(false)
 				{
-					auto smoothDesc = descriptor;
+					starlab::PointSoup * ps = new starlab::PointSoup;
+					float maxVal = -1;
+					for(size_t i = 0; i < ma_point_active.size(); i++) maxVal = std::max(maxVal, ma_point_rad[i]);
+					for(size_t i = 0; i < ma_point_active.size(); i++) {
+						if(ma_point_active[i])
+							ps->addPoint(Vector3(ma_point[i].cast<double>()), starlab::qtJetColor(ma_point_rad[i], 0, maxVal));
+					}
+					drawArea()->deleteAllRenderObjects();
+					drawArea()->addRenderObject(ps);
+				}
+
+				// Only use medial descriptors
+				if( true )
+				{
+					// Compute medial descriptors
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						#pragma omp parallel for
-						for(int pi = 0; pi < (int)s->particles.size(); pi++)
-						{
-							const auto & p = s->particles[pi];
-
-							std::vector<float> sum( descriptor[p.id].size(), 0 );
-							int count = 0;
-
-							unsigned int x,y,z;
-							mortonDecode(p.morton, x, y, z);
-
-							for(int u = -1; u <= 1; u++){
-								for(int v = -1; v <= 1; v++){
-									for(int w = -1; w <= 1; w++)
-									{
-										Eigen::Vector3i c(x + u, y + v, z + w);
-
-										// Skip outside grid
-										if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
-										if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
-
-										uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
-										if(!s->grid.occupied[ mcode ]) continue;
-
-										size_t nj = s->mortonToParticleID[ mcode ];
-
-										std::vector<float> nei = descriptor[nj];
-
-										// Add this neighbor to sum
-										for(size_t j = 0; j < sum.size(); j++) sum[j] += nei[j];
-										count++;
-									}
-								}
+						if( ma_point_active[pi] ){
+							Vector3 maPoint = ma_point[pi].cast<double>();
+							int r = 0;
+							for(auto d : sampledRayDirections){
+								raytracing::RayHit hit = rt.hit( maPoint, (d + Vector3(1,1,1) * 1e-6).normalized() ); // weird bug..
+								descriptor[pi][r++] = hit.distance;
 							}
-
-							// divide over count
-							for(size_t j = 0; j < sum.size(); j++) sum[j] /= count;
-
-							smoothDesc[p.id] = sum;
 						}
 					}
-					descriptor = smoothDesc;
+
+					// Assign descriptor of all particles to their nearest medial point
+					NanoKdTree tree;
+					std::map<size_t,size_t> ma_particle;
+					for(size_t i = 0; i < ma_point_active.size(); i++){
+						if( ma_point_active[i] ){
+							ma_particle[ma_particle.size()] = i;
+							tree.addPoint( ma_point[i].cast<double>() );
+						}
+					}
+					tree.build();
+
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					{
+						if( !ma_point_active[pi] )
+						{
+							size_t pj = ma_particle[tree.closest( s->particles[pi].pos )];
+							descriptor[pi] = descriptor[pj];
+						}
+
+						auto maxelement = std::max_element(descriptor[pi].begin(),descriptor[pi].end());
+						s->particles[pi].direction = sampledRayDirections[ maxelement - descriptor[pi].begin() ].normalized();
+					}
+				}
+
+				// Debug
+				{
+					/*
+					starlab::LineSegments * vs = new starlab::LineSegments(2);
+					for(auto & particle : s->particles)
+					{
+						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
+						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
+					}
+					s->debug.push_back(vs);
+					*/
 				}
 			}
 
@@ -303,16 +367,6 @@ void particles::processShapes()
 				double min_desc = *std::min_element(desc.begin(),desc.end());
 				global_min = std::min(global_min, min_desc);
 			}
-
-			// Extract one of the descriptors
-			if(selectedParticle >= 0)
-			{
-				int idx = std::min(selectedParticle, (int)s->particles.size()- 1);
-				spheres.back().setValues( descriptor[idx] );
-				spheres.back().normalizeValues();
-			}
-            else
-                spheres.clear();
 
 			// Rotation invariant description
 			if( pw->ui->bands->value() > 0 )
@@ -338,7 +392,7 @@ void particles::processShapes()
 
 					std::vector<float> coeff;
 					sh.SH_project_function(desc, sh_samples, coeff);
-						
+
 					desc = sh.SH_signature(coeff);
 
 					//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
@@ -349,17 +403,6 @@ void particles::processShapes()
 			// Report
 			mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
 			timer.restart();
-
-			// Debug
-			{
-				/*starlab::LineSegments * vs = new starlab::LineSegments;
-				for(auto particle : s->particles){		
-					Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
-					color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
-					vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.005), QColor::fromRgbF(color[0],color[1],color[2],1));
-				}
-				s->debug.push_back(vs);*/
-			}
 		}
 	}
 
@@ -455,11 +498,9 @@ void particles::decorate()
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return;
 
-	return;
-
 	for(auto & sphere : spheres)
 	{
-		sphere.draw();
+		sphere->draw();
 	}
 
 	//if(pwidget->pmeshes.size() < 2) 
@@ -476,8 +517,9 @@ void particles::decorate()
 		}
 
 		glPopMatrix();
-
 	}
+
+	return;
 
 	// Experimental
 	static bool isForward = true;
@@ -591,7 +633,41 @@ void particles::decorate()
 bool particles::keyPressEvent(QKeyEvent*e)
 {
 	if(e->key() == Qt::Key_Space)
+	{
 		spheres.clear();
+	}
+
+	if(e->key() == Qt::Key_S)
+	{
+		ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+		if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+
+		auto & pmesh = pwidget->pmeshes.front();
+
+		qglviewer::Vec cen = drawArea()->camera()->revolveAroundPoint();
+		Vector3 q(cen[0],cen[1],cen[2]);
+
+		size_t pi = 0;
+
+		double minDist = DBL_MAX;
+		for(auto & p : pmesh->particles){
+			double dist = (p.pos-q).norm();
+			if(dist < minDist){
+				minDist = dist;
+				pi = p.id;
+			}
+		}
+
+		Spherelib::Sphere * sphere = new Spherelib::Sphere( pwidget->ui->sphereResolution->value(), pmesh->particles[pi].pos, 0.01 );
+		sphere->setValues( pmesh->desc[ pi ] );
+		sphere->normalizeValues();
+
+		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3]").arg(pi).arg(*std::max_element(
+			pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(*std::min_element(pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())) );
+
+		spheres.clear();
+		spheres.push_back( sphere );
+	}
 
 	drawArea()->update();
 	return true;

@@ -120,8 +120,10 @@ Spherelib::Sphere::Sphere( int resolution, Vector3 center, double radius ) : cen
 	// Copy sphere geometry to our SurfaceMeshModel
 	geometry = new SurfaceMesh::SurfaceMeshModel;
 	Surface_mesh tempGeometry = SphereMaker::makeSphere( resolution );
-    for(int i = 0; i < (int)tempGeometry.n_vertices(); i++) geometry->add_vertex( 
-		tempGeometry.vertex_property<Vector3>("v:point")[Surface_mesh::Vertex(i)] );
+    for(int i = 0; i < (int)tempGeometry.n_vertices(); i++){
+		Vector3 spnt = tempGeometry.vertex_property<Vector3>("v:point")[Surface_mesh::Vertex(i)];
+		geometry->add_vertex( center + (spnt * radius) );
+	}
 	Surface_mesh::Face_iterator fit, fend = tempGeometry.faces_end();
 	Surface_mesh::Vertex_around_face_circulator fvit, fvend;
 	for (fit=tempGeometry.faces_begin(); fit!=fend; ++fit){
