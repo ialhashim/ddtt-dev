@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include "qglviewer/qglviewer.h"
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -21,7 +22,7 @@ public:
 
 	void process();
 
-	void drawParticles();
+	void drawParticles( qglviewer::Camera * camera );
 	void drawDebug(QGLWidget & widget);
 	static QVector<QColor> rndcolors;
 

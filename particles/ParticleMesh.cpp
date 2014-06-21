@@ -93,24 +93,82 @@ void ParticleMesh::process()
 	}
 }
 
-void ParticleMesh::drawParticles()
+void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 {
+	// Light setup
+	{
+		GLfloat lightColor[] = {0.9f, 0.9f, 0.9f, 1.0f};
+		glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
+
+		glEnable(GL_LIGHT0);
+		glEnable(GL_LIGHTING);
+
+		// Specular
+		glEnable(GL_COLOR_MATERIAL);
+		glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+		float specReflection[] = { 0.8f, 0.8f, 0.8f, 1.0f };
+		GLfloat high_shininess [] = { 100.0 }; 
+		glMaterialfv(GL_FRONT, GL_SPECULAR, specReflection);
+		glMaterialfv (GL_FRONT, GL_SHININESS, high_shininess); 
+		glMateriali(GL_FRONT, GL_SHININESS, 56);
+	}
+
+	// Setup
+	qglviewer::Vec pos = camera->position();
+	qglviewer::Vec dir = camera->viewDirection();
+	qglviewer::Vec revolve = camera->revolveAroundPoint();
+	Vector3 eye(pos[0],pos[1],pos[2]);
+	Vector3 direction(dir[0],dir[1],dir[2]);
+	Vector3 center(revolve[0],revolve[1],revolve[2]);
+
+	// Sort particles
+	std::map<size_t,double> distances;
+	double minDist = DBL_MAX, maxDist = -DBL_MAX;
+
+	for(size_t i = 0; i < particles.size(); i++)
+	{
+		distances[i] = abs((particles[i].pos - eye).dot(direction));
+		minDist = std::min(minDist, distances[i]);
+		maxDist = std::max(maxDist, distances[i]);
+	}
+
+	// Sort
+	std::vector<std::pair<size_t,double> > myVec(distances.begin(), distances.end());
+	std::sort( myVec.begin(), myVec.end(), [](std::pair<size_t,double> a, std::pair<size_t,double> b){ return a.second < b.second; } );
+
 	glDisable( GL_LIGHTING );
+	//glEnable(GL_LIGHTING);
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glDepthMask(GL_FALSE);
+	//glDepthMask(GL_FALSE);
 
-	glPointSize(4);
+	double camDist = (eye - center).norm();
+	double ratio = 1.0 / camDist;
+
+	glPointSize( std::max(2, std::min(10, int(8.0 * ratio))) );
+
 	glBegin(GL_POINTS);
 
-	for(auto particle : particles)
+	for(auto pi : myVec)
 	{
+		auto & particle = particles[pi.first];
 		//QColor c = starlab::qtJetColor(particle.measure);
 		//Eigen::Vector4d color( c.redF(), c.greenF(), c.blueF(), particle.alpha );
 		//Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
 		//color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
 		//glColor4dv( color.data() );
+
+		if(camDist > 0.5)
+			particle.alpha = 1.0;
+		else
+			particle.alpha = std::max(0.3, 1.0 - ((pi.second - minDist) / (maxDist-minDist)));
 		
+		// Fake normals
+		//Vector3 d = (particle.pos - eye).normalized();
+		//Vector3 n = -direction;
+		//Vector3 pn = (d - 2*(d.dot(n)) * n).normalized();
+		//glNormal3dv( pn.data() );
+
 		QColor c = rndcolors[ particle.flag ];
 		Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), particle.alpha);
 		glColor4dv( color.data() );
@@ -119,7 +177,8 @@ void ParticleMesh::drawParticles()
 
 	glEnd();
 
-	glDepthMask(GL_TRUE);
+	//glDepthMask(GL_TRUE);
+	glEnable(GL_LIGHTING);
 }
 
 void ParticleMesh::drawDebug(QGLWidget & widget)

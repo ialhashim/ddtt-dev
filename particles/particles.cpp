@@ -37,7 +37,18 @@ void particles::create()
 {
 	if( widget ) return;
 
-	//drawArea()->setAxisIsDrawn(true);
+	// Viewer
+	{
+		//drawArea()->setAxisIsDrawn(true);
+		drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
+
+		double worldRadius = 1;
+		drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
+		drawArea()->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
+		drawArea()->camera()->lookAt(qglviewer::Vec());
+		drawArea()->camera()->setSceneRadius( worldRadius );
+		drawArea()->camera()->showEntireScene();
+	}
 
 	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
 	ParticlesWidget * pw = new ParticlesWidget();
@@ -416,8 +427,8 @@ void particles::processShapes()
 
 		// Cluster
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
-		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value());
-		km.run(100, 0.01);
+		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value(), clustering::KmeansInitPlusPlus);
+		km.run(300, 0.005);
 
 		// Assign classes
 		int pi = 0;
@@ -510,7 +521,7 @@ void particles::decorate()
 		// Evaluation
 		for( auto s : pwidget->pmeshes )
 		{
-			s->drawParticles();
+			s->drawParticles( drawArea()->camera() );
 			s->drawDebug( *drawArea() );
 
 			glTranslated(s->bbox.sizes().x() * 1.1, 0, 0);
