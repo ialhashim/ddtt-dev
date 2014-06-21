@@ -74,6 +74,8 @@ void particles::processShapes()
 	ParticlesWidget * pw = (ParticlesWidget *) widget;
 	pw->isReady = false;
 
+	if(pw->pmeshes.empty()) return;
+
 	// Show voxelized meshes
 	for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
 
@@ -117,10 +119,13 @@ void particles::processShapes()
 			{
 				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
 
-				std::vector<Vector3> dbgpnts(s->particles.size(), Vector3(0,0,0));
+				std::vector<Eigen::Vector3f> ma_point(s->particles.size(), Eigen::Vector3f(0,0,0));
+				std::vector<bool> ma_point_active(s->particles.size(), false);
+				std::vector<float> ma_point_rad(s->particles.size(), 0);
+				size_t gridsize = s->grid.gridsize;
 
 				NanoKdTree tree;
-				for(auto p : s->grid.pointsOutside()) tree.addPoint(p.cast<double>());
+				for(auto p : s->grid.pointsOutside(0)) tree.addPoint(p.cast<double>());
 				tree.build();
 
 				// Shoot rays around all particles
@@ -138,6 +143,7 @@ void particles::processShapes()
 						rayCount++;
 					}
 
+					// Compute medial points
 					if(true)
 					{
 						std::vector<float> desc = descriptor[pi];
@@ -146,10 +152,17 @@ void particles::processShapes()
 
 						size_t minMatches = tree.cloud.pts.size();
 						size_t minIdx = 0;
-						double minRadius = 0;
+
+						double maxRadius = -DBL_MAX;
+						double minThickness = DBL_MAX;
+
+						std::vector<bool> isVisisted( sampledRayDirections.size(), false );
 
 						for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
 						{
+							//if(isVisisted[antiRays[idx]]) continue;
+							isVisisted[antiRays[idx]] = true;
+
 							Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
 							Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
 
@@ -157,8 +170,9 @@ void particles::processShapes()
 
 							midPoints[idx] = midpoint;
 
-							double radius = (start - end).norm() / 2;
-							radius = std::max(radius, s->grid.unitlength);
+							double radius = ((start - end).norm() / 2);
+
+							minThickness = std::min(minThickness, radius);
 
 							// Search for an inner ball
 							KDResults matches;
@@ -166,23 +180,66 @@ void particles::processShapes()
 							tree.k_closest(midpoint, 1, matches);
 
 							double d = std::sqrt(matches.front().second);
+							bool isInside = d > radius;
 
-							if(d > radius)
+							if(isInside && radius > maxRadius)
 							{
 								minMatches = matches.size();
 								minIdx = idx;
-								minRadius = radius;
+								maxRadius = radius;
 							}
 						}
 
-						//if(minRadius > s->grid.unitlength)
-						if(minRadius != 0)
-							dbgpnts[pi] = midPoints[minIdx];
+						if( maxRadius > 0 )
+						{
+							ma_point[pi] = midPoints[minIdx].cast<float>();
+							ma_point_rad[pi] = maxRadius;
+							ma_point_active[pi] = true;
+						}
+					}
+				}
+
+				// Filter out less medial points
+				{
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					{
+						if(ma_point_active[pi] && ma_point_rad[pi] < s->grid.unitlength * 2 )
+						{
+							unsigned int x,y,z;
+							mortonDecode(s->particles[pi].morton, x, y, z);
+
+							float max_rad = ma_point_rad[pi];
+
+							for(int u = -1; u <= 1; u++){
+								for(int v = -1; v <= 1; v++){
+									for(int w = -1; w <= 1; w++){
+										if(u == 0 && v == 0 && w == 0) continue;
+										Eigen::Vector3i c(x + u, y + v, z + w);
+										if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+										if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;;
+										uint64_t m = mortonEncode_LUT( c.x(), c.y(), c.z() );
+										if( !s->grid.occupied[m] ) continue;
+
+										max_rad = std::max(max_rad, ma_point_rad[s->mortonToParticleID[m]]);
+									}
+								}
+							}
+
+							if(max_rad > ma_point_rad[pi])
+								ma_point_active[pi] = false;
+						}
 					}
 				}
 
 				starlab::PointSoup * ps = new starlab::PointSoup;
-				for(auto p : dbgpnts) ps->addPoint(Vector3(p));
+				float maxVal = -1;
+				for(size_t i = 0; i < ma_point_active.size(); i++) maxVal = std::max(maxVal, ma_point_rad[i]);
+				for(size_t i = 0; i < ma_point_active.size(); i++) {
+					if(ma_point_active[i]){
+						ps->addPoint(Vector3(ma_point[i].cast<double>()), starlab::qtJetColor(ma_point_rad[i], 0, maxVal));
+					}
+				}
 				drawArea()->deleteAllRenderObjects();
 				drawArea()->addRenderObject(ps);
 			}

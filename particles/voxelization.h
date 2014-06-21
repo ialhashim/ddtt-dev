@@ -108,7 +108,7 @@ struct VoxelContainer{
 		return Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
 	}
 	void findOccupied(){ occupied.resize(gridsize*gridsize*gridsize, EMPTY_VOXEL); for(auto & v : data) occupied[v.morton] = FULL_VOXEL; }
-	std::vector< Vector3 > pointsOutside()
+	std::vector< Vector3 > pointsOutside( double alpha = 0.0 )
 	{
 		std::vector< Vector3 > result;
 
@@ -120,6 +120,7 @@ struct VoxelContainer{
 		{					
 			unsigned int x,y,z;
 			mortonDecode(voxel.morton, x, y, z);
+			Vector3 curVoxelPos = voxelPos(voxel.morton);
 
 			std::vector<uint64_t> neigh;
 			if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
@@ -133,7 +134,9 @@ struct VoxelContainer{
 			for(auto n : neigh){
 				if(occupied[n] != occupied[voxel.morton]){
 					// We add center of empty neighbors
-					result.push_back( voxelPos(n) );
+					Vector3 nPos = voxelPos(n);
+					Vector3 midPoint = (nPos + curVoxelPos) * 0.5;
+					result.push_back( ((1-alpha) * nPos) + (alpha * midPoint) );
 				}
 			}
 
@@ -147,7 +150,9 @@ struct VoxelContainer{
 					else if(v[i] == gridsize-1) d[i] = 1;
 					if(d[0]!=0||d[1]!=0||d[2]!=0){
 						d += Eigen::Vector3i(x,y,z);
-						result.push_back( Vector3(d[2] * unitlength, d[1] * unitlength, d[0] * unitlength) + delta );
+						Vector3 nPos = Vector3(d[2] * unitlength, d[1] * unitlength, d[0] * unitlength) + delta;
+						Vector3 midPoint = (nPos + curVoxelPos) * 0.5;
+						result.push_back( ((1-alpha) * nPos) + (alpha * midPoint) );
 					}
 				}
 			}
