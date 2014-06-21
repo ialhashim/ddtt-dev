@@ -169,8 +169,8 @@ void particles::processShapes()
 							// Search for an inner ball
 							KDResults matches;
 							tree.k_closest(midpoint, 1, matches);
-
 							double d2 = matches.front().second;
+
 							bool isInside = d2 > pow(radius, 2);
 
 							if(isInside && radius > maxRadius)
