@@ -438,8 +438,10 @@ void particles::processShapes()
 	}
 
 	/// [ Correspondence ] match particles
-	if( false )
+	if( true )
 	{
+		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
+
 		for(size_t i = 0; i < pw->pmeshes.size(); i++){
 			for(size_t j = i+1; j < pw->pmeshes.size(); j++){
 				NanoKdTree * itree = pw->pmeshes[i]->kdtree;
@@ -447,7 +449,7 @@ void particles::processShapes()
 
 				for(auto & iparticle : pw->pmeshes[i]->particles)
 				{
-					if( true )
+					if( false )
 					{
 						iparticle.correspondence = jtree->closest( iparticle.relativePos );
 					}
@@ -461,9 +463,9 @@ void particles::processShapes()
 						for(auto p : matches) 
 						{
 							double weight = p.second;
-							//double dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
-							double dist = 1;
-							measures[ weight * dist ] = p.first;
+							double desc_dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
+							//double desc_dist = 1;
+							measures[ desc_dist ] = p.first;
 						}
 						iparticle.correspondence = measures[ measures.keys().front() ];
 					}
@@ -485,9 +487,9 @@ void particles::processShapes()
 						for(auto p : matches) 
 						{
 							double weight = p.second;
-							//double dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
-							double dist = 1;
-							measures[ weight * dist ] = p.first;
+							double desc_dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
+							//double desc_dist = 1;
+							measures[ desc_dist ] = p.first;
 						}
 						jparticle.correspondence = measures[ measures.keys().front() ];
 					}
@@ -514,7 +516,7 @@ void particles::decorate()
 		sphere->draw();
 	}
 
-	//if(pwidget->pmeshes.size() < 2) 
+	if(pwidget->pmeshes.size() < 2) 
 	{
 		glPushMatrix();
 
@@ -528,9 +530,9 @@ void particles::decorate()
 		}
 
 		glPopMatrix();
-	}
 
-	return;
+		return;
+	}
 
 	// Experimental
 	static bool isForward = true;
