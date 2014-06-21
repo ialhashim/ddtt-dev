@@ -144,55 +144,46 @@ void particles::processShapes()
 					}
 
 					// Compute medial points
-					if(true)
+					if( true )
 					{
-						std::vector<float> desc = descriptor[pi];
+						std::vector<float> & desc = descriptor[pi];
 
-						std::vector<Vector3> midPoints( sampledRayDirections.size() );
-
-						size_t minMatches = tree.cloud.pts.size();
 						size_t minIdx = 0;
+						Vector3 maPoint = p.pos;
 
 						double maxRadius = -DBL_MAX;
-						double minThickness = DBL_MAX;
 
 						std::vector<bool> isVisisted( sampledRayDirections.size(), false );
 
 						for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
 						{
-							//if(isVisisted[antiRays[idx]]) continue;
+							if(isVisisted[antiRays[idx]]) continue;
 							isVisisted[antiRays[idx]] = true;
 
 							Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
 							Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
-
 							Vector3 midpoint = (start + end) * 0.5;
-
-							midPoints[idx] = midpoint;
 
 							double radius = ((start - end).norm() / 2);
 
-							minThickness = std::min(minThickness, radius);
-
 							// Search for an inner ball
 							KDResults matches;
-							//tree.ball_search(midpoint, radius, matches);
 							tree.k_closest(midpoint, 1, matches);
 
-							double d = std::sqrt(matches.front().second);
-							bool isInside = d > radius;
+							double d2 = matches.front().second;
+							bool isInside = d2 > pow(radius, 2);
 
 							if(isInside && radius > maxRadius)
 							{
-								minMatches = matches.size();
 								minIdx = idx;
 								maxRadius = radius;
+								maPoint = midpoint;
 							}
 						}
 
 						if( maxRadius > 0 )
 						{
-							ma_point[pi] = midPoints[minIdx].cast<float>();
+							ma_point[pi] = maPoint.cast<float>();
 							ma_point_rad[pi] = maxRadius;
 							ma_point_active[pi] = true;
 						}
@@ -200,6 +191,7 @@ void particles::processShapes()
 				}
 
 				// Filter out less medial points
+				if( true )
 				{
 					#pragma omp parallel for
 					for(int pi = 0; pi < (int)s->particles.size(); pi++)
