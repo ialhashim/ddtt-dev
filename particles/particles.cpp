@@ -427,7 +427,7 @@ void particles::processShapes()
 
 		// Cluster
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
-		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value(), clustering::KmeansInitPlusPlus);
+		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value());
 		km.run(300, 0.005);
 
 		// Assign classes
