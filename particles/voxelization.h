@@ -708,8 +708,15 @@ inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m)
 	SurfaceMesh::Vector3VertexProperty points = m->vertex_coordinates();
 	for( auto v : m->vertices() ) original.push_back( points[v] );
 
+	// Average edge length
+	double avgEdge = 0;
+	for(auto e : m->edges()) avgEdge += ( points[ m->vertex(e,0) ] - points[ m->vertex(e,1) ] ).norm();
+	avgEdge /= m->n_edges();
+
+	double closeThreshold = avgEdge * 0.01;
+
 	// Snap close vertices, sort them, then remove duplicates
-	snapCloseVertices( original, 1e-12 );	
+	snapCloseVertices( original, closeThreshold );	
 	std::vector<SurfaceMesh::Vector3> clean = original;
 	std::sort( clean.begin(), clean.end(), CompareVector3);
 	clean.erase( std::unique(clean.begin(), clean.end()), clean.end() );
@@ -723,7 +730,7 @@ inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m)
 	std::vector< std::vector<SurfaceMesh::Vertex> > faces;
 	for(auto f: m->faces()){
 		std::vector<SurfaceMesh::Vertex> faceverts;
-		for(auto v: m->vertices(f)) faceverts.push_back( SurfaceMesh::Vertex((int)xrefs[ v.idx() ]) );
+		for(auto v: m->vertices(f)) faceverts.push_back( SurfaceMesh::Vertex(xrefs[ v.idx() ]) );
 		faceverts.erase( std::unique(faceverts.begin(), faceverts.end()), faceverts.end() );
 		if(faceverts.size() == 3) faces.push_back(faceverts); // skip degenerate faces
 	}

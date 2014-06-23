@@ -30,7 +30,7 @@ public:
 	VoxelContainer<VoxelVector> grid;
 	std::map<uint64_t,size_t> mortonToParticleID;
 
-	std::vector< std::vector<float> > desc;
+	std::vector< std::vector<float> > desc, sig;
 
     std::vector<Particle> particles;
     double raidus;

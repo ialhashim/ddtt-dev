@@ -27,61 +27,11 @@ QTimer * timer = NULL;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 
+std::vector<Spherelib::Sphere*> spheres;
+
 #ifdef WIN32
 namespace std{ int isfinite(double x) {return _finite(x);} }
 #endif
-
-std::vector<Spherelib::Sphere*> spheres;
-
-void particles::create()
-{
-	if( widget ) return;
-
-	// Viewer
-	{
-		//drawArea()->setAxisIsDrawn(true);
-		drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
-
-		double worldRadius = 1;
-		drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
-		drawArea()->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
-		drawArea()->camera()->lookAt(qglviewer::Vec());
-		drawArea()->camera()->setSceneRadius( worldRadius );
-		drawArea()->camera()->showEntireScene();
-	}
-
-	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
-	ParticlesWidget * pw = new ParticlesWidget();
-	widget = pw;
-
-	dockwidget->setWidget( widget );
-	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
-
-	// General Tests
-	connect(pw->ui->testButton, &QPushButton::released, [=]{
-		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
-		//drawArea()->update();
-	});
-
-	// Load and process shapes:
-	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
-		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
-
-		for(auto filename : files)
-		{
-			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
-			fromMesh.read( filename.toStdString() );
-
-			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
-		}
-
-		emit( pw->shapesLoaded() );
-	});
-
-	// Post-processing
-	connect(pw, SIGNAL(shapesLoaded()), SLOT(processShapes()));
-	connect(pw->ui->processShapesButton, SIGNAL(clicked()), SLOT(processShapes()));
-}
 
 void particles::processShapes()
 {
@@ -136,7 +86,7 @@ void particles::processShapes()
 
 				// Points just outside the volume
 				NanoKdTree tree;
-				for(auto p : s->grid.pointsOutside(0)) tree.addPoint(p.cast<double>());
+				for(auto p : s->grid.pointsOutside()) tree.addPoint(p.cast<double>());
 				tree.build();
 
 				// Accelerated raytracing
@@ -218,12 +168,10 @@ void particles::processShapes()
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
 					const auto & p = s->particles[pi];
-
 					std::vector<float> & desc = descriptor[pi];
 
-					size_t minIdx = 0;
 					Vector3 maPoint = p.pos;
-					double maxRadius = -DBL_MAX;
+					double maxUsedRadius = -DBL_MAX;
 					std::vector<bool> isVisisted( sampledRayDirections.size(), false );
 
 					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
@@ -242,21 +190,20 @@ void particles::processShapes()
 						tree.k_closest(midpoint, 1, matches);
 						double d2 = matches.front().second;
 
-						bool isInside = d2 > pow(radius, 2);
+						bool isFullyInside = d2 > pow(radius, 2);
 
-						if(isInside && radius > maxRadius)
+						if( isFullyInside && radius > maxUsedRadius )
 						{
-							minIdx = idx;
-							maxRadius = radius;
+							maxUsedRadius = radius;
 							maPoint = midpoint;
 						}
 					}
 
 					// Found a medial point
-					if( maxRadius > 0 )
+					if( maxUsedRadius > 0 )
 					{
 						ma_point[pi] = maPoint.cast<float>();
-						ma_point_rad[pi] = maxRadius;
+						ma_point_rad[pi] = maxUsedRadius;
 						ma_point_active[pi] = true;
 					}
 				}
@@ -267,17 +214,21 @@ void particles::processShapes()
 					#pragma omp parallel for
 					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						if(ma_point_active[pi] && ma_point_rad[pi] < s->grid.unitlength * 2 )
+						float ma_rad = ma_point_rad[pi];
+						bool isPossibleThin = ma_rad < s->grid.unitlength * 2;
+						
+						if( ma_point_active[pi] && isPossibleThin )
 						{
 							unsigned int x,y,z;
 							mortonDecode(s->particles[pi].morton, x, y, z);
 
-							float max_rad = ma_point_rad[pi];
+							float max_rad = ma_rad;
 
-							for(int u = -1; u <= 1; u++){
-								for(int v = -1; v <= 1; v++){
-									for(int w = -1; w <= 1; w++){
-										if(u == 0 && v == 0 && w == 0) continue;
+							// Look around for access to wider regions
+							int step = 2;
+							for(int u = -step; u <= step; u++){
+								for(int v = -step; v <= step; v++){
+									for(int w = -step; w <= step; w++){
 										Eigen::Vector3i c(x + u, y + v, z + w);
 										if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
 										if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;;
@@ -289,7 +240,7 @@ void particles::processShapes()
 								}
 							}
 
-							if(max_rad > ma_point_rad[pi])
+							if( max_rad > ma_point_rad[pi] )
 								ma_point_active[pi] = false;
 						}
 					}
@@ -353,7 +304,6 @@ void particles::processShapes()
 
 				// Debug
 				{
-					/*
 					starlab::LineSegments * vs = new starlab::LineSegments(2);
 					for(auto & particle : s->particles)
 					{
@@ -362,7 +312,6 @@ void particles::processShapes()
 						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
 					}
 					s->debug.push_back(vs);
-					*/
 				}
 			}
 
@@ -370,44 +319,35 @@ void particles::processShapes()
 			mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
 			timer.restart();
 
-			// Inner voxels more visible
-			double global_min = DBL_MAX;
-			for(auto & p : s->particles)
-			{
-				std::vector<float> & desc = descriptor[p.id];
-				double min_desc = *std::min_element(desc.begin(),desc.end());
-				global_min = std::min(global_min, min_desc);
-			}
-
-			// Rotation invariant description
-			if( pw->ui->bands->value() > 0 )
+			// Normalize response
+			if( pw->ui->normalizeSphereFn->isChecked() )
 			{
 				#pragma omp parallel for
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
 					auto & p = s->particles[pi];
-
 					std::vector<float> & desc = descriptor[p.id];
+					double max_desc = *std::max_element(desc.begin(),desc.end());
+					double min_desc = *std::min_element(desc.begin(),desc.end());
+					for(auto & d : desc) d = (d-min_desc) / (max_desc-min_desc);
+				}
+			}
 
-					p.direction = sampledRayDirections[ std::max_element(desc.begin(),desc.end()) - desc.begin() ];
+			// Rotation invariant descriptor
+			if( pw->ui->bands->value() > 0 )
+			{
+				s->sig = std::vector< std::vector<float> >(s->particles.size(), std::vector<float>( pw->ui->bands->value() ));
 
-					// Normalize response
-					if( pw->ui->normalizeSphereFn->isChecked() )
-					{
-						double max_desc = *std::max_element(desc.begin(),desc.end());
-						double min_desc = *std::min_element(desc.begin(),desc.end());
-						for(auto & d : desc) d /= max_desc;
-
-						p.alpha = min_desc / global_min;
-					}
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					auto & p = s->particles[pi];
+					std::vector<float> & desc = descriptor[p.id];
 
 					std::vector<float> coeff;
 					sh.SH_project_function(desc, sh_samples, coeff);
 
-					desc = sh.SH_signature(coeff);
-
-					//auto grid = sphere.createGrid(desc,pw->ui->tracks->value(),pw->ui->sectors->value());
-					//desc = grid.alignedValues();
+					s->sig[p.id] = sh.SH_signature(coeff);
 				}
 			}
 
@@ -423,7 +363,12 @@ void particles::processShapes()
 		// Collect descriptors
 		std::vector< std::vector<float> > allDesc;
 		for(auto & s : pw->pmeshes)
-			allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
+		{
+			if( pw->ui->bands->value() > 0 )
+				allDesc.insert(allDesc.end(), s->sig.begin(), s->sig.end());
+			else
+				allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
+		}
 
 		// Cluster
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
@@ -504,6 +449,57 @@ void particles::processShapes()
 	pw->isReady = true;
 
 	drawArea()->update();
+}
+
+
+void particles::create()
+{
+	if( widget ) return;
+
+	// Viewer
+	{
+		//drawArea()->setAxisIsDrawn(true);
+		drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
+
+		double worldRadius = 1;
+		drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
+		drawArea()->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
+		drawArea()->camera()->lookAt(qglviewer::Vec());
+		drawArea()->camera()->setSceneRadius( worldRadius );
+		drawArea()->camera()->showEntireScene();
+	}
+
+	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
+	ParticlesWidget * pw = new ParticlesWidget();
+	widget = pw;
+
+	dockwidget->setWidget( widget );
+	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+
+	// General Tests
+	connect(pw->ui->testButton, &QPushButton::released, [=]{
+		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
+		//drawArea()->update();
+	});
+
+	// Load and process shapes:
+	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
+		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
+
+		for(auto filename : files)
+		{
+			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
+			fromMesh.read( filename.toStdString() );
+
+			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+		}
+
+		emit( pw->shapesLoaded() );
+	});
+
+	// Post-processing
+	connect(pw, SIGNAL(shapesLoaded()), SLOT(processShapes()));
+	connect(pw->ui->processShapesButton, SIGNAL(clicked()), SLOT(processShapes()));
 }
 
 void particles::decorate()
@@ -672,7 +668,26 @@ bool particles::keyPressEvent(QKeyEvent*e)
 		}
 
 		Spherelib::Sphere * sphere = new Spherelib::Sphere( pwidget->ui->sphereResolution->value(), pmesh->particles[pi].pos, 0.01 );
-		sphere->setValues( pmesh->desc[ pi ] );
+
+		// Reconstruct when using rotation invariant
+		if( pwidget->ui->bands->value() > 0 )
+		{
+			// Uniform sampling on the sphere
+			Spherelib::Sphere ss( pwidget->ui->sphereResolution->value() );
+			std::vector< Eigen::Vector3d > sampledRayDirections  = ss.rays();
+			std::vector< size_t > antiRays = ss.antiRays();
+
+			// Rotation invariant descriptor
+			SphericalHarmonic<Vector3,float> sh( std::max(1,pwidget->ui->bands->value()) );
+			std::vector< SHSample<Vector3,float> > sh_samples;
+			sh.SH_setup_spherical( sampledRayDirections, sh_samples );
+			sh.SH_project_function( pmesh->desc[ pi ], sh_samples, pmesh->desc[pi] );
+
+			sphere->setValues( sh.SH_reconstruct(sampledRayDirections, pmesh->desc[pi]) );
+		}
+		else
+			sphere->setValues( pmesh->desc[ pi ] );
+		
 		sphere->normalizeValues();
 
 		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3]").arg(pi).arg(*std::max_element(

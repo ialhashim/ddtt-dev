@@ -34,14 +34,9 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
 			voffset += 4;
 		}
 
+		surface_mesh->garbage_collection();
 		surface_mesh->triangulate();
 		meregeVertices( surface_mesh );
-
-		for(auto v : surface_mesh->vertices())
-			if(surface_mesh->is_isolated(v))
-				surface_mesh->remove_vertex(v);
-
-		surface_mesh->garbage_collection();
 	}
 
 	// Remove outer most voxel
@@ -96,6 +91,7 @@ void ParticleMesh::process()
 void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 {
 	// Light setup
+	if(false)
 	{
 		GLfloat lightColor[] = {0.9f, 0.9f, 0.9f, 1.0f};
 		glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);

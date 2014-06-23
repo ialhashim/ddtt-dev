@@ -236,7 +236,7 @@ public:
 		return output;
 	}
 
-	std::vector<Scalar> SH_reconstruct( const std::vector<Vec3d,Scalar> & positions, std::vector<Scalar> & result  )
+	std::vector<Scalar> SH_reconstruct( const std::vector<Vec3d> & positions, std::vector<Scalar> & result  )
 	{
 		std::vector<Scalar> output;
 
@@ -253,7 +253,7 @@ public:
 					val += result[index] * SH(l,m,theta,phi);
 				}
 			}
-			output.push_back( std::max(0.0, val) );
+			output.push_back( std::max(Scalar(0), val) );
 		}
 
 		return output;
