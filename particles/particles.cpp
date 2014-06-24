@@ -27,6 +27,8 @@ QTimer * timer = NULL;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 
+#include "mc.h"
+
 std::vector<Spherelib::Sphere*> spheres;
 
 #ifdef WIN32
@@ -167,23 +169,30 @@ void particles::processShapes()
 				#pragma omp parallel for
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
-					const auto & p = s->particles[pi];
+					auto & p = s->particles[pi];
 					std::vector<float> & desc = descriptor[pi];
 
 					Vector3 maPoint = p.pos;
 					double maxUsedRadius = -DBL_MAX;
 					std::vector<bool> isVisisted( sampledRayDirections.size(), false );
 
+					double sumDiameter = 0;
+					int visitCount = 0;
+
 					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
 					{
 						if(isVisisted[antiRays[idx]]) continue;
 						isVisisted[antiRays[idx]] = true;
+						visitCount++;
 
 						Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
 						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
 						Vector3 midpoint = (start + end) * 0.5;
 
-						double radius = ((start - end).norm() / 2);
+						double diameter = (start - end).norm();
+						double radius = diameter / 2;
+						
+						sumDiameter += diameter;
 
 						// Search for an inner ball
 						KDResults matches;
@@ -206,6 +215,9 @@ void particles::processShapes()
 						ma_point_rad[pi] = maxUsedRadius;
 						ma_point_active[pi] = true;
 					}
+
+					// Record average diameter around particle
+					p.avgDiameter = sumDiameter / visitCount;
 				}
 
 				// Filter out not so medial points
@@ -303,6 +315,7 @@ void particles::processShapes()
 				}
 
 				// Debug
+				if( false )
 				{
 					starlab::LineSegments * vs = new starlab::LineSegments(2);
 					for(auto & particle : s->particles)
@@ -389,8 +402,8 @@ void particles::processShapes()
 
 		for(size_t i = 0; i < pw->pmeshes.size(); i++){
 			for(size_t j = i+1; j < pw->pmeshes.size(); j++){
-				NanoKdTree * itree = pw->pmeshes[i]->kdtree;
-				NanoKdTree * jtree = pw->pmeshes[j]->kdtree;
+				NanoKdTree * itree = pw->pmeshes[i]->relativeKdtree;
+				NanoKdTree * jtree = pw->pmeshes[j]->relativeKdtree;
 
 				for(auto & iparticle : pw->pmeshes[i]->particles)
 				{
@@ -522,7 +535,7 @@ void particles::decorate()
 			s->drawParticles( drawArea()->camera() );
 			s->drawDebug( *drawArea() );
 
-			glTranslated(s->bbox.sizes().x() * 1.1, 0, 0);
+			glTranslated(s->bbox().sizes().x() * 1.1, 0, 0);
 		}
 
 		glPopMatrix();
@@ -539,7 +552,7 @@ void particles::decorate()
 
 	// Prepare scene once
 	Eigen::AlignedBox3d largeBox;
-	for(auto pmesh : pwidget->pmeshes) largeBox.extend(pmesh->bbox);
+	for(auto pmesh : pwidget->pmeshes) largeBox.extend(pmesh->bbox());
 	if(timer == NULL){
 		drawArea()->setSceneRadius( largeBox.sizes().norm() * 2 );
 		drawArea()->showEntireScene();

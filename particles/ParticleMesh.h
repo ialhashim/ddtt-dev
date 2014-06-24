@@ -5,6 +5,7 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 #include <vector>
+#include <random>
 
 #include "Particle.h"
 #include "NanoKdTree.h"
@@ -12,15 +13,20 @@
 
 #include "voxelization.h"
 
+#include "GenericGraph.h"
+
 class ParticleMesh
 {
 public:
 	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
 	~ParticleMesh();
 
-	std::vector<Eigen::Vector3d> extractSurface();
-
 	void process();
+
+	std::vector< std::vector< std::vector<float> > > toGrid();
+	GenericGraphs::Graph<uint,double> toGraph();
+
+	std::vector< double > agd( int numStartPoints );
 
 	void drawParticles( qglviewer::Camera * camera );
 	void drawDebug(QGLWidget & widget);
@@ -34,11 +40,12 @@ public:
 
     std::vector<Particle> particles;
     double raidus;
-	Eigen::Vector3d tranlsation;
-	Eigen::AlignedBox3d bbox;
+
+	Eigen::AlignedBox3d bbox();
 
 	SurfaceMeshModel * surface_mesh;
-	NanoKdTree * kdtree;
+	NanoKdTree * relativeKdtree;
 
 	QVector<RenderObject::Base*> debug;
+	void distort();
 };

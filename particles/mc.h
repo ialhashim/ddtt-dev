@@ -10,10 +10,20 @@
 #define MC_VOLUME_PADDING 10
 
 typedef std::vector<std::vector<std::vector<float> > > ScalarVolume;
-inline ScalarVolume initScalarVolume( size_t gridsize, double value = 0.0 ){
+inline ScalarVolume initScalarVolume( size_t gridsize, float value = 0 ){
 	gridsize += (MC_VOLUME_PADDING * 2); // add padding
 	return std::vector<std::vector<std::vector<float> > >( gridsize, 
 		std::vector<std::vector<float> >(gridsize, std::vector<float>( gridsize, value )) );
+}
+inline ScalarVolume addPaddingToVolume( const ScalarVolume & fromVolume, float value = 0 ){
+	size_t gridsize = fromVolume.size();
+	ScalarVolume volume = initScalarVolume( gridsize, value );
+	#pragma omp parallel for
+	for(int x = 0; x < gridsize; x++)
+		for(int y = 0; y < gridsize; y++)
+			for(int z = 0; z < gridsize; z++)
+				volume[x+MC_VOLUME_PADDING][y+MC_VOLUME_PADDING][z+MC_VOLUME_PADDING] = fromVolume[x][y][z];
+	return volume;
 }
 
 int mc_edtable[] = {

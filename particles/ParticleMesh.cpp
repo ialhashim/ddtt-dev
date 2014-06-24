@@ -14,7 +14,7 @@ inline QVector<QColor> rndColors(int count){
 QVector<QColor> ParticleMesh::rndcolors = rndColors(512);
 
 ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
-	raidus(particle_raidus), tranlsation(Eigen::Vector3d(0,0,0))
+	raidus(particle_raidus)
 {
 	// Voxelization
 	grid = ComputeVoxelization<VoxelVector>(mesh, gridsize, true, true);
@@ -55,32 +55,43 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
 		mortonToParticleID[voxel.morton] = particle.id;
 
         particles.push_back( particle );
-		bbox.extend( point.cast<double>() );
     }
 
 	grid.findOccupied();
 
 	// KD-tree
 	{
-		kdtree = new NanoKdTree;
-		Vector3 sizes = bbox.sizes();
+		relativeKdtree = new NanoKdTree;
+
+		Eigen::AlignedBox3d box = bbox();
+		Vector3 sizes = box.sizes();
+
 		for( auto & particle : particles )
 		{
-			Vector3 mapped = (particle.pos - bbox.min());
+			Vector3 mapped = (particle.pos - box.min());
 			for(int i = 0; i < 3; i++) mapped[i] /= sizes[i];
 
 			particle.relativePos = mapped;
-			kdtree->addPoint( particle.relativePos );
+			relativeKdtree->addPoint( particle.relativePos );
 		}
-		kdtree->build();
+
+		relativeKdtree->build();
 	}
 
 	process();
 }
 
+Eigen::AlignedBox3d ParticleMesh::bbox()
+{
+	Eigen::AlignedBox3d box;
+	for(auto & p : particles) box.extend(p.pos);
+	return box;
+}
+
 void ParticleMesh::process()
 {
-	double bmin = bbox.min().z(), bmax = bbox.max().z();
+	Eigen::AlignedBox3d box = bbox();
+	double bmin = box.min().z(), bmax = box.max().z();
 
 	for(auto & particle : particles)
 	{
@@ -182,8 +193,119 @@ void ParticleMesh::drawDebug(QGLWidget & widget)
 	for(auto d : debug) d->draw( widget );
 }
 
+std::vector< std::vector< std::vector<float> > > ParticleMesh::toGrid()
+{
+	size_t gridsize = grid.gridsize;
+
+	std::vector< std::vector< std::vector<float> > > g;
+	g.resize(gridsize, std::vector<std::vector<float> >(gridsize, std::vector<float>(gridsize, 1)));
+
+	double gridlength = gridsize * grid.unitlength;
+
+	for(auto & particle : particles)
+	{
+		Vector3 p = particle.pos - grid.translation.cast<double>();
+		Vector3 delta = p / gridlength;
+		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+
+		// skip outside of grid..
+		if(gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) continue; 
+		if(gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1) continue;
+
+		g[gridpnt[2]][gridpnt[1]][gridpnt[0]] = -1;
+	}
+
+	return g;
+}
+
+void ParticleMesh::distort()
+{
+	Eigen::AlignedBox3d box = bbox();
+
+	for(auto & particle : particles)
+	{
+		double t = (particle.pos.x() - bbox().min().x()) / box.sizes().x();
+		double d = sin( t * 10 );
+		Vector3 delta( 0, 0, d );
+		particle.pos += delta;
+	}
+}
+
 ParticleMesh::~ParticleMesh()
 {
 	if(surface_mesh) delete surface_mesh;
-	if(kdtree) delete kdtree;
+	if(relativeKdtree) delete relativeKdtree;
+}
+
+GenericGraphs::Graph<uint,double> ParticleMesh::toGraph()
+{
+	GenericGraphs::Graph<uint,double> graph;
+
+	NanoKdTree tree;
+	for(auto p : particles) tree.addPoint(p.pos);
+	tree.build();
+
+	for (auto p : particles)
+	{
+		KDResults matches;
+		tree.ball_search(p.pos, grid.unitlength * 1.5, matches);
+		matches.erase(matches.begin()); // remove self
+
+		for(auto match : matches)
+		{
+			double d2 = match.second;
+
+			graph.AddEdge( graph.AddVertex(uint(p.id)), graph.AddVertex(uint(match.first)), std::sqrt(d2) );
+		}
+	}
+
+	return graph;
+}
+
+std::vector< double > ParticleMesh::agd( int numStartPoints )
+{
+	auto graph = toGraph();
+
+	std::vector<double> sum_distances( particles.size(), 0.0 );
+
+	// Random staring points
+	std::vector<int> v;
+
+	if( numStartPoints > 0 )
+	{
+		std::random_device rd;
+		std::mt19937 gen(rd());
+		std::uniform_int_distribution<> dis(0, int(particles.size()-1));
+		for(int i = 0; i < numStartPoints; i++)
+			v.push_back( dis(gen) );
+
+		// Avoid duplicates
+		std::sort(v.begin(), v.end());
+		auto last = std::unique(v.begin(), v.end());
+		v.erase(last, v.end());
+	}
+	else
+		for(size_t i = 0; i < particles.size(); i++) v.push_back(int(i));
+
+	// Sum distances to other
+	#pragma omp parallel for
+	for(int pi = 0; pi < (int)v.size(); pi++){
+		auto curGraph = graph;
+		curGraph.DijkstraComputePaths(v[pi]);
+		for(size_t pj = 0; pj < particles.size(); pj++)
+			sum_distances[pj] += curGraph.min_distance[pj];
+	}
+
+	// Average
+	auto avg_distances = sum_distances;
+	for(auto & p : particles) avg_distances[p.id] = sum_distances[p.id] / particles.size();
+
+	// Bounds
+	double minDist = *std::min_element(avg_distances.begin(),avg_distances.end());
+	double maxDist = *std::max_element(avg_distances.begin(),avg_distances.end());
+
+	// Normalize
+	for(auto & v : avg_distances) v = (v-minDist) / (maxDist-minDist);
+
+	return avg_distances;
 }
