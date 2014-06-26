@@ -259,7 +259,7 @@ void particles::processShapes()
 				}
 
 				// DEBUG: medial points
-				if(false)
+				if( pw->ui->showMedial->isChecked() )
 				{
 					starlab::PointSoup * ps = new starlab::PointSoup;
 					float maxVal = -1;
@@ -325,6 +325,25 @@ void particles::processShapes()
 						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
 					}
 					s->debug.push_back(vs);
+				}
+
+				// Show projected skeleton
+				if( pw->ui->projectSkeleton->isChecked() )
+				{
+					NanoKdTree kdtree;
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+						if( ma_point_active[pi] ) kdtree.addPoint( ma_point[pi].cast<double>() );
+					kdtree.build();
+
+					SurfaceMeshModel * m = s->surface_mesh->clone();
+					m->setObjectName("projected");
+					auto points = m->vertex_coordinates();
+
+					for(auto v : m->vertices()){
+						points[v] = kdtree.cloud.pts[ kdtree.closest(points[v]) ];
+					}
+
+					document()->addModel( m );
 				}
 			}
 

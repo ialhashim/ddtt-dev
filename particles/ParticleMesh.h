@@ -15,16 +15,23 @@
 
 #include "GenericGraph.h"
 
+#include "SpatialHash.h"
+
 class ParticleMesh
 {
 public:
 	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
 	~ParticleMesh();
 
+	std::vector< Particle<Vector3> > particles;
+	double raidus;
+
 	void process();
 
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	GenericGraphs::Graph<uint,double> toGraph();
+	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
+	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
 
 	std::vector< double > agd( int numStartPoints );
 
@@ -37,9 +44,6 @@ public:
 	std::map<uint64_t,size_t> mortonToParticleID;
 
 	std::vector< std::vector<float> > desc, sig;
-
-    std::vector<Particle> particles;
-    double raidus;
 
 	Eigen::AlignedBox3d bbox();
 

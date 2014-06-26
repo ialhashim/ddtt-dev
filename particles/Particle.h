@@ -4,18 +4,20 @@
 #include <stdint.h>
 #include <Eigen/Core>
 
-class Particle
+template<typename Vector3>
+struct Particle
 {
-public:
-    Particle(const Eigen::Vector3d& pos) : pos(pos), measure(0.0), weight(1.0), 
-		alpha(1.0), direction(Eigen::Vector3d(0,0,1)), flag(0), avgDiameter(0.0) {}
+	typedef double Scalar;
 
-    size_t id, correspondence;
-	int flag;
+    Particle(const Vector3& pos) : pos(pos), measure(0.0), weight(1), 
+		alpha(1.0), direction(Vector3(0,0,1)), flag(0), avgDiameter(0) {}
+
+	size_t id, correspondence;
 	uint64_t morton;
-    Eigen::Vector3d pos, direction, relativePos;
-    double measure;
-	double weight;
-	double alpha;
-	double avgDiameter;
+	int flag;
+    Vector3 pos, direction, relativePos;
+    Scalar measure;
+	Scalar weight;
+	Scalar alpha;
+	Scalar avgDiameter;
 };

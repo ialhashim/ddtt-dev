@@ -1,9 +1,11 @@
 #include "ParticleMesh.h"
 
-#include "voxelization.h"
-
 #include "RenderObjectExt.h"
 #include <QGLWidget>
+
+#include "voxelization.h"
+
+#include "bluenoise.h"
 
 inline QVector<QColor> rndColors(int count){
 	QVector<QColor> c;
@@ -48,7 +50,7 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
     {
 		Eigen::Vector3f point = grid.voxelPos(voxel.morton);
 
-        Particle particle( point.cast<double>() );
+        Particle<Vector3> particle( point.cast<double>() );
 
         particle.id = particles.size();
 		particle.morton = voxel.morton;
@@ -308,4 +310,60 @@ std::vector< double > ParticleMesh::agd( int numStartPoints )
 	for(auto & v : avg_distances) v = (v-minDist) / (maxDist-minDist);
 
 	return avg_distances;
+}
+
+SpatialHash< Vector3, Vector3::Scalar > ParticleMesh::spatialHash()
+{
+	std::vector<Vector3> positions;
+	for(auto & p : particles) positions.push_back(p.pos);
+
+	return SpatialHash< Vector3, Vector3::Scalar >( positions, grid.unitlength );
+}
+
+std::vector<size_t> ParticleMesh::randomSamples( int numSamples, bool isSpread )
+{
+	std::vector<size_t> samples;
+	std::set<int> set;
+
+	if( numSamples >= particles.size() )
+	{
+		for(size_t i = 0; i < particles.size(); i++) set.insert(i);
+	}
+	else if( isSpread )
+	{
+		Eigen::AlignedBox3d box = bbox();
+
+		double spreadFactor = pow(std::max(1.0, double(particles.size()) / numSamples), 1.0 / 3.0);
+
+		std::vector<Vector3> samples;
+		bluenoise_sample<3,double,Vector3>( grid.unitlength * spreadFactor, box.min(), box.max(), samples );
+
+		size_t gridsize = grid.gridsize;
+		double gridlength = gridsize * grid.unitlength;
+
+		for(auto s : samples)
+		{
+			Vector3 p = s - grid.translation.cast<double>();
+			Vector3 delta = p / gridlength;
+			Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+
+			// skip outside of grid..
+			if(gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) continue; 
+			if(gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1) continue;
+
+			uint64_t m = mortonEncode_LUT(gridpnt.z(),gridpnt.y(),gridpnt.x());
+			if( grid.occupied[m] ) set.insert(mortonToParticleID[m]);
+		}
+	}
+	else
+	{
+		std::uniform_int_distribution<int> uniform(0, int(particles.size()-1));
+		std::random_device rand_dev;
+		std::mt19937 mt(rand_dev()); 
+		for(int i = 0; i < numSamples; i++) set.insert(uniform(mt));
+	}
+
+	for(auto i : set) samples.push_back(i);
+
+	return samples;
 }

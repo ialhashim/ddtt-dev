@@ -91,6 +91,7 @@ unsigned long int n_dimensional_array_index(const VecInt &dimensions, const Vec 
    return k;
 }
 
+// 'N' is max dimension
 template<unsigned int N, class T, class Vec>
 void bluenoise_sample(T radius, Vec xmin, Vec xmax, std::vector<Vec > &sample,
                       unsigned int seed=0, int max_sample_attempts=30)

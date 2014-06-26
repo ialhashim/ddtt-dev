@@ -730,7 +730,7 @@ inline void meregeVertices(SurfaceMesh::SurfaceMeshModel * m)
 	std::vector< std::vector<SurfaceMesh::Vertex> > faces;
 	for(auto f: m->faces()){
 		std::vector<SurfaceMesh::Vertex> faceverts;
-		for(auto v: m->vertices(f)) faceverts.push_back( SurfaceMesh::Vertex(xrefs[ v.idx() ]) );
+		for(auto v: m->vertices(f)) faceverts.push_back( SurfaceMesh::Vertex((int)xrefs[ v.idx() ]) );
 		faceverts.erase( std::unique(faceverts.begin(), faceverts.end()), faceverts.end() );
 		if(faceverts.size() == 3) faces.push_back(faceverts); // skip degenerate faces
 	}

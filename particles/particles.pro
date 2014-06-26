@@ -17,7 +17,6 @@ SOURCES += \
     particles.cpp \
     particles-widget.cpp \
     ParticleMesh.cpp \
-    Particle.cpp \
     Raytracing.cpp
 
 FORMS       += particles-widget.ui
