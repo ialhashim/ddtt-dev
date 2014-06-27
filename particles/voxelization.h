@@ -1,7 +1,7 @@
 // Adapted from https://github.com/Forceflow/ooc_svo_builder
 #pragma once
 #include <stack>
-#include <queue>
+#include <deque>
 #include <set>
 
 #include <Eigen/Core>
@@ -472,14 +472,14 @@ inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, siz
 		chunk[7] = Eigen::AlignedBox3i( chunk[3].min() + Eigen::Vector3i(0,0,h), chunk[3].max() + Eigen::Vector3i(0,0,h) );
 
 		// Assign wall voxels to their chunks
-		std::vector< std::queue<uint64_t> > wall( chunk.size() );
+		std::vector< std::deque<uint64_t> > wall( chunk.size() );
 		for(auto m : outer)
 		{
 			unsigned int x,y,z;
 			mortonDecode(m, x, y, z);
 			for(size_t i = 0; i < chunk.size(); i++){
 				if( chunk[i].contains( Eigen::Vector3i(x,y,z) ) ){
-					wall[i].push(m); break;
+					wall[i].push_back(m); break;
 				}
 			}
 		}
@@ -488,13 +488,13 @@ inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, siz
 		#pragma omp parallel for
 		for(int i = 0; i < (int)wall.size(); i++)
 		{
-			std::queue<uint64_t> & queue = wall[i];
+			std::deque<uint64_t> & queue = wall[i];
 
 			// Flood fill (do we need to visit diagonals as well??)
 			while( !queue.empty() )
 			{
 				uint64_t curVox = queue.front();
-				queue.pop();
+				queue.pop_front();
 
 				const uint64_t vox = voxels.at(curVox);
 
@@ -505,17 +505,13 @@ inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, siz
 					unsigned int x,y,z;
 					mortonDecode(curVox, x, y, z);
 
-					Eigen::Vector3i vox(x,y,z);
-					//if( chunk.at(i).contains(vox)  )
-					{
-						if(x < gridsize - 1) queue.push( mortonEncode_LUT(x+1,y,z) );
-						if(y < gridsize - 1) queue.push( mortonEncode_LUT(x,y+1,z) );
-						if(z < gridsize - 1) queue.push( mortonEncode_LUT(x,y,z+1) );
+					if(x < gridsize - 1) queue.push_back( mortonEncode_LUT(x+1,y,z) );
+					if(y < gridsize - 1) queue.push_back( mortonEncode_LUT(x,y+1,z) );
+					if(z < gridsize - 1) queue.push_back( mortonEncode_LUT(x,y,z+1) );
 
-						if(x > 0) queue.push( mortonEncode_LUT(x-1,y,z) );
-						if(y > 0) queue.push( mortonEncode_LUT(x,y-1,z) );
-						if(z > 0) queue.push( mortonEncode_LUT(x,y,z-1) );
-					}
+					if(x > 0) queue.push_back( mortonEncode_LUT(x-1,y,z) );
+					if(y > 0) queue.push_back( mortonEncode_LUT(x,y-1,z) );
+					if(z > 0) queue.push_back( mortonEncode_LUT(x,y,z-1) );
 				}
 			}
 		}

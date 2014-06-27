@@ -3,8 +3,6 @@
 #include "RenderObjectExt.h"
 #include <QGLWidget>
 
-#include "voxelization.h"
-
 #include "bluenoise.h"
 
 inline QVector<QColor> rndColors(int count){

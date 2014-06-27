@@ -110,6 +110,10 @@ void particles::processShapes()
 					}
 				}
 
+				// Report
+				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
+				timer.restart();
+
 				// Average of neighbors
 				int avgNeighIters = pw->ui->avgNeighIters->value();
 				if( avgNeighIters )
@@ -179,6 +183,10 @@ void particles::processShapes()
 					double sumDiameter = 0;
 					int visitCount = 0;
 
+					double diameter, radius, out_dist, d2;
+					size_t ret_index;
+					bool isFullyInside;
+
 					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
 					{
 						if(isVisisted[antiRays[idx]]) continue;
@@ -189,17 +197,20 @@ void particles::processShapes()
 						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
 						Vector3 midpoint = (start + end) * 0.5;
 
-						double diameter = (start - end).norm();
-						double radius = diameter / 2;
+						diameter = (start - end).norm();
+						radius = diameter / 2;
 						
 						sumDiameter += diameter;
 
 						// Search for an inner ball
-						KDResults matches;
-						tree.k_closest(midpoint, 1, matches);
-						double d2 = matches.front().second;
+						//KDResults matches;
+						//tree.k_closest(midpoint, 1, matches);
+						//double d2 = matches.front().second;
 
-						bool isFullyInside = d2 > pow(radius, 2);
+						tree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
+						d2 = out_dist;
+
+						isFullyInside = d2 > (radius * radius);
 
 						if( isFullyInside && radius > maxUsedRadius )
 						{
@@ -258,6 +269,10 @@ void particles::processShapes()
 					}
 				}
 
+				// Report
+				mainWindow()->setStatusBarMessage( QString("Medial particles (%1 ms)").arg( timer.elapsed() ) );
+				timer.restart();
+
 				// DEBUG: medial points
 				if( pw->ui->showMedial->isChecked() )
 				{
@@ -314,7 +329,11 @@ void particles::processShapes()
 					}
 				}
 
-				// Debug
+				// Report
+				mainWindow()->setStatusBarMessage( QString("Projection to Medial particles (%1 ms)").arg( timer.elapsed() ) );
+				timer.restart();
+
+				// Debug show main 'direction' of particles
 				if( false )
 				{
 					starlab::LineSegments * vs = new starlab::LineSegments(2);
@@ -336,20 +355,14 @@ void particles::processShapes()
 					kdtree.build();
 
 					SurfaceMeshModel * m = s->surface_mesh->clone();
-					m->setObjectName("projected");
 					auto points = m->vertex_coordinates();
-
-					for(auto v : m->vertices()){
+					for(auto v : m->vertices())
 						points[v] = kdtree.cloud.pts[ kdtree.closest(points[v]) ];
-					}
-
+					
 					document()->addModel( m );
+					drawArea()->setRenderer(m, "Flat Wire");
 				}
 			}
-
-			// Report
-			mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
-			timer.restart();
 
 			// Normalize response
 			if( pw->ui->normalizeSphereFn->isChecked() )
@@ -382,10 +395,6 @@ void particles::processShapes()
 					s->sig[p.id] = sh.SH_signature(coeff);
 				}
 			}
-
-			// Report
-			mainWindow()->setStatusBarMessage( QString("Alignment took (%1 ms)").arg( timer.elapsed() ) );
-			timer.restart();
 		}
 	}
 
@@ -518,6 +527,8 @@ void particles::create()
 	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
 		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
 
+		QElapsedTimer timer; timer.start();
+
 		for(auto filename : files)
 		{
 			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
@@ -525,6 +536,8 @@ void particles::create()
 
 			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
 		}
+
+		mainWindow()->setStatusBarMessage(QString("Shapes loaded and voxelized (%1 ms)").arg(timer.elapsed()));
 
 		emit( pw->shapesLoaded() );
 	});
