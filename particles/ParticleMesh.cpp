@@ -237,25 +237,54 @@ ParticleMesh::~ParticleMesh()
 	if(relativeKdtree) delete relativeKdtree;
 }
 
-GenericGraphs::Graph<uint,double> ParticleMesh::toGraph()
+GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
 {
 	GenericGraphs::Graph<uint,double> graph;
+	size_t eidx = 0;
 
 	NanoKdTree tree;
 	for(auto p : particles) tree.addPoint(p.pos);
 	tree.build();
 
-	for (auto p : particles)
+	// Normalization when needed
+	double minVal = DBL_MAX, maxVal = -minVal, range;
+	if(wtype == GEW_DIAMETER){
+		for(auto & p : particles){
+			minVal = std::min(minVal, p.avgDiameter);
+			maxVal = std::max(maxVal, p.avgDiameter);
+		}
+		range = maxVal - minVal;
+	}
+
+	for (auto & p : particles)
 	{
 		KDResults matches;
-		tree.ball_search(p.pos, grid.unitlength * 1.5, matches);
+		tree.ball_search(p.pos, grid.unitlength*1.01, matches);
 		matches.erase(matches.begin()); // remove self
 
 		for(auto match : matches)
 		{
-			double d2 = match.second;
+			double edge_weight = 1.0;
 
-			graph.AddEdge( graph.AddVertex(uint(p.id)), graph.AddVertex(uint(match.first)), std::sqrt(d2) );
+			switch (wtype)
+			{
+			case ParticleMesh::GEW_DISTANCE:
+				{
+					double d2 = match.second;
+					edge_weight = std::sqrt(d2);
+					break;
+				}
+			case ParticleMesh::GEW_DIAMETER:
+				{
+					double w1 = (particles[p.id].avgDiameter - minVal) / range;
+					double w2 = (particles[match.first].avgDiameter - minVal) / range;
+					edge_weight = 1.0 / (w1 + w2);
+					break;
+				}
+			default: break;
+			}
+
+			graph.AddEdge( graph.AddVertex(uint(p.id)), graph.AddVertex(uint(match.first)), edge_weight, eidx++ );
 		}
 	}
 

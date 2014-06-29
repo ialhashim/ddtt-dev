@@ -84,12 +84,6 @@ void particles::processShapes()
 				std::vector<bool> ma_point_active(s->particles.size(), false);
 				std::vector<float> ma_point_rad(s->particles.size(), 0);
 				size_t gridsize = s->grid.gridsize;
-				std::vector< std::vector<float> > ma_descriptor( s->particles.size() );
-
-				// Points just outside the volume
-				NanoKdTree tree;
-				for(auto p : s->grid.pointsOutside()) tree.addPoint(p.cast<double>());
-				tree.build();
 
 				// Accelerated raytracing
 				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
@@ -169,6 +163,11 @@ void particles::processShapes()
 					}
 				}
 
+				// Points just outside the volume
+				NanoKdTree surface_kdtree;
+				for(auto p : s->grid.pointsOutside()) surface_kdtree.addPoint(p.cast<double>());
+				surface_kdtree.build();
+
 				// Compute medial points
 				#pragma omp parallel for
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
@@ -197,17 +196,12 @@ void particles::processShapes()
 						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
 						Vector3 midpoint = (start + end) * 0.5;
 
-						diameter = (start - end).norm();
+						diameter = desc[idx] + desc[antiRays[idx]];
 						radius = diameter / 2;
 						
 						sumDiameter += diameter;
 
-						// Search for an inner ball
-						//KDResults matches;
-						//tree.k_closest(midpoint, 1, matches);
-						//double d2 = matches.front().second;
-
-						tree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
+						surface_kdtree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
 						d2 = out_dist;
 
 						isFullyInside = d2 > (radius * radius);
@@ -232,12 +226,14 @@ void particles::processShapes()
 				}
 
 				// Filter out not so medial points
-				if( true )
+				if( pw->ui->filterMedialPoints->isChecked() )
 				{
 					#pragma omp parallel for
 					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
 						float ma_rad = ma_point_rad[pi];
+
+						// Either thin area or minor feature
 						bool isPossibleThin = ma_rad < s->grid.unitlength * 2;
 						
 						if( ma_point_active[pi] && isPossibleThin )
@@ -263,17 +259,52 @@ void particles::processShapes()
 								}
 							}
 
+							// A neighbor has wider access than me => I'm not so medial
 							if( max_rad > ma_point_rad[pi] )
 								ma_point_active[pi] = false;
 						}
 					}
 				}
 
+				// Contract medial points to their neighborhood center
+				for( int i = 0; i < pw->ui->contractMedial->value(); i++ )
+				{
+					NanoKdTree kdtree;
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+						if( ma_point_active[pi] ) kdtree.addPoint( ma_point[pi].cast<double>() );
+					kdtree.build();
+
+					// Get a set of neighbors for each medial point
+					std::vector< std::vector<Vector3> > nei(s->particles.size());
+					for(int pi = 0; pi < (int)s->particles.size(); pi++){
+						if( !ma_point_active[pi] ) continue;
+
+						KDResults matches;
+						kdtree.ball_search( ma_point[pi].cast<double>(), s->grid.unitlength * 1.5, matches );
+						for(auto m : matches) 
+							if((kdtree.cloud.pts[m.first]-ma_point[pi].cast<double>()).norm() > 1e-6) 
+								nei[pi].push_back(kdtree.cloud.pts[m.first]);
+					}
+
+					// Move to center of neighborhood
+					for(int pi = 0; pi < (int)s->particles.size(); pi++){
+						if( !ma_point_active[pi] ) continue;
+						Vector3 sumv(0,0,0);
+						for(auto v : nei[pi]) sumv += v;
+						ma_point[pi] = sumv.cast<float>() / nei[pi].size();
+					}
+				}
+
+				// Experiment
+				{
+
+				}
+
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Medial particles (%1 ms)").arg( timer.elapsed() ) );
 				timer.restart();
 
-				// DEBUG: medial points
+				// [DEBUG] medial points
 				if( pw->ui->showMedial->isChecked() )
 				{
 					starlab::PointSoup * ps = new starlab::PointSoup;
@@ -287,7 +318,7 @@ void particles::processShapes()
 					drawArea()->addRenderObject(ps);
 				}
 
-				// Only use medial descriptors
+				// Only use descriptors from medial points
 				if( true )
 				{
 					// Compute medial descriptors
@@ -305,22 +336,22 @@ void particles::processShapes()
 					}
 
 					// Assign descriptor of all particles to their nearest medial point
-					NanoKdTree tree;
+					NanoKdTree medial_kdtree;
 					std::map<size_t,size_t> ma_particle;
 					for(size_t i = 0; i < ma_point_active.size(); i++){
 						if( ma_point_active[i] ){
 							ma_particle[ma_particle.size()] = i;
-							tree.addPoint( ma_point[i].cast<double>() );
+							medial_kdtree.addPoint( ma_point[i].cast<double>() );
 						}
 					}
-					tree.build();
+					medial_kdtree.build();
 
 					#pragma omp parallel for
 					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
 						if( !ma_point_active[pi] )
 						{
-							size_t pj = ma_particle[tree.closest( s->particles[pi].pos )];
+							size_t pj = ma_particle[medial_kdtree.closest( s->particles[pi].pos )];
 							descriptor[pi] = descriptor[pj];
 						}
 
@@ -333,20 +364,7 @@ void particles::processShapes()
 				mainWindow()->setStatusBarMessage( QString("Projection to Medial particles (%1 ms)").arg( timer.elapsed() ) );
 				timer.restart();
 
-				// Debug show main 'direction' of particles
-				if( false )
-				{
-					starlab::LineSegments * vs = new starlab::LineSegments(2);
-					for(auto & particle : s->particles)
-					{
-						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
-						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
-						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
-					}
-					s->debug.push_back(vs);
-				}
-
-				// Show projected skeleton
+				// [DEBUG] show projected skeleton
 				if( pw->ui->projectSkeleton->isChecked() )
 				{
 					NanoKdTree kdtree;
@@ -362,9 +380,21 @@ void particles::processShapes()
 					document()->addModel( m );
 					drawArea()->setRenderer(m, "Flat Wire");
 				}
+
+				// [DEBUG] show main 'direction' of particles
+				if( false )
+				{
+					starlab::LineSegments * vs = new starlab::LineSegments(2);
+					for(auto & particle : s->particles){
+						Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+						color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
+						vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
+					}
+					s->debug.push_back(vs);
+				}
 			}
 
-			// Normalize response
+			// Normalize descriptor
 			if( pw->ui->normalizeSphereFn->isChecked() )
 			{
 				#pragma omp parallel for
@@ -424,7 +454,7 @@ void particles::processShapes()
 	}
 
 	/// [ Correspondence ] match particles
-	if( true )
+	if( true && pw->pmeshes.size() > 1 )
 	{
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
 
@@ -451,7 +481,7 @@ void particles::processShapes()
 							double weight = p.second;
 							double desc_dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
 							//double desc_dist = 1;
-							measures[ desc_dist ] = p.first;
+							measures[ weight ] = p.first;
 						}
 						iparticle.correspondence = measures[ measures.keys().front() ];
 					}
@@ -475,7 +505,7 @@ void particles::processShapes()
 							double weight = p.second;
 							double desc_dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
 							//double desc_dist = 1;
-							measures[ desc_dist ] = p.first;
+							measures[ weight ] = p.first;
 						}
 						jparticle.correspondence = measures[ measures.keys().front() ];
 					}

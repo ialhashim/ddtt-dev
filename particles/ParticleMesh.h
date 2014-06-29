@@ -28,8 +28,9 @@ public:
 
 	void process();
 
+	enum GraphEdgeWeight{ GEW_DISTANCE, GEW_DIAMETER };
+	GenericGraphs::Graph<uint,double> toGraph( GraphEdgeWeight wtype = GEW_DISTANCE );
 	std::vector< std::vector< std::vector<float> > > toGrid();
-	GenericGraphs::Graph<uint,double> toGraph();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
 

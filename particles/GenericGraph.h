@@ -63,15 +63,30 @@ namespace GenericGraphs{
 		};
 
 	public:
+		void DijkstraComputeManyPaths(const std::set<vertex_t> & sources)
+		{
+			// Add dummy start node
+			auto newNode = AddVertex( vertices.size() );
+
+			// Add edges to dummy node
+			for(auto & v : sources)	AddEdge(v, newNode, weight_t(0), -1);
+
+			DijkstraComputePaths( newNode );
+
+			// Remove edges
+			for(auto & v : sources) removeEdge(v, newNode);
+
+			// Remove dummy node
+			vertices.erase( newNode );
+		}
+
 		void DijkstraComputePaths(vertex_t source)
 		{
 			if(source == lastStart)
 				return;
-			else
-			{
-				lastStart = source;
-				previous.clear();
-			}
+			
+			lastStart = source;
+			previous.clear();
 
 			min_distance.clear();
 			min_distance.resize(vertices.size(), std::numeric_limits< WeightType >::infinity());
@@ -110,7 +125,7 @@ namespace GenericGraphs{
 			}
 		}
 
-		std::list<vertex_t> DijkstraGetShortestPathTo(vertex_t target)
+		std::list<vertex_t> DijkstraGetShortestPathsTo(vertex_t target)
 		{
 			std::list<vertex_t> path;
 			typename std::map<vertex_t, vertex_t>::iterator prev;
@@ -124,13 +139,33 @@ namespace GenericGraphs{
 				path.push_front(vertex);
 			}
 
+			// Remove last 'previous' which is null
+			if(path.size() > 1) path.erase(path.begin());
+
 			return path;
 		}
 
 		std::list<vertex_t> DijkstraShortestPath(vertex_t start, vertex_t end)
 		{
 			this->DijkstraComputePaths(start);
-			return this->DijkstraGetShortestPathTo(end);
+			return this->DijkstraGetShortestPathsTo(end);
+		}
+
+		std::vector<Edge> DijkstraShortestPathEdges(vertex_t start, vertex_t end)
+		{
+			this->DijkstraComputePaths(start);
+			auto path = this->DijkstraGetShortestPathsTo(end);
+
+			std::vector<Edge> result;
+			if(path.size() < 2) return result;
+
+			vertex_t lastVert = start;
+			for(auto v : path){
+				result.push_back(Edge(lastVert, 1.0, v));
+				lastVert = v;
+			}
+			result.erase(result.begin());
+			return result;
 		}
 
 		int NodeDistance(vertex_t n1, vertex_t n2)
@@ -528,7 +563,7 @@ namespace GenericGraphs{
 
 			for(typename std::set<vertex_t>::iterator it = seedSet.begin(); it != seedSet.end(); it++)
 			{
-				std::list<vertex_t> curPath = DijkstraGetShortestPathTo(*it);
+				std::list<vertex_t> curPath = DijkstraGetShortestPathsTo(*it);
 
 				if(curPath.size() > longestPath.size())
 					longestPath = curPath;
