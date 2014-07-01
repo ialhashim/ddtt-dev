@@ -6,29 +6,158 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>173</width>
-    <height>588</height>
+    <width>179</width>
+    <height>610</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Particles</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="13" column="0" colspan="2">
-    <widget class="QCheckBox" name="projectSkeleton">
+   <item row="21" column="1">
+    <widget class="QPushButton" name="processShapesButton">
      <property name="text">
-      <string>Project skeleton</string>
+      <string>Process</string>
      </property>
     </widget>
    </item>
-   <item row="22" column="0" colspan="2">
+   <item row="13" column="0" colspan="2">
+    <widget class="QCheckBox" name="normalizeSphereFn">
+     <property name="text">
+      <string>Normalize sphere fn.</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="0" colspan="2">
+    <widget class="QCheckBox" name="useDescriptor">
+     <property name="text">
+      <string>Use descriptor</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0">
+    <widget class="QLabel" name="label_6">
+     <property name="text">
+      <string>Contract MP</string>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="0" colspan="2">
+    <widget class="QCheckBox" name="filterMedialPoints">
+     <property name="text">
+      <string>Filter medial points</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="20" column="0">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>k-means</string>
+     </property>
+    </widget>
+   </item>
+   <item row="20" column="1">
+    <widget class="QSpinBox" name="kclusters">
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="maximum">
+      <number>120</number>
+     </property>
+     <property name="value">
+      <number>6</number>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0" colspan="2">
+    <widget class="QCheckBox" name="useRotationInv">
+     <property name="text">
+      <string>Use rotation invariant</string>
+     </property>
+    </widget>
+   </item>
+   <item row="16" column="0" colspan="2">
+    <widget class="QCheckBox" name="showMedial">
+     <property name="text">
+      <string>Visualize medial particles</string>
+     </property>
+    </widget>
+   </item>
+   <item row="15" column="0" colspan="2">
+    <widget class="QCheckBox" name="showDistGround">
+     <property name="text">
+      <string>Visualize distance ground</string>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="0" colspan="2">
+    <widget class="QCheckBox" name="useGroundDist">
+     <property name="text">
+      <string>Use ground distance</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="label_5">
+     <property name="text">
+      <string>Bands</string>
+     </property>
+    </widget>
+   </item>
+   <item row="17" column="0" colspan="2">
+    <widget class="QCheckBox" name="showSymmetry">
+     <property name="text">
+      <string>Visualize symmetry</string>
+     </property>
+    </widget>
+   </item>
+   <item row="22" column="1">
+    <widget class="QSpinBox" name="selectedParticle">
+     <property name="minimum">
+      <number>-1</number>
+     </property>
+     <property name="maximum">
+      <number>100000000</number>
+     </property>
+     <property name="value">
+      <number>-1</number>
+     </property>
+    </widget>
+   </item>
+   <item row="18" column="1">
+    <widget class="QSpinBox" name="fnSmoothIters">
+     <property name="maximum">
+      <number>200</number>
+     </property>
+    </widget>
+   </item>
+   <item row="23" column="0" colspan="2">
     <widget class="QPushButton" name="loadShapes">
      <property name="text">
       <string>Load shapes...</string>
      </property>
     </widget>
    </item>
-   <item row="21" column="0">
+   <item row="14" column="0" colspan="2">
+    <widget class="QCheckBox" name="projectSkeleton">
+     <property name="text">
+      <string>Project skeleton</string>
+     </property>
+    </widget>
+   </item>
+   <item row="22" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
       <string>Selected prt.</string>
@@ -58,16 +187,10 @@
    <item row="5" column="1">
     <widget class="QSpinBox" name="contractMedial"/>
    </item>
-   <item row="1" column="1">
-    <widget class="QSpinBox" name="gridsize">
-     <property name="minimum">
-      <number>8</number>
-     </property>
-     <property name="maximum">
-      <number>1024</number>
-     </property>
-     <property name="value">
-      <number>128</number>
+   <item row="1" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Grid size</string>
      </property>
     </widget>
    </item>
@@ -75,16 +198,6 @@
     <widget class="QLabel" name="label_3">
      <property name="text">
       <string>Sphere res.</string>
-     </property>
-    </widget>
-   </item>
-   <item row="10" column="0" colspan="2">
-    <widget class="QCheckBox" name="useGroundDistSeed">
-     <property name="text">
-      <string>Use ground distance seeds</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
      </property>
     </widget>
    </item>
@@ -98,7 +211,7 @@
      </property>
     </widget>
    </item>
-   <item row="23" column="1">
+   <item row="24" column="1">
     <spacer name="verticalSpacer">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -111,17 +224,20 @@
      </property>
     </spacer>
    </item>
-   <item row="17" column="0">
-    <widget class="QLabel" name="fnSmoothItersLabel">
+   <item row="11" column="0" colspan="2">
+    <widget class="QCheckBox" name="useGroundDistSeed">
      <property name="text">
-      <string>Smooth Fn.</string>
+      <string>Use ground distance seeds</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="label_2">
+   <item row="18" column="0">
+    <widget class="QLabel" name="fnSmoothItersLabel">
      <property name="text">
-      <string>Grid size</string>
+      <string>Smooth Fn.</string>
      </property>
     </widget>
    </item>
@@ -139,132 +255,26 @@
      </property>
     </widget>
    </item>
-   <item row="12" column="0" colspan="2">
-    <widget class="QCheckBox" name="normalizeSphereFn">
-     <property name="text">
-      <string>Normalize sphere fn.</string>
-     </property>
-     <property name="checked">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="14" column="0" colspan="2">
-    <widget class="QCheckBox" name="showDistGround">
-     <property name="text">
-      <string>Visualize distance ground</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="0">
-    <widget class="QLabel" name="label_5">
-     <property name="text">
-      <string>Bands</string>
-     </property>
-    </widget>
-   </item>
-   <item row="19" column="0">
-    <widget class="QLabel" name="label_4">
-     <property name="text">
-      <string>k-means</string>
-     </property>
-    </widget>
-   </item>
-   <item row="21" column="1">
-    <widget class="QSpinBox" name="selectedParticle">
+   <item row="1" column="1">
+    <widget class="QSpinBox" name="gridsize">
      <property name="minimum">
-      <number>-1</number>
+      <number>8</number>
      </property>
      <property name="maximum">
-      <number>100000000</number>
+      <number>1024</number>
      </property>
      <property name="value">
-      <number>-1</number>
+      <number>64</number>
      </property>
     </widget>
    </item>
-   <item row="9" column="0" colspan="2">
-    <widget class="QCheckBox" name="useGroundDist">
+   <item row="6" column="1">
+    <widget class="QSpinBox" name="simplifyCluster"/>
+   </item>
+   <item row="6" column="0">
+    <widget class="QLabel" name="simplifyClusterLabel">
      <property name="text">
-      <string>Use ground distance</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="11" column="0" colspan="2">
-    <widget class="QCheckBox" name="filterMedialPoints">
-     <property name="text">
-      <string>Filter medial points</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="0" colspan="2">
-    <widget class="QCheckBox" name="useDescriptor">
-     <property name="text">
-      <string>Use descriptor</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="19" column="1">
-    <widget class="QSpinBox" name="kclusters">
-     <property name="minimum">
-      <number>1</number>
-     </property>
-     <property name="maximum">
-      <number>120</number>
-     </property>
-     <property name="value">
-      <number>6</number>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="0" colspan="2">
-    <widget class="QCheckBox" name="useRotationInv">
-     <property name="text">
-      <string>Use rotation invariant</string>
-     </property>
-    </widget>
-   </item>
-   <item row="20" column="1">
-    <widget class="QPushButton" name="processShapesButton">
-     <property name="text">
-      <string>Process</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="0">
-    <widget class="QLabel" name="label_6">
-     <property name="text">
-      <string>Contract MP</string>
-     </property>
-    </widget>
-   </item>
-   <item row="15" column="0" colspan="2">
-    <widget class="QCheckBox" name="showMedial">
-     <property name="text">
-      <string>Visualize medial particles</string>
-     </property>
-    </widget>
-   </item>
-   <item row="17" column="1">
-    <widget class="QSpinBox" name="fnSmoothIters">
-     <property name="maximum">
-      <number>200</number>
-     </property>
-    </widget>
-   </item>
-   <item row="16" column="0" colspan="2">
-    <widget class="QCheckBox" name="showSymmetry">
-     <property name="text">
-      <string>Visualize symmetry</string>
+      <string>Simplify clusters</string>
      </property>
     </widget>
    </item>

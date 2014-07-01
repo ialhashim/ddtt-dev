@@ -29,6 +29,8 @@ QTimer * timer = NULL;
 
 std::vector<Spherelib::Sphere*> spheres;
 
+QStringList files;
+
 #ifdef WIN32
 namespace std{ int isfinite(double x) {return _finite(x);} }
 #endif
@@ -41,6 +43,18 @@ void particles::processShapes()
 	pw->isReady = false;
 
 	if(pw->pmeshes.empty()) return;
+
+	drawArea()->clear();
+
+	// Check grid size changes, redo voxelization
+	if( pw->pmeshes.front()->grid.gridsize != pw->ui->gridsize->value() ){
+		pw->pmeshes.clear();
+		for(auto filename : files){
+			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
+			fromMesh.read( filename.toStdString() );
+			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+		}
+	}
 
 	// Show voxelized meshes
 	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
@@ -468,6 +482,8 @@ void particles::processShapes()
 		{
 			for(auto & s : pw->pmeshes)
 			{	
+				if(!s->particles.size()) continue;
+
 				// Cluster
 				clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(s->desc, K);
 
@@ -497,7 +513,7 @@ void particles::processShapes()
 	}
 
 	// Merge smaller clusters with larger ones
-	if( true )
+	for(int i = 0; i < pw->ui->simplifyCluster->value(); i++)
 	{
 		for(auto & s : pw->pmeshes)
 		{	
@@ -572,7 +588,7 @@ void particles::processShapes()
 				neiGraph.AddEdge( s1->uid, s2->uid, 1.0 );
 			}
 
-			double threshold = s->bbox().sizes().z() * 0.02;
+			double threshold = s->grid.unitlength * 2; // two voxels
 
 			starlab::PlaneSoup * ps = new starlab::PlaneSoup( threshold * 2 );
 			int pcount = 0;
@@ -599,7 +615,9 @@ void particles::processShapes()
 			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( allSegs.size() ).arg( pcount ));
 
 			if( pw->ui->showSymmetry->isChecked() )
+			{
 				drawArea()->addRenderObject(ps);
+			}
 		}
 	}
 
@@ -705,7 +723,7 @@ void particles::create()
 
 	// Load and process shapes:
 	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
-		QStringList files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
+		files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
 
 		QElapsedTimer timer; timer.start();
 
