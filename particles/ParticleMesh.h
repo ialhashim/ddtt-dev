@@ -27,13 +27,17 @@ public:
 	double raidus;
 
 	void process();
+	void computeDistanceToFloor();
 
 	enum GraphEdgeWeight{ GEW_DISTANCE, GEW_DIAMETER };
-	GenericGraphs::Graph<uint,double> toGraph( GraphEdgeWeight wtype = GEW_DISTANCE );
+	GenericGraphs::Graph<uint,double> & toGraph( GraphEdgeWeight wtype = GEW_DISTANCE );
+	GenericGraphs::Graph<uint,double> cachedGraph;
+	std::vector< GenericGraphs::Graph<uint,double> > segmentToComponents( GenericGraphs::Graph<uint,double> & neiGraph );
+
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
-
+	std::vector<size_t> neighbourhood( const Particle<Vector3> & p, int step );
 	std::vector< double > agd( int numStartPoints );
 
 	void drawParticles( qglviewer::Camera * camera );

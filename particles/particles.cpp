@@ -27,8 +27,6 @@ QTimer * timer = NULL;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 
-#include "mc.h"
-
 std::vector<Spherelib::Sphere*> spheres;
 
 #ifdef WIN32
@@ -83,7 +81,6 @@ void particles::processShapes()
 				std::vector<Eigen::Vector3f> ma_point(s->particles.size(), Eigen::Vector3f(0,0,0));
 				std::vector<bool> ma_point_active(s->particles.size(), false);
 				std::vector<float> ma_point_rad(s->particles.size(), 0);
-				size_t gridsize = s->grid.gridsize;
 
 				// Accelerated raytracing
 				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
@@ -238,26 +235,11 @@ void particles::processShapes()
 						
 						if( ma_point_active[pi] && isPossibleThin )
 						{
-							unsigned int x,y,z;
-							mortonDecode(s->particles[pi].morton, x, y, z);
-
-							float max_rad = ma_rad;
+							float max_rad = ma_point_rad[pi];
 
 							// Look around for access to wider regions
-							int step = 2;
-							for(int u = -step; u <= step; u++){
-								for(int v = -step; v <= step; v++){
-									for(int w = -step; w <= step; w++){
-										Eigen::Vector3i c(x + u, y + v, z + w);
-										if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
-										if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;;
-										uint64_t m = mortonEncode_LUT( c.x(), c.y(), c.z() );
-										if( !s->grid.occupied[m] ) continue;
-
-										max_rad = std::max(max_rad, ma_point_rad[s->mortonToParticleID[m]]);
-									}
-								}
-							}
+							for(auto pj : s->neighbourhood( s->particles[pi], 2 ))
+								max_rad = std::max(max_rad, ma_point_rad[pj]);
 
 							// A neighbor has wider access than me => I'm not so medial
 							if( max_rad > ma_point_rad[pi] )
@@ -293,11 +275,6 @@ void particles::processShapes()
 						for(auto v : nei[pi]) sumv += v;
 						ma_point[pi] = sumv.cast<float>() / nei[pi].size();
 					}
-				}
-
-				// Experiment
-				{
-
 				}
 
 				// Report
@@ -394,6 +371,14 @@ void particles::processShapes()
 				}
 			}
 
+			// [DEBUG] visualize distance to ground
+			if( pw->ui->showDistGround->isChecked() )
+			{
+				for(auto & particle : s->particles)
+					drawArea()->drawPoint(particle.pos, 5, starlab::qtJetColor(particle.measure));
+				return;
+			}
+
 			// Normalize descriptor
 			if( pw->ui->normalizeSphereFn->isChecked() )
 			{
@@ -423,7 +408,27 @@ void particles::processShapes()
 					sh.SH_project_function(desc, sh_samples, coeff);
 
 					s->sig[p.id] = sh.SH_signature(coeff);
+
+					if( pw->ui->useRotationInv->isChecked() )
+						desc = s->sig[p.id];
 				}
+			}
+		}
+	}
+
+	// Special features
+	if( pw->ui->useGroundDist->isChecked() )
+	{
+		// Add distance to ground to descriptor
+		for(auto & s : pw->pmeshes){
+			for(auto & p : s->particles){
+				std::vector<float> new_desc;
+
+				if(pw->ui->useDescriptor->isChecked()) 
+					new_desc = s->desc[p.id];
+
+				new_desc.push_back(p.measure);
+				s->desc[p.id] = new_desc;
 			}
 		}
 	}
@@ -431,26 +436,171 @@ void particles::processShapes()
 	// k-means clustering
 	if( true )
 	{
-		// Collect descriptors
-		std::vector< std::vector<float> > allDesc;
-		for(auto & s : pw->pmeshes)
-		{
-			if( pw->ui->bands->value() > 0 )
-				allDesc.insert(allDesc.end(), s->sig.begin(), s->sig.end());
-			else
-				allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
-		}
-
-		// Cluster
+		int K = pw->ui->kclusters->value();
+		int numIterations = 300;
+		double minchangesfraction = 0.005;
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
-		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, pw->ui->kclusters->value());
-		km.run(300, 0.005);
 
-		// Assign classes
-		int pi = 0;
+		bool isClusterShapesTogether = false;
+
+		if( isClusterShapesTogether )
+		{
+			// Collect descriptors
+			std::vector< std::vector<float> > allDesc;
+			for(auto & s : pw->pmeshes){
+				if( pw->ui->bands->value() > 0 )
+					allDesc.insert(allDesc.end(), s->sig.begin(), s->sig.end());
+				else
+					allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
+			}
+
+			// Cluster
+			clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, K);
+			km.run(numIterations, minchangesfraction);
+
+			// Assign classes
+			int pi = 0;
+			for(auto & s : pw->pmeshes)
+				for(auto & p : s->particles)
+					p.segment = (int) km.clusters()[pi++];
+		}
+		else
+		{
+			for(auto & s : pw->pmeshes)
+			{	
+				// Cluster
+				clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(s->desc, K);
+
+				// Special seeding when using ground distance
+				if( pw->ui->useGroundDistSeed->isChecked() )
+				{
+					// Sort seeds based on ground
+					typedef std::pair<size_t,double> seedpair;
+					std::vector< seedpair > pg;
+					for(auto & p : s->particles) pg.push_back( std::make_pair(p.id, p.measure) );
+					std::sort(pg.begin(),pg.end(),[](seedpair a, seedpair b){ return a.second < b.second; });
+
+					km._centers.clear();
+					for(int i = 0; i < K; i++){
+						size_t pid = pg[(double(i)/K) * (pg.size()-1)].first;
+						km._centers.push_back( s->desc[pid] );
+					}
+				}
+
+				km.run(numIterations, minchangesfraction);
+
+				// Assign classes
+				for(auto & p : s->particles)
+					p.segment = (int) km.clusters()[p.id];
+			}
+		}
+	}
+
+	// Merge smaller clusters with larger ones
+	if( true )
+	{
 		for(auto & s : pw->pmeshes)
+		{	
+			std::map<size_t,size_t> clusterClount;
+			for(auto & p : s->particles) clusterClount[p.segment]++;
+
 			for(auto & p : s->particles)
-				p.flag = (int) km.clusters()[pi++];
+			{
+				std::map<size_t,size_t> clusterHistogram;
+				for( auto pj : s->neighbourhood(p, 2) )
+					clusterHistogram[ s->particles[pj].segment ]++;
+				
+				std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
+				std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
+
+				// majority rule
+				p.segment = ch.back().first;
+			}
+		}
+	}
+
+	// Find symmetric parts
+	if( true )
+	{		
+		for(auto & s : pw->pmeshes)
+		{		
+			// Extract groups of similar segments
+			typedef GenericGraphs::Graph<uint,double> GraphType;
+			std::map<int, std::vector<GraphType*> > groupedSegments;
+			std::map<size_t, GraphType*> allSegs;
+			GraphType rawNeiGraph, neiGraph;
+
+			for(auto seg : s->segmentToComponents( rawNeiGraph ))
+			{
+				int si = s->particles[seg.FirstVertex()].segment;
+
+				auto c_seg = new GraphType( seg );
+				groupedSegments[ si ].push_back( c_seg );
+				c_seg->sid = si;
+
+				// Track segment
+				allSegs[ c_seg->uid ] = c_seg;
+
+				// Segment centroid
+				{
+					Vector3 sum(0,0,0);
+					for(auto v : c_seg->vertices) sum += s->particles[v].pos;
+					Vector3 centroid = sum / c_seg->vertices.size();
+
+					c_seg->setProperty<Vector3>("centroid", centroid);
+				}
+			}
+
+			// Function to map vertex ID to segment pointer
+			auto mapVertToSegment = [=]( uint v ){ 
+				GraphType * g = NULL;
+				for(auto uid_segment : allSegs) {
+					if( uid_segment.second->IsHasVertex(v) ) {
+						g = uid_segment.second;
+						break;
+					}
+				}
+				return g; 
+			};
+
+			// Record connectivity relations between segments
+			for(auto e : rawNeiGraph.GetEdgesSet())
+			{
+				auto s1 = mapVertToSegment( e.index );
+				auto s2 = mapVertToSegment( e.target );
+
+				neiGraph.AddEdge( s1->uid, s2->uid, 1.0 );
+			}
+
+			double threshold = s->bbox().sizes().z() * 0.02;
+
+			starlab::PlaneSoup * ps = new starlab::PlaneSoup( threshold * 2 );
+			int pcount = 0;
+
+			for(auto & segGroup : groupedSegments)
+			{
+				auto & group = segGroup.second;
+				for(size_t i = 0; i < group.size(); i++)
+				{
+					if(group[i]->vertices.size() < 5) continue;
+
+					for(size_t j = i+1; j < group.size(); j++){
+						Vector3 centroid_i = *group[i]->getProperty<Vector3>("centroid");
+						Vector3 centroid_j = *group[j]->getProperty<Vector3>("centroid");
+
+						if( std::abs(centroid_i.z() - centroid_j.z()) > threshold ) continue;
+						
+						ps->addPlane( Vector3((centroid_i+centroid_j) * 0.5), (centroid_i-centroid_j).normalized() );
+						pcount++;
+					}
+				}
+			}
+
+			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( allSegs.size() ).arg( pcount ));
+
+			if( pw->ui->showSymmetry->isChecked() )
+				drawArea()->addRenderObject(ps);
+		}
 	}
 
 	/// [ Correspondence ] match particles
@@ -575,6 +725,10 @@ void particles::create()
 	// Post-processing
 	connect(pw, SIGNAL(shapesLoaded()), SLOT(processShapes()));
 	connect(pw->ui->processShapesButton, SIGNAL(clicked()), SLOT(processShapes()));
+
+#ifdef QT_DEBUG
+	pw->ui->gridsize->setValue(32);
+#endif
 }
 
 void particles::decorate()

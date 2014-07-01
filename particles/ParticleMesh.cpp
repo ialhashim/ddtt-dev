@@ -10,8 +10,18 @@ inline QVector<QColor> rndColors(int count){
 	for(int i = 0; i < count; i++) c << starlab::qRandomColor3();
 	return c;
 }
+inline QVector<QColor> rndColors2(int count){
+	QVector<QColor> colors;
+	float currentHue = 0.0;
+	for (int i = 0; i < count; i++){
+		colors.push_back( QColor::fromHslF(currentHue, 1.0, 0.5) );
+		currentHue += 0.618033988749895f;
+		currentHue = std::fmod(currentHue, 1.0f);
+	}
+	return colors;
+}
 
-QVector<QColor> ParticleMesh::rndcolors = rndColors(512);
+QVector<QColor> ParticleMesh::rndcolors = rndColors2(512);
 
 ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
 	raidus(particle_raidus)
@@ -90,13 +100,13 @@ Eigen::AlignedBox3d ParticleMesh::bbox()
 
 void ParticleMesh::process()
 {
-	Eigen::AlignedBox3d box = bbox();
-	double bmin = box.min().z(), bmax = box.max().z();
-
-	for(auto & particle : particles)
-	{
-		particle.measure = (particle.pos.z() - bmin) / (bmax - bmin);
-	}
+	/// Relative z-value:
+	//Eigen::AlignedBox3d box = bbox();
+	//double bmin = box.min().z(), bmax = box.max().z();
+	//for(auto & particle : particles) particle.measure = (particle.pos.z() - bmin) / (bmax - bmin);
+	
+	/// Normalized distance to floor:
+	computeDistanceToFloor();
 }
 
 void ParticleMesh::drawParticles( qglviewer::Camera * camera )
@@ -176,7 +186,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 		//Vector3 pn = (d - 2*(d.dot(n)) * n).normalized();
 		//glNormal3dv( pn.data() );
 
-		QColor c = rndcolors[ particle.flag ];
+		QColor c = rndcolors[ particle.segment ];
 		Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), particle.alpha);
 		glColor4dv( color.data() );
 		glVertex3dv( particle.pos.data() );
@@ -237,10 +247,11 @@ ParticleMesh::~ParticleMesh()
 	if(relativeKdtree) delete relativeKdtree;
 }
 
-GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
+GenericGraphs::Graph<uint,double> & ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
 {
-	GenericGraphs::Graph<uint,double> graph;
-	size_t eidx = 0;
+	cachedGraph = GenericGraphs::Graph<uint,double>();
+
+	int eidx = 0;
 
 	NanoKdTree tree;
 	for(auto p : particles) tree.addPoint(p.pos);
@@ -284,11 +295,11 @@ GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*
 			default: break;
 			}
 
-			graph.AddEdge( graph.AddVertex(uint(p.id)), graph.AddVertex(uint(match.first)), edge_weight, eidx++ );
+			cachedGraph.AddEdge( cachedGraph.AddVertex(uint(p.id)), cachedGraph.AddVertex(uint(match.first)), edge_weight, eidx++ );
 		}
 	}
 
-	return graph;
+	return cachedGraph;
 }
 
 std::vector< double > ParticleMesh::agd( int numStartPoints )
@@ -350,7 +361,7 @@ SpatialHash< Vector3, Vector3::Scalar > ParticleMesh::spatialHash()
 std::vector<size_t> ParticleMesh::randomSamples( int numSamples, bool isSpread )
 {
 	std::vector<size_t> samples;
-	std::set<int> set;
+	std::set<size_t> set;
 
 	if( numSamples >= particles.size() )
 	{
@@ -393,4 +404,81 @@ std::vector<size_t> ParticleMesh::randomSamples( int numSamples, bool isSpread )
 	for(auto i : set) samples.push_back(i);
 
 	return samples;
+}
+
+void ParticleMesh::computeDistanceToFloor()
+{
+	std::set<uint> sources;
+	for(auto & p : particles){
+		unsigned int x,y,z;
+		mortonDecode(p.morton,z,y,x);
+		if( z > 1 ) continue;
+		sources.insert( uint(p.id) );
+
+		p.flag = ParticleFlags::FLOOR;
+	}
+
+	auto g = toGraph();
+	g.DijkstraComputePathsMany( sources );
+
+	double minVal = *std::min_element(g.min_distance.begin(),g.min_distance.end());
+	double maxVal = *std::max_element(g.min_distance.begin(),g.min_distance.end());
+	double range = maxVal - minVal;
+
+	for(auto & p : particles)
+		p.measure = (g.min_distance[p.id] - minVal) / range;
+}
+
+std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponents( GenericGraphs::Graph<uint,double> & neiGraph )
+{
+	std::vector< GenericGraphs::Graph<uint,double> > result;
+	if( cachedGraph.IsEmpty() ) cachedGraph = toGraph();
+	
+	// Make a copy of the graph we will modify
+	auto graph = cachedGraph;
+	if(graph.IsEmpty()) return result;
+
+	// Track neighboring relations
+	;
+
+	// Remove edges between two nodes having different segments
+	for(auto e : graph.GetEdgesSet())
+	{
+		int s1 = particles[e.index].segment;
+		int s2 = particles[e.target].segment;
+
+		if(s1 != s2) 
+		{
+			graph.removeEdge(e.index, e.target);
+
+			neiGraph.AddEdge( e.index, e.target, 1.0 );
+		}
+	} 
+
+	return graph.toConnectedParts();
+}
+
+std::vector<size_t> ParticleMesh::neighbourhood( const Particle<Vector3> & p, int step )
+{
+	std::vector<size_t> result;
+
+	unsigned int x,y,z;
+	mortonDecode(p.morton, x, y, z);
+
+	for(int u = -step; u <= step; u++){
+		for(int v = -step; v <= step; v++){
+			for(int w = -step; w <= step; w++){
+				Eigen::Vector3i c(x + u, y + v, z + w);
+				if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+				if(c.x() > grid.gridsize-1 || c.y() > grid.gridsize-1 || c.z() > grid.gridsize-1) continue;;
+				
+				uint64_t m = mortonEncode_LUT( c.x(), c.y(), c.z() );
+				if( !grid.occupied[m] ) continue;
+
+				result.push_back( mortonToParticleID[m] );
+			}
+		}
+	}
+
+	return result;
 }

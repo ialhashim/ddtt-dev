@@ -14,7 +14,8 @@ namespace clustering{
 enum KmeansInitAlgorithm
 {
     KmeansInitRandom,
-    KmeansInitPlusPlus
+    KmeansInitPlusPlus,
+	KmeansInitSpecial
 };
 
 template <class index_t, class collection_t>
@@ -123,10 +124,10 @@ class kmeans
 
     /**
      * @brief Standard k-means clustering given a distance function
-     * @param collection Datastructure containing the samples to be clustered, typically a vector<vector<float> >, where the 'inner'
+     * @param collection Data structure containing the samples to be clustered, typically a vector<vector<float> >, where the 'inner'
      * vector<float> would be a single sample.
      * @param numclusters Number of clusters to use.
-     * @param initalgorithm Algorithm used to estimate the inital cluster centers
+     * @param initalgorithm Algorithm used to estimate the initial cluster centers
      * @param distfn Distance function used for comparing two samples.
      */
     kmeans(const collection_t& collection, std::size_t numclusters, KmeansInitAlgorithm initalgorithm = KmeansInitRandom, const dist_fn& distfn = dist_fn())
@@ -134,16 +135,17 @@ class kmeans
     {
         // get initial centers
         std::vector<std::size_t> initindices;
+
         if (initalgorithm == KmeansInitPlusPlus)
         {
             kmeans_init_plusplus(initindices, collection, numclusters, distfn);
         }
-        else
+        else if(initalgorithm == KmeansInitRandom)
         {
             kmeans_init_random(initindices, collection, numclusters);
         }
 
-        for (std::size_t i = 0; i < initindices.size(); i++) 
+		for (std::size_t i = 0; i < initindices.size(); i++) 
 			_centers[i] = collection[initindices[i]];
     }
 
@@ -358,8 +360,9 @@ class kmeans
     const collection_t& _collection;
     const dist_fn&      _distfn;
 
-    std::vector<sample_t>    _centers;
-    std::vector<std::size_t> _clusters;
+	std::vector<std::size_t> _clusters;
+public:
+	std::vector<sample_t>    _centers;
 };
 
 
@@ -370,24 +373,17 @@ class kmeans
  */
 template <class T>
 struct l2norm_squared{
-    // stl
-    typedef T first_argument_type;
-    typedef T second_argument_type;
 	typedef typename T::value_type R;
-    typedef R result_type;
 
     /// Squared L2 distance between a and b.
-    R operator() (const T& a, const T& b) const
-    {
+    R operator() (const T& a, const T& b) const{
         R s = 0;
-        for (typename T::const_iterator ai = a.begin(), bi = b.begin(); ai != a.end(); ++ai, ++bi)
-        {
+        for (typename T::const_iterator ai = a.begin(), bi = b.begin(); ai != a.end(); ++ai, ++bi){
             R d = static_cast<R>(*ai) - static_cast<R>(*bi);
             s += d*d;
         }
         return s;
     }
 };
-
 
 } // namespace

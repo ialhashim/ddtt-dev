@@ -2,6 +2,7 @@ include($$[STARLAB])
 include($$[SURFACEMESH])
 include($$[OCTREE])
 include($$[NANOFLANN])
+include($$[QHULL])
 StarlabTemplate(plugin)
 
 QT += gui opengl xml svg

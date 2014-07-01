@@ -14,6 +14,8 @@
 #define Max(a,b) (((a) > (b)) ? (a) : (b))
 #define Min(a,b) (((a) < (b)) ? (a) : (b))
 
+static size_t GLOBAL_GRAPH_UID = 0;
+
 namespace GenericGraphs{
 
 	template <typename VertexType = unsigned int, typename WeightType = double>
@@ -63,10 +65,10 @@ namespace GenericGraphs{
 		};
 
 	public:
-		void DijkstraComputeManyPaths(const std::set<vertex_t> & sources)
+		void DijkstraComputePathsMany(const std::set<vertex_t> & sources)
 		{
 			// Add dummy start node
-			auto newNode = AddVertex( vertices.size() );
+			auto newNode = AddVertex( vertex_t(vertices.size()) );
 
 			// Add edges to dummy node
 			for(auto & v : sources)	AddEdge(v, newNode, weight_t(0), -1);
@@ -175,7 +177,7 @@ namespace GenericGraphs{
 			return DijkstraShortestPath(n1, n2).size();
 		}
 
-	private:
+	public:
 		// Graph Variables:
 		vertices_set vertices;
 		adjacency_map_t adjacency_map;
@@ -189,6 +191,9 @@ namespace GenericGraphs{
 		Graph()
 		{
 			lastStart = std::numeric_limits<vertex_t>::max();
+			sid = 0;
+
+			uid = GLOBAL_GRAPH_UID++;
 		}
 
 		Graph(const Graph& from)
@@ -198,10 +203,15 @@ namespace GenericGraphs{
 			this->min_distance = from.min_distance;
 			this->previous = from.previous;
 			this->lastStart = from.lastStart;
+			this->sid = from.sid;
+
+			uid = GLOBAL_GRAPH_UID++; 
 		}
 
 		void AddEdge(vertex_t p1, vertex_t p2, weight_t weight, int index = -1)
 		{
+			if( IsEdgeExists(p1, p2) ) return;
+
 			adjacency_map[AddVertex(p1)].push_back(Edge(AddVertex(p2), weight, index));
 			adjacency_map[AddVertex(p2)].push_back(Edge(AddVertex(p1), weight, index));
 		}
@@ -211,6 +221,12 @@ namespace GenericGraphs{
 			vertices.insert(p);
 
 			return p;
+		}
+
+		vertex_t FirstVertex()
+		{
+			if(vertices.empty()) return -1;
+			return *vertices.begin();
 		}
 
 		void removeDirectedEdge(vertex_t p1, vertex_t p2)
@@ -340,6 +356,28 @@ namespace GenericGraphs{
 			return vertices;
 		}
 
+		bool IsEmpty()
+		{
+			return vertices.empty();
+		}
+
+		bool IsHasVertex( vertex_t v )
+		{
+			return vertices.find(v) != vertices.end();
+		}
+
+		inline bool IsEdgeExists(vertex_t v1, vertex_t v2)
+		{
+			std::list<Edge> * adj = &adjacency_map[v1];
+
+			for(typename std::list<Edge>::iterator i = adj->begin(); i != adj->end(); i++){
+				Edge * e = &(*i);
+				if(e->target == v2) return true;
+			}
+
+			return false;
+		}
+
 		// the 'index' of the edge will be replaced with index of a vertex
 		std::vector<Edge> GetEdges()
 		{
@@ -373,6 +411,11 @@ namespace GenericGraphs{
 			return result;
 		}
 
+		size_t GetNumberEdges()
+		{
+			return GetEdgesSet().size();
+		}
+
 		std::vector<vertex_t> GetLeaves() const
 		{
 			std::vector<vertex_t> leaves;
@@ -403,7 +446,7 @@ namespace GenericGraphs{
 				{
 					vertex_t j = it->target;
 
-					// Check: not visited
+					// Check: is not visited ?
 					if(explored.find(j) == explored.end()) 
 					{
 						explored.insert(j);
@@ -413,14 +456,11 @@ namespace GenericGraphs{
 			}
 		}
 
-		vertex_t getNodeLargestConnected()
+		std::vector<std::set<vertex_t> > GetConnectedComponents()
 		{
 			std::vector< std::set<vertex_t> > connectedComponents;
 			std::set<vertex_t> unvisited;
 
-			if(vertices.size() == 0)
-				return -1;
-
 			// fill unvisited set
 			for(typename vertices_set::const_iterator it = vertices.begin(); it != vertices.end(); it++)
 				unvisited.insert(*it);
@@ -431,60 +471,24 @@ namespace GenericGraphs{
 				vertex_t firstNode = *(unvisited.begin());
 
 				// Explore its tree
-				std::set<vertex_t> currVisit;
-				currVisit.insert(firstNode);
-				explore(firstNode, currVisit);
+				std::set<vertex_t> currVisits;
+				currVisits.insert(firstNode);
+				explore(firstNode, currVisits);
 
 				// Add as a connected component
-				connectedComponents.push_back(currVisit);
+				connectedComponents.push_back(currVisits);
 
 				// Remove from unvisited set
-				for(typename std::set<vertex_t>::iterator it = currVisit.begin(); it != currVisit.end(); it++)
+				for(typename std::set<vertex_t>::iterator it = currVisits.begin(); it != currVisits.end(); it++)
 					unvisited.erase(*it);
 			}
 
-			// Find set with maximum number of nodes
-			int maxConnectSize = -1, max_i = 0;
-			for(int i = 0; i < (int)connectedComponents.size(); i++)
-			{
-				int currSize = connectedComponents[i].size();
-
-				if(currSize > maxConnectSize){
-					maxConnectSize = currSize;
-					max_i = i;
-				}
-			}
-
-			// Return first node of that maximum set
-			return *(connectedComponents[max_i].begin());
+			return connectedComponents;
 		}
 
 		std::set<vertex_t> GetLargestConnectedComponent()
 		{
-			std::vector<std::set<vertex_t> > connectedComponents;
-			std::set<vertex_t> unvisited;
-
-			// fill unvisited set
-			for(typename vertices_set::const_iterator it = vertices.begin(); it != vertices.end(); it++)
-				unvisited.insert(*it);
-
-			while(unvisited.size() > 1)
-			{
-				// Take first unvisited node
-				vertex_t firstNode = *(unvisited.begin());
-
-				// Explore its tree
-				std::set<vertex_t> currVisit;
-				currVisit.insert(firstNode);
-				explore(firstNode, currVisit);
-
-				// Add as a connected component
-				connectedComponents.push_back(currVisit);
-
-				// Remove from unvisited set
-				for(typename std::set<vertex_t>::iterator it = currVisit.begin(); it != currVisit.end(); it++)
-					unvisited.erase(*it);
-			}
+			std::vector<std::set<vertex_t> > connectedComponents = GetConnectedComponents();
 
 			// Find set with maximum number of nodes
 			int maxConnectSize = -1, max_i = 0;
@@ -498,7 +502,7 @@ namespace GenericGraphs{
 				}
 			}
 
-			// Return first node of that maximum set
+			// Return maximum set
 			return connectedComponents[max_i];
 		}
 
@@ -510,6 +514,13 @@ namespace GenericGraphs{
 
 				for(typename std::list<Edge>::iterator e = adj.begin(); e != adj.end(); e++)
 					this->AddEdge(*vi, e->target, e->weight);
+			}
+
+			// Isolated nodes
+			if(this->vertices.empty())
+			{
+				for(typename std::set<vertex_t>::const_iterator vi = explored.begin(); vi != explored.end(); vi++)
+					this->AddVertex( *vi );
 			}
 		}
 
@@ -537,7 +548,7 @@ namespace GenericGraphs{
 				result.push_back(Graph<vertex_t, weight_t>());
 				result.back().subGraph(*this, explored);
 
-				// mark as visited the explored
+				// mark as visited the explored nodes
 				for(typename std::set<vertex_t>::iterator vi = explored.begin(); vi != explored.end(); vi++)
 					isVisited[*vi] = true;
 			}
@@ -581,6 +592,22 @@ namespace GenericGraphs{
 
 			return false;
 		}
-	};
 
+		std::map< std::string, std::set<int> > intSet;
+		size_t uid, sid;
+
+		// Warning: memory leak properties
+		std::map<std::string, void*> property;
+		template<typename T>
+		void setProperty(std::string pname, const T & value){
+			T * ptr = new T;
+			(*ptr) = value;
+			property[pname] = (void *) ptr;
+		}
+		template<typename T>
+		T * getProperty(std::string pname){
+			if(property.find(pname) == property.end()) return NULL;
+			return (T*)property[pname];
+		}
+	};
 }
