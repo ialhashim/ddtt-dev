@@ -439,9 +439,6 @@ std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponen
 	auto graph = cachedGraph;
 	if(graph.IsEmpty()) return result;
 
-	// Track neighboring relations
-	;
-
 	// Remove edges between two nodes having different segments
 	for(auto e : graph.GetEdgesSet())
 	{
@@ -450,7 +447,7 @@ std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponen
 
 		if(s1 != s2) 
 		{
-			graph.removeEdge(e.index, e.target);
+			graph.removeEdge( e.index, e.target );
 
 			neiGraph.AddEdge( e.index, e.target, 1.0 );
 		}
