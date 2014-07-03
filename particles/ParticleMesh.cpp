@@ -425,6 +425,7 @@ void ParticleMesh::computeDistanceToFloor()
 	double maxVal = *std::max_element(g.min_distance.begin(),g.min_distance.end());
 	double range = maxVal - minVal;
 
+	// Normalize
 	for(auto & p : particles)
 		p.measure = (g.min_distance[p.id] - minVal) / range;
 }

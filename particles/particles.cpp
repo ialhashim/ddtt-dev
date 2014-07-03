@@ -11,11 +11,15 @@ using namespace SurfaceMesh;
 
 #include <QOpenGLShaderProgram>
 #include <QWidget>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QFileDialog>
 #include <QElapsedTimer>
 
 #define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
 QTimer * timer = NULL;
+
+QStringList files;
 
 #include "ParticleMesh.h"
 #include "myglobals.h"
@@ -26,10 +30,7 @@ QTimer * timer = NULL;
 
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
-
 std::vector<Spherelib::Sphere*> spheres;
-
-QStringList files;
 
 #ifdef WIN32
 namespace std{ int isfinite(double x) {return _finite(x);} }
@@ -174,66 +175,82 @@ void particles::processShapes()
 					}
 				}
 
-				// Points just outside the volume
-				NanoKdTree surface_kdtree;
-				for(auto p : s->grid.pointsOutside()) surface_kdtree.addPoint(p.cast<double>());
-				surface_kdtree.build();
-
 				// Compute medial points
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
-					auto & p = s->particles[pi];
-					std::vector<float> & desc = descriptor[pi];
+					// Points just outside the volume
+					NanoKdTree surface_kdtree;
+					for(auto p : s->grid.pointsOutside()) surface_kdtree.addPoint(p.cast<double>());
+					surface_kdtree.build();
 
-					Vector3 maPoint = p.pos;
-					double maxUsedRadius = -DBL_MAX;
-					std::vector<bool> isVisisted( sampledRayDirections.size(), false );
-
-					double sumDiameter = 0;
-					int visitCount = 0;
-
-					double diameter, radius, out_dist, d2;
-					size_t ret_index;
-					bool isFullyInside;
-
-					for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
+					// Find maximal balls inside shape
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						if(isVisisted[antiRays[idx]]) continue;
-						isVisisted[antiRays[idx]] = true;
-						visitCount++;
+						auto & p = s->particles[pi];
+						std::vector<float> & desc = descriptor[pi];
 
-						Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
-						Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
-						Vector3 midpoint = (start + end) * 0.5;
+						Vector3 maPoint = p.pos;
+						double maxUsedRadius = -DBL_MAX;
+						std::vector<bool> isVisisted( sampledRayDirections.size(), false );
 
-						diameter = desc[idx] + desc[antiRays[idx]];
-						radius = diameter / 2;
-						
-						sumDiameter += diameter;
+						double sumDiameter = 0;
+						int visitCount = 0;
 
-						surface_kdtree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
-						d2 = out_dist;
+						double diameter, radius, out_dist, d2;
+						size_t ret_index;
+						bool isFullyInside;
 
-						isFullyInside = d2 > (radius * radius);
-
-						if( isFullyInside && radius > maxUsedRadius )
+						for(size_t idx = 0; idx < sampledRayDirections.size(); idx++)
 						{
-							maxUsedRadius = radius;
-							maPoint = midpoint;
+							if(isVisisted[antiRays[idx]]) continue;
+							isVisisted[antiRays[idx]] = true;
+							visitCount++;
+
+							Vector3 start( p.pos + sampledRayDirections[idx] * desc[idx] );
+							Vector3 end( p.pos + sampledRayDirections[antiRays[idx]] * desc[antiRays[idx]] );
+							Vector3 midpoint = (start + end) * 0.5;
+
+							diameter = desc[idx] + desc[antiRays[idx]];
+							radius = diameter / 2;
+						
+							sumDiameter += diameter;
+
+							surface_kdtree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
+							d2 = out_dist;
+
+							isFullyInside = d2 > (radius * radius);
+
+							if( isFullyInside && radius > maxUsedRadius )
+							{
+								maxUsedRadius = radius;
+								maPoint = midpoint;
+							}
 						}
+
+						// Found a medial point
+						if( maxUsedRadius > 0 )
+						{
+							ma_point[pi] = maPoint.cast<float>();
+							ma_point_rad[pi] = maxUsedRadius;
+							ma_point_active[pi] = true;
+						}
+
+						// Record average diameter around particle
+						p.avgDiameter = sumDiameter / visitCount;
 					}
 
-					// Found a medial point
-					if( maxUsedRadius > 0 )
+					// Normalize average diameter
+					if( true )
 					{
-						ma_point[pi] = maPoint.cast<float>();
-						ma_point_rad[pi] = maxUsedRadius;
-						ma_point_active[pi] = true;
-					}
+						double minDiameter = DBL_MAX, maxDiameter = -DBL_MAX;
+						for(auto & p : s->particles) { 
+							minDiameter = std::min(minDiameter, p.avgDiameter); 
+							maxDiameter = std::max(maxDiameter, p.avgDiameter);
+						}
 
-					// Record average diameter around particle
-					p.avgDiameter = sumDiameter / visitCount;
+						for(auto & p : s->particles) 
+							p.avgDiameter = (p.avgDiameter-minDiameter) / (maxDiameter-minDiameter);
+					}
 				}
 
 				// Filter out not so medial points
@@ -347,7 +364,7 @@ void particles::processShapes()
 						}
 
 						auto maxelement = std::max_element(descriptor[pi].begin(),descriptor[pi].end());
-						s->particles[pi].direction = sampledRayDirections[ maxelement - descriptor[pi].begin() ].normalized();
+						s->particles[pi].direction = sampledRayDirections[ maxelement - descriptor[pi].begin() ];
 					}
 				}
 
@@ -394,6 +411,22 @@ void particles::processShapes()
 			}
 
 			// Normalize descriptor
+			if( pw->ui->normalizeDesc->isChecked() )
+			{
+				float mn = FLT_MAX, mx = -FLT_MIN;
+				for(auto & p : s->particles) { 
+					auto & desc = s->desc[p.id];
+					mn = std::min(mn, *std::min_element(desc.begin(),desc.end())); 
+					mx = std::max(mx, *std::max_element(desc.begin(),desc.end()));
+				}
+
+				for(auto & p : s->particles){
+					auto & desc = s->desc[p.id];
+					for(auto & d : desc) d = (d-mn) / (mx-mn);
+				}
+			}
+
+			// Normalize descriptor per particle
 			if( pw->ui->normalizeSphereFn->isChecked() )
 			{
 				#pragma omp parallel for
@@ -431,17 +464,24 @@ void particles::processShapes()
 	}
 
 	// Special features
-	if( pw->ui->useGroundDist->isChecked() )
+	if( true )
 	{
-		// Add distance to ground to descriptor
-		for(auto & s : pw->pmeshes){
-			for(auto & p : s->particles){
+		// Different descriptor options
+		for(auto & s : pw->pmeshes)
+		{
+			for(auto & p : s->particles)
+			{
 				std::vector<float> new_desc;
 
 				if(pw->ui->useDescriptor->isChecked()) 
 					new_desc = s->desc[p.id];
 
-				new_desc.push_back(p.measure);
+				if(pw->ui->useGroundDist->isChecked())
+					new_desc.push_back(p.measure);
+
+				if(pw->ui->useDiameter->isChecked()) 
+					new_desc.push_back(p.avgDiameter);
+
 				s->desc[p.id] = new_desc;
 			}
 		}
@@ -688,8 +728,9 @@ void particles::processShapes()
 	pw->isReady = true;
 
 	drawArea()->update();
-}
 
+	emit( shapesProcessed() );
+}
 
 void particles::create()
 {
@@ -714,6 +755,45 @@ void particles::create()
 
 	dockwidget->setWidget( widget );
 	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+
+	// Collect experiment figures
+	{
+		QWidget * experimentViewer = new QWidget;
+		QVBoxLayout * expViewerLayout = new QVBoxLayout;
+		
+		QWidget * thumbsWidget = new QWidget;
+		QVBoxLayout * thumbsLayout = new QVBoxLayout;
+
+		QScrollArea * scrollarea = new QScrollArea;
+		scrollarea->setBackgroundRole(QPalette::Dark);
+		scrollarea->setWidgetResizable(true);
+
+		int thumbWidth = 400;
+
+		connect(this, &particles::shapesProcessed, [=](){
+			QLabel * thumb = new QLabel;
+			thumb->setPixmap(QPixmap::fromImage(drawArea()->grabFrameBuffer().scaledToWidth(thumbWidth)));
+			thumbsWidget->layout()->addWidget(thumb);
+			
+			// Scroll
+			QTimer *timer = new QTimer(this);
+			timer->setSingleShot(true);
+			connect(timer, &QTimer::timeout, [=]() {
+				auto vbar = scrollarea->verticalScrollBar();
+				vbar->setValue(vbar->maximum() - thumb->height());
+				timer->deleteLater();
+			} );
+			timer->start(100);
+		});
+
+		thumbsWidget->setLayout( thumbsLayout );
+		scrollarea->setWidget( thumbsWidget );
+		expViewerLayout->addWidget(scrollarea);
+		experimentViewer->setLayout(expViewerLayout);
+		experimentViewer->setMinimumSize(thumbWidth,thumbWidth);
+		experimentViewer->move( mainWindow()->geometry().topLeft() - QPoint(thumbWidth,0) );
+		experimentViewer->show();
+	}
 
 	// General Tests
 	connect(pw->ui->testButton, &QPushButton::released, [=]{

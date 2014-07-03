@@ -29,4 +29,7 @@ public:
 
 public slots:
 	void processShapes();
+
+signals:
+	void shapesProcessed();
 };
