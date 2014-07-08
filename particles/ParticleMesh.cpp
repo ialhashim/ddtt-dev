@@ -1,25 +1,10 @@
 #include "ParticleMesh.h"
+#include "myglobals.h"
 
 #include "RenderObjectExt.h"
 #include <QGLWidget>
 
 #include "bluenoise.h"
-
-inline QVector<QColor> rndColors(int count){
-	QVector<QColor> c;
-	for(int i = 0; i < count; i++) c << starlab::qRandomColor3();
-	return c;
-}
-inline QVector<QColor> rndColors2(int count){
-	QVector<QColor> colors;
-	float currentHue = 0.0;
-	for (int i = 0; i < count; i++){
-		colors.push_back( QColor::fromHslF(currentHue, 1.0, 0.5) );
-		currentHue += 0.618033988749895f;
-		currentHue = std::fmod(currentHue, 1.0f);
-	}
-	return colors;
-}
 
 QVector<QColor> ParticleMesh::rndcolors = rndColors2(512);
 

@@ -458,7 +458,8 @@ void particles::processShapes()
 			}
 
 			// Axis perpendicular to floor flow
-			if( true )
+			int numIterations = pw->ui->experimentIter->value();
+			if( numIterations > 0 )
 			{
 				#pragma omp parallel for
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
@@ -481,7 +482,6 @@ void particles::processShapes()
 				}
 
 				// Average direction
-				int numIterations = pw->ui->experimentIter->value();
 				for(int itr = 0; itr < numIterations; itr++)
 				{
 					std::vector<Vector3> smoothedDirections(s->particles.size());
@@ -691,7 +691,58 @@ void particles::processShapes()
 
 	// Find symmetric parts
 	if( pw->ui->showSymmetry->isChecked() )
-	{		
+	{	
+		struct Plane{ 
+			Vector3 pos,n; double weight; 
+			Plane(Vector3 pos, Vector3 n, double weight):pos(pos),n(n),weight(weight){}
+
+			static std::vector<Plane> mergePlanes(const std::vector<Plane> & groupPlanes, double similiairy_threshold)
+			{
+				// Compare planes
+				std::vector<Plane> mergedPlanes;
+				QMap<size_t,int> count;
+				QSet<size_t> used;
+				int k = 0;
+
+				for(size_t i = 0; i < groupPlanes.size(); i++){
+					if(used.contains(i)) continue;
+
+					auto plane_i = groupPlanes[i];
+					mergedPlanes.push_back( plane_i );
+
+					count[k]++;
+
+					for(size_t j = i+1; j < groupPlanes.size(); j++){
+						if(used.contains(j)) continue;
+						auto plane_j = groupPlanes[j];
+
+						double dot = plane_i.n.dot(plane_j.n);
+						double similiairy = abs(dot);
+						if( similiairy > similiairy_threshold )
+						{
+							used.insert(j); // mark as used
+							mergedPlanes[k].pos += plane_j.pos;
+							mergedPlanes[k].n += (dot > 0) ? plane_j.n : -plane_j.n;
+							mergedPlanes[k].weight = std::max(mergedPlanes[k].weight, plane_j.weight);
+							count[k]++;
+						}
+					}
+
+					k++;
+				}
+
+				for(size_t i = 0; i < mergedPlanes.size(); i++){
+					auto & plane = mergedPlanes[i];
+					plane.pos /= count[i];
+					plane.n /= count[i];
+
+					plane.n.normalize();
+				}
+
+				return mergedPlanes;
+			}
+		};
+
 		for(auto & s : pw->pmeshes)
 		{		
 			// Extract groups of similar segments
@@ -755,12 +806,15 @@ void particles::processShapes()
 
 			//double threshold = s->grid.unitlength * 3; // two voxels
 
-			starlab::PlaneSoup * ps = new starlab::PlaneSoup( s->grid.unitlength * 6 );
 			int pcount = 0;
+
+			std::vector<Plane> allPlanes;
 
 			for(auto & segGroup : groupedSegments)
 			{
 				auto & group = segGroup.second;
+
+				std::vector<Plane> groupPlanes;
 				
 				// Compare pair of parts in the same segment
 				for(size_t i = 0; i < group.size(); i++){
@@ -768,6 +822,8 @@ void particles::processShapes()
 						Vector3 centroid_i = *group[i]->getProperty<Vector3>("centroid");
 						Vector3 centroid_j = *group[j]->getProperty<Vector3>("centroid");
 						//if( std::abs(centroid_i.z() - centroid_j.z()) > threshold ) continue;
+						Vector3 planeCenter = (centroid_i+centroid_j) * 0.5;
+						Vector3 planeNormal = (centroid_i-centroid_j).normalized();
 
 						Eigen::AlignedBox3d bbox_i = *group[i]->getProperty<Eigen::AlignedBox3d>("bbox");
 						Eigen::AlignedBox3d bbox_j = *group[j]->getProperty<Eigen::AlignedBox3d>("bbox");
@@ -777,23 +833,38 @@ void particles::processShapes()
 						Bounds<double> interval_j = *group[j]->getProperty< Bounds<double> >("interval");
 						
 						// by volume
-						//double minVol = std::min(interval_i.count, interval_j.count);
-						//double maxVol = std::max(interval_i.count, interval_j.count);
-						//double ratio = minVol / maxVol;
+						double minVol = std::min(interval_i.count, interval_j.count);
+						double maxVol = std::max(interval_i.count, interval_j.count);
+						double ratio = minVol / maxVol;
+						if(ratio < 0.4) continue;
+
+						groupPlanes.push_back( Plane(planeCenter, planeNormal, ratio) );
 						
-						ps->addPlane( Vector3((centroid_i+centroid_j) * 0.5), (centroid_i-centroid_j).normalized() );
-						drawArea()->drawSegment(centroid_i,centroid_j);
+						//ps->addPlane( Vector3(planeCenter, planeNormal);
+						//drawArea()->drawSegment(centroid_i,centroid_j);
 						pcount++;
 					}
 				}
+
+				auto mergedPlanes = Plane::mergePlanes(groupPlanes, 0.9);
+				for (auto & plane : mergedPlanes) allPlanes.push_back(plane);
+			}
+
+			auto rndColors = rndColors2(pcount);
+
+			auto mergedPlanes = Plane::mergePlanes(allPlanes, 0.9);
+
+			for(size_t i = 0; i < mergedPlanes.size(); i++)
+			{
+				auto & plane = mergedPlanes[i];
+				auto color = QColor::fromRgbF(rndColors[i].redF(),rndColors[i].greenF(),rndColors[i].blueF());
+				starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.1 * plane.weight, true, color);
+				ps->addPlane( plane.pos, plane.n );
+
+				drawArea()->addRenderObject(ps);
 			}
 
 			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( allSegs.size() ).arg( pcount ));
-
-			if( pw->ui->showSymmetry->isChecked() )
-			{
-				drawArea()->addRenderObject(ps);
-			}
 		}
 	}
 
