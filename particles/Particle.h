@@ -11,16 +11,16 @@ struct Particle
 {
 	typedef double Scalar;
 
-    Particle(const Vector3& pos) : pos(pos), measure(0.0), weight(1), 
+    explicit Particle(const Vector3& pos) : pos(pos), measure(0.0), weight(1), 
 		alpha(1.0), direction(Vector3(0,0,1)), flag(NONE), avgDiameter(0), segment(0) {}
 
 	size_t id, correspondence;
 	uint64_t morton;
 	ParticleFlags flag;
 	int segment;
-    Vector3 pos, direction, relativePos;
+    Vector3 pos, direction, relativePos, axis;
     Scalar measure;
 	Scalar weight;
 	Scalar alpha;
-	Scalar avgDiameter;
+	float avgDiameter;
 };

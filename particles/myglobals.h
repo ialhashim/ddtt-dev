@@ -38,3 +38,12 @@ inline std::vector< Vector3Type > sphere_fibonacci_points ( int n = 100 )
 
 	return points;
 }
+
+template<typename Vector3d>
+static inline Vector3d orthogonalVector(const Vector3d& n) {
+	if ((abs(n.y()) >= 0.9 * abs(n.x())) &&
+		abs(n.z()) >= 0.9 * abs(n.x())) return Vector3d(0.0, -n.z(), n.y());
+	else if ( abs(n.x()) >= 0.9 * abs(n.y()) &&
+		abs(n.z()) >= 0.9 * abs(n.y()) ) return Vector3d(-n.z(), 0.0, n.x());
+	else return Vector3d(-n.y(), n.x(), 0.0);
+}

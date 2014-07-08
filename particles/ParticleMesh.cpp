@@ -88,6 +88,9 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
 		relativeKdtree->build();
 	}
 
+	// Cache adjacency
+	cachedAdj.resize(particles.size());
+
 	process();
 }
 
@@ -247,9 +250,9 @@ ParticleMesh::~ParticleMesh()
 	if(relativeKdtree) delete relativeKdtree;
 }
 
-GenericGraphs::Graph<uint,double> & ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
+GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
 {
-	cachedGraph = GenericGraphs::Graph<uint,double>();
+	GenericGraphs::Graph<uint,double> graph = GenericGraphs::Graph<uint,double>();
 
 	int eidx = 0;
 
@@ -258,7 +261,7 @@ GenericGraphs::Graph<uint,double> & ParticleMesh::toGraph(GraphEdgeWeight wtype 
 	tree.build();
 
 	// Normalization when needed
-	double minVal = DBL_MAX, maxVal = -minVal, range;
+	float minVal = FLT_MAX, maxVal = -minVal, range;
 	if(wtype == GEW_DIAMETER){
 		for(auto & p : particles){
 			minVal = std::min(minVal, p.avgDiameter);
@@ -270,7 +273,7 @@ GenericGraphs::Graph<uint,double> & ParticleMesh::toGraph(GraphEdgeWeight wtype 
 	for (auto & p : particles)
 	{
 		KDResults matches;
-		tree.ball_search(p.pos, grid.unitlength*1.01, matches);
+		tree.ball_search(p.pos, grid.unitlength*1.42, matches);
 		matches.erase(matches.begin()); // remove self
 
 		for(auto match : matches)
@@ -287,19 +290,19 @@ GenericGraphs::Graph<uint,double> & ParticleMesh::toGraph(GraphEdgeWeight wtype 
 				}
 			case ParticleMesh::GEW_DIAMETER:
 				{
-					double w1 = (particles[p.id].avgDiameter - minVal) / range;
-					double w2 = (particles[match.first].avgDiameter - minVal) / range;
+					float w1 = (particles[p.id].avgDiameter - minVal) / range;
+					float w2 = (particles[match.first].avgDiameter - minVal) / range;
 					edge_weight = 1.0 / (w1 + w2);
 					break;
 				}
 			default: break;
 			}
 
-			cachedGraph.AddEdge( cachedGraph.AddVertex(uint(p.id)), cachedGraph.AddVertex(uint(match.first)), edge_weight, eidx++ );
+			graph.AddEdge( uint(p.id), uint(match.first), edge_weight, eidx++ );
 		}
 	}
 
-	return cachedGraph;
+	return graph;
 }
 
 std::vector< double > ParticleMesh::agd( int numStartPoints )
@@ -422,21 +425,26 @@ void ParticleMesh::computeDistanceToFloor()
 	g.DijkstraComputePathsMany( sources );
 
 	double minVal = *std::min_element(g.min_distance.begin(),g.min_distance.end());
-	double maxVal = *std::max_element(g.min_distance.begin(),g.min_distance.end());
+	auto tipPoint = std::max_element(g.min_distance.begin(),g.min_distance.end());
+	double maxVal = *tipPoint;
 	double range = maxVal - minVal;
 
 	// Normalize
 	for(auto & p : particles)
 		p.measure = (g.min_distance[p.id] - minVal) / range;
+
+	// Keep a path from ground to furthest tip point
+	auto path = g.DijkstraGetShortestPathsTo( tipPoint - g.min_distance.begin() );
+
+	for(auto p : path) if(p < particles.size()) pathFromFloor.push_back(p);
 }
 
 std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponents( GenericGraphs::Graph<uint,double> & neiGraph )
 {
 	std::vector< GenericGraphs::Graph<uint,double> > result;
-	if( cachedGraph.IsEmpty() ) cachedGraph = toGraph();
 	
 	// Make a copy of the graph we will modify
-	auto graph = cachedGraph;
+	auto graph = toGraph();
 	if(graph.IsEmpty()) return result;
 
 	// Remove edges between two nodes having different segments
@@ -456,27 +464,56 @@ std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponen
 	return graph.toConnectedParts();
 }
 
-std::vector<size_t> ParticleMesh::neighbourhood( const Particle<Vector3> & p, int step )
+std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )
 {
+	if(!cachedAdj[p.id][step].empty())
+		return cachedAdj[p.id][step];
+
 	std::vector<size_t> result;
+	std::queue<size_t> toSee;
+	std::set<size_t> visisted;
 
 	unsigned int x,y,z;
 	mortonDecode(p.morton, x, y, z);
+	Eigen::Vector3i c0(x, y, z);
 
-	for(int u = -step; u <= step; u++){
-		for(int v = -step; v <= step; v++){
-			for(int w = -step; w <= step; w++){
-				Eigen::Vector3i c(x + u, y + v, z + w);
-				if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
-				if(c.x() > grid.gridsize-1 || c.y() > grid.gridsize-1 || c.z() > grid.gridsize-1) continue;;
-				
-				uint64_t m = mortonEncode_LUT( c.x(), c.y(), c.z() );
-				if( !grid.occupied[m] ) continue;
+	toSee.push( p.id );
 
-				result.push_back( mortonToParticleID[m] );
+	while( !toSee.empty() )
+	{
+		size_t current = toSee.front();
+		toSee.pop();
+		visisted.insert(current);
+
+		mortonDecode(particles[current].morton, x, y, z);
+
+		for(int u = -1; u <= 1; u++){
+			for(int v = -1; v <= 1; v++){
+				for(int w = -1; w <= 1; w++){
+					Eigen::Vector3i c(x + u, y + v, z + w);
+					if(c.x() < 0 || c.y() < 0 || c.z() < 0) continue;
+					if(c.x() > grid.gridsize-1 || c.y() > grid.gridsize-1 || c.z() > grid.gridsize-1) continue;;
+
+					uint64_t m = mortonEncode_LUT( c.x(), c.y(), c.z() );
+					if( m == p.morton) continue;
+					if( !grid.occupied[m] ) continue;
+
+					auto pid = mortonToParticleID[m];
+
+					auto distance = (c-c0).norm();
+
+					if( visisted.find(pid) == visisted.end() && distance <= step )
+					{
+						result.push_back( pid );
+						toSee.push( pid );
+						visisted.insert( pid );
+					}
+				}
 			}
 		}
 	}
+
+	cachedAdj[p.id][step] = result;
 
 	return result;
 }

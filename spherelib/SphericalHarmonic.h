@@ -230,6 +230,8 @@ public:
 					norm2 += (r*r)*2;
 			}
 
+			if(norm2 < 0) norm2 = 0;
+
 			output[l] = std::sqrt( norm2 );
 		}
 

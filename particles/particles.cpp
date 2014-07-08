@@ -1,4 +1,4 @@
-#include "particles.h"
+﻿#include "particles.h"
 #include "particles-widget.h"
 #include "ui_particles-widget.h"
 #include <omp.h>
@@ -23,6 +23,7 @@ QStringList files;
 
 #include "ParticleMesh.h"
 #include "myglobals.h"
+#include "Bounds.h"
 
 #include "Raytracing.h"
 
@@ -31,6 +32,8 @@ QStringList files;
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 std::vector<Spherelib::Sphere*> spheres;
+
+#include "BasicTable.h"
 
 #ifdef WIN32
 namespace std{ int isfinite(double x) {return _finite(x);} }
@@ -62,7 +65,6 @@ void particles::processShapes()
 
 	QElapsedTimer allTimer; allTimer.start();
 
-	mainWindow()->setStatusBarMessage("Shapes loaded, now processing..");
 	qApp->processEvents();
 
 	// Uniform sampling on the sphere
@@ -80,6 +82,7 @@ void particles::processShapes()
 	{
 		for(auto & s : pw->pmeshes)
 		{
+			mainWindow()->setStatusBarMessage(QString("Working with (%1) particles.").arg(s->particles.size()));
 			s->debug.clear();
 
 			QElapsedTimer timer; timer.start();
@@ -90,6 +93,9 @@ void particles::processShapes()
 
 			int rayCount = 0;
 
+			// Accelerated raytracing
+			raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+
 			// Shooting rays from inside the volume
 			{
 				// Medial points record
@@ -98,7 +104,8 @@ void particles::processShapes()
 				std::vector<float> ma_point_rad(s->particles.size(), 0);
 
 				// Accelerated raytracing
-				raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+				//raytracing::Raytracing<Eigen::Vector3d> rt( s->surface_mesh );
+				// ^^^ Moved up ^^
 
 				// Shoot rays around all particles
 				#pragma omp parallel for
@@ -111,9 +118,13 @@ void particles::processShapes()
 					{
 						raytracing::RayHit hit = rt.hit( p.pos, d );
 
+						if(!hit.isHit) hit.distance = s->grid.unitlength;
+
 						descriptor[pi][r++] = hit.distance;
 						rayCount++;
 					}
+
+					p.avgDiameter = 0;
 				}
 
 				// Report
@@ -152,6 +163,7 @@ void particles::processShapes()
 											if(c.x() > gridsize-1 || c.y() > gridsize-1 || c.z() > gridsize-1) continue;
 
 											uint64_t mcode = mortonEncode_LUT(c.x(),c.y(),c.z());
+											if(p.morton == mcode) continue;
 											if(!s->grid.occupied[ mcode ]) continue;
 
 											size_t nj = s->mortonToParticleID[ mcode ];
@@ -193,13 +205,15 @@ void particles::processShapes()
 							std::vector<float> & desc = descriptor[pi];
 
 							Vector3 maPoint = p.pos;
-							double maxUsedRadius = -DBL_MAX;
-							std::vector<bool> isVisisted( sampledRayDirections.size(), false );
-
+							
 							double sumDiameter = 0;
 							int visitCount = 0;
+							std::vector< bool > isVisisted( sampledRayDirections.size(), false );
 
-							double diameter, radius, out_dist, d2;
+							typedef std::pair<double,Vector3> RadiusCenter;
+							std::vector<RadiusCenter> medial_balls;
+
+							double diameter, radius, d2;
 							size_t ret_index;
 							bool isFullyInside;
 
@@ -218,41 +232,29 @@ void particles::processShapes()
 
 								sumDiameter += diameter;
 
-								surface_kdtree.tree->knnSearch(&midpoint[0], 1, &ret_index, &out_dist);
-								d2 = out_dist;
-
+								surface_kdtree.tree->knnSearch(&midpoint[0], 1, &ret_index, &d2);
+								
 								isFullyInside = d2 > (radius * radius);
 
-								if( isFullyInside && radius > maxUsedRadius )
-								{
-									maxUsedRadius = radius;
-									maPoint = midpoint;
-								}
+								if( isFullyInside )
+									medial_balls.push_back(RadiusCenter(radius,midpoint));
 							}
 
-							// Found a medial point
-							if( maxUsedRadius > 0 )
+							// Select medial point
+							if( medial_balls.size() )
 							{
-								ma_point[pi] = maPoint.cast<float>();
-								ma_point_rad[pi] = maxUsedRadius;
+								// Sort balls by radius
+								std::sort(medial_balls.begin(),medial_balls.end(), 
+									[](RadiusCenter a, RadiusCenter b){ return a.first < b.first; });
+								auto selected_medial = medial_balls.front();
+								
+								ma_point[pi] = selected_medial.second.cast<float>();
+								ma_point_rad[pi] = selected_medial.first;
 								ma_point_active[pi] = true;
+
+								// Record average diameter around particle
+								p.avgDiameter = sumDiameter / visitCount;
 							}
-
-							// Record average diameter around particle
-							p.avgDiameter = sumDiameter / visitCount;
-						}
-
-						// Normalize average diameter
-						if( true )
-						{
-							double minDiameter = DBL_MAX, maxDiameter = -DBL_MAX;
-							for(auto & p : s->particles) { 
-								minDiameter = std::min(minDiameter, p.avgDiameter); 
-								maxDiameter = std::max(maxDiameter, p.avgDiameter);
-							}
-
-							for(auto & p : s->particles) 
-								p.avgDiameter = (p.avgDiameter-minDiameter) / (maxDiameter-minDiameter);
 						}
 					}
 
@@ -276,7 +278,8 @@ void particles::processShapes()
 									max_rad = std::max(max_rad, ma_point_rad[pj]);
 
 								// A neighbor has wider access than me => I'm not so medial
-								if( max_rad > ma_point_rad[pi] )
+								double scale = 1.2;
+								if( max_rad > ma_point_rad[pi] * scale )
 									ma_point_active[pi] = false;
 							}
 						}
@@ -364,6 +367,9 @@ void particles::processShapes()
 							{
 								size_t pj = ma_particle[medial_kdtree.closest( s->particles[pi].pos )];
 								descriptor[pi] = descriptor[pj];
+
+								s->particles[pi].avgDiameter = s->particles[pj].avgDiameter;
+								//s->particles[pi].measure = s->particles[pj].measure;
 							}
 
 							auto maxelement = std::max_element(descriptor[pi].begin(),descriptor[pi].end());
@@ -392,6 +398,14 @@ void particles::processShapes()
 						drawArea()->setRenderer(m, "Flat Wire");
 					}
 
+					// Normalize diameters
+					if( true )
+					{
+						Bounds<float> b;
+						for(auto & p : s->particles) b.extend(p.avgDiameter);
+						for(auto & p : s->particles) p.avgDiameter = b.normalized(p.avgDiameter);
+					}
+
 					// [DEBUG] show main 'direction' of particles
 					if( false )
 					{
@@ -406,44 +420,6 @@ void particles::processShapes()
 				}
 			}
 
-			// [DEBUG] visualize distance to ground
-			if( pw->ui->showDistGround->isChecked() )
-			{
-				for(auto & particle : s->particles)
-					drawArea()->drawPoint(particle.pos, 5, starlab::qtJetColor(particle.measure));
-				return;
-			}
-
-			// Normalize descriptor
-			if( pw->ui->normalizeDesc->isChecked() )
-			{
-				float mn = FLT_MAX, mx = -FLT_MIN;
-				for(auto & p : s->particles) { 
-					auto & desc = s->desc[p.id];
-					mn = std::min(mn, *std::min_element(desc.begin(),desc.end())); 
-					mx = std::max(mx, *std::max_element(desc.begin(),desc.end()));
-				}
-
-				for(auto & p : s->particles){
-					auto & desc = s->desc[p.id];
-					for(auto & d : desc) d = (d-mn) / (mx-mn);
-				}
-			}
-
-			// Normalize descriptor per particle
-			if( pw->ui->normalizeSphereFn->isChecked() )
-			{
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
-				{
-					auto & p = s->particles[pi];
-					std::vector<float> & desc = descriptor[p.id];
-					double max_desc = *std::max_element(desc.begin(),desc.end());
-					double min_desc = *std::min_element(desc.begin(),desc.end());
-					for(auto & d : desc) d = (d-min_desc) / (max_desc-min_desc);
-				}
-			}
-
 			// Rotation invariant descriptor
 			if( pw->ui->bands->value() > 0 )
 			{
@@ -453,16 +429,85 @@ void particles::processShapes()
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
 					auto & p = s->particles[pi];
-					std::vector<float> & desc = descriptor[p.id];
+
+					auto desc = s->desc[pi];
+					// Normalize descriptor
+					//desc = Bounds<float>::from( desc ).normalize( desc );
 
 					std::vector<float> coeff;
 					sh.SH_project_function(desc, sh_samples, coeff);
 
 					s->sig[p.id] = sh.SH_signature(coeff);
-
-					if( pw->ui->useRotationInv->isChecked() )
-						desc = s->sig[p.id];
 				}
+			}
+
+			// Axis perpendicular to floor flow
+			if( true )
+			{
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++)
+				{
+					QMap<double, size_t> fnei;
+					for(auto pj : s->neighbourhood( s->particles[pi], 2 ))
+						fnei[ s->particles[pj].measure ] = pj;
+
+					Vector3 axis = ( s->particles[ fnei[fnei.firstKey()] ].pos - 
+									 s->particles[ fnei[fnei.lastKey()] ].pos).normalized();
+
+					s->particles[pi].axis = axis;
+				}
+
+				// Average direction
+				int numIterations = pw->ui->experimentIter->value();
+				for(int itr = 0; itr < numIterations; itr++)
+				{
+					std::vector<Vector3> smoothedDirections(s->particles.size());
+
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					{
+						auto nei = s->neighbourhood( s->particles[pi], 2 );
+						Vector3 sumAxis(0,0,0);
+						for(auto pj : nei) sumAxis += s->particles[pj].axis;
+						sumAxis /= nei.size();
+
+						smoothedDirections[pi] = sumAxis.normalized();
+					}
+
+					for(auto & p : s->particles)
+						s->particles[p.id].axis = smoothedDirections[p.id];
+				}
+
+				// [DEBUG] visualize axis experiment
+				if( pw->ui->showExperiment->isChecked() )
+				{
+					drawArea()->clear();
+					starlab::LineSegments * vs = new starlab::LineSegments(2);
+					for(auto & particle : s->particles){
+						Vector3 d = particle.axis;
+						double angle = abs(dot(d, Vector3(0,0,1)));
+						vs->addLine(particle.pos,  Vector3(particle.pos + d * 0.01), starlab::qtJetColor(angle));
+					}
+					drawArea()->addRenderObject(vs);
+
+					return;
+				}
+			}
+
+			// [DEBUG] visualize distance to ground
+			if( pw->ui->showDistGround->isChecked() )
+			{
+				for(auto & particle : s->particles)
+					drawArea()->drawPoint(particle.pos, 5, starlab::qtJetColor(particle.measure));
+				return;
+			}
+
+			// [DEBUG] visualize average diameter
+			if( pw->ui->showDiameter->isChecked() )
+			{
+				for(auto & particle : s->particles)
+					drawArea()->drawPoint(particle.pos, 5, starlab::qtJetColor(particle.avgDiameter));
+				return;
 			}
 		}
 	}
@@ -473,21 +518,31 @@ void particles::processShapes()
 		// Different descriptor options
 		for(auto & s : pw->pmeshes)
 		{
-			for(auto & p : s->particles)
+			#pragma omp parallel for
+			for(int pi = 0; pi < (int)s->particles.size(); pi++)
 			{
 				std::vector<float> new_desc;
 
-				if(pw->ui->useDescriptor->isChecked()) 
-					new_desc = s->desc[p.id];
+				auto & p = s->particles[pi];
 
-				if(pw->ui->useGroundDist->isChecked())
-					new_desc.push_back(p.measure);
+				if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
+				if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
+				if(pw->ui->useDiameter->isChecked()   ) 	new_desc.push_back(p.avgDiameter);
+				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
+				if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
 
-				if(pw->ui->useDiameter->isChecked()) 
-					new_desc.push_back(p.avgDiameter);
+				if(pw->ui->experimentIter->value())
+				{
+					double vertical = abs(dot(p.axis, Vector3(0,0,1)));
+					new_desc.push_back(vertical);
+				}
+
+				if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
 
 				s->desc[p.id] = new_desc;
 			}
+
+			showTable(s->desc, std::min(size_t(1000),s->particles.size()));
 		}
 	}
 
@@ -499,8 +554,7 @@ void particles::processShapes()
 		double minchangesfraction = 0.005;
 		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
 
-		bool isClusterShapesTogether = false;
-
+		/*bool isClusterShapesTogether = false;
 		if( isClusterShapesTogether )
 		{
 			// Collect descriptors
@@ -522,7 +576,7 @@ void particles::processShapes()
 				for(auto & p : s->particles)
 					p.segment = (int) km.clusters()[pi++];
 		}
-		else
+		else*/
 		{
 			for(auto & s : pw->pmeshes)
 			{	
@@ -534,24 +588,34 @@ void particles::processShapes()
 				// Special seeding when using ground distance
 				if( pw->ui->useGroundDistSeed->isChecked() )
 				{
-					// Sort seeds based on ground
-					typedef std::pair<size_t,double> seedpair;
-					std::vector< seedpair > pg;
-					for(auto & p : s->particles) pg.push_back( std::make_pair(p.id, p.measure) );
-					std::sort(pg.begin(),pg.end(),[](seedpair a, seedpair b){ return a.second < b.second; });
+					std::set<size_t> seeds;
+					for(int i = 0; i < K; i++)
+					{
+						double t = double(i) / (K-1);
+						int idx = t * (s->pathFromFloor.size()-1);
+						seeds.insert( s->pathFromFloor[idx] );
+					}
 
+					// Add seeds
 					km._centers.clear();
-					for(int i = 0; i < K; i++){
-						size_t pid = pg[(double(i)/K) * (pg.size()-1)].first;
+					for(auto pid : seeds) 
+					{
 						km._centers.push_back( s->desc[pid] );
+
+						// DEBUG
+						if( pw->ui->showSeeds->isChecked() )
+							drawArea()->drawPoint(s->particles[pid].pos, 20, Qt::black);
 					}
 				}
 
 				km.run(numIterations, minchangesfraction);
 
 				// Assign classes
-				for(auto & p : s->particles)
+				#pragma omp parallel for
+				for(int pi = 0; pi < (int)s->particles.size(); pi++){
+					auto & p = s->particles[pi];
 					p.segment = (int) km.clusters()[p.id];
+				}
 			}
 		}
 	}
@@ -561,6 +625,8 @@ void particles::processShapes()
 	{
 		for(auto & s : pw->pmeshes)
 		{	
+			std::vector<int> newSegmentAssignment(s->particles.size());
+
 			for(auto & p : s->particles)
 			{
 				std::map<size_t,size_t> clusterHistogram;
@@ -571,8 +637,11 @@ void particles::processShapes()
 				std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
 
 				// majority rule
-				p.segment = ch.back().first;
+				newSegmentAssignment[p.id] = (int)ch.back().first;
+				//p.segment = ch.back().first;
 			}
+
+			for(auto & p : s->particles) p.segment = newSegmentAssignment[p.id];
 		}
 	}
 
@@ -598,13 +667,24 @@ void particles::processShapes()
 				// Track segment
 				allSegs[ c_seg->uid ] = c_seg;
 
-				// Segment centroid
+				// Segment properties
 				{
 					Vector3 sum(0,0,0);
-					for(auto v : c_seg->vertices) sum += s->particles[v].pos;
-					Vector3 centroid = sum / c_seg->vertices.size();
+					Eigen::AlignedBox3d bbox;
+					Bounds<double> interval;
+					
+					for(auto v : c_seg->vertices) 
+					{
+						Vector3 p = s->particles[v].pos;
+						sum += p;
+						bbox.extend( p );
+						interval.extend( s->particles[v].measure );
+					}
 
-					c_seg->setProperty<Vector3>("centroid", centroid);
+					Vector3 centroid = sum / c_seg->vertices.size();
+					c_seg->setProperty< Vector3 >("centroid", centroid);
+					c_seg->setProperty< Eigen::AlignedBox3d >("bbox", bbox);
+					c_seg->setProperty< Bounds<double> >("interval", interval);
 				}
 			}
 
@@ -626,28 +706,39 @@ void particles::processShapes()
 				auto s1 = mapVertToSegment( e.index );
 				auto s2 = mapVertToSegment( e.target );
 
-				neiGraph.AddEdge( s1->uid, s2->uid, 1.0 );
+				if(s1 != s2) neiGraph.AddEdge( (uint)s1->uid, (uint)s2->uid, 1.0 );
 			}
 
-			double threshold = s->grid.unitlength * 3; // two voxels
+			//double threshold = s->grid.unitlength * 3; // two voxels
 
-			starlab::PlaneSoup * ps = new starlab::PlaneSoup( threshold * 2 );
+			starlab::PlaneSoup * ps = new starlab::PlaneSoup( s->grid.unitlength * 6 );
 			int pcount = 0;
 
 			for(auto & segGroup : groupedSegments)
 			{
 				auto & group = segGroup.second;
-				for(size_t i = 0; i < group.size(); i++)
-				{
-					if(group[i]->vertices.size() < 5) continue;
-
+				
+				// Compare pair of parts in the same segment
+				for(size_t i = 0; i < group.size(); i++){
 					for(size_t j = i+1; j < group.size(); j++){
 						Vector3 centroid_i = *group[i]->getProperty<Vector3>("centroid");
 						Vector3 centroid_j = *group[j]->getProperty<Vector3>("centroid");
-
 						//if( std::abs(centroid_i.z() - centroid_j.z()) > threshold ) continue;
 
+						Eigen::AlignedBox3d bbox_i = *group[i]->getProperty<Eigen::AlignedBox3d>("bbox");
+						Eigen::AlignedBox3d bbox_j = *group[j]->getProperty<Eigen::AlignedBox3d>("bbox");
+						double bbox_diff = (bbox_i.sizes() - bbox_j.sizes()).norm();
+
+						Bounds<double> interval_i = *group[i]->getProperty< Bounds<double> >("interval");
+						Bounds<double> interval_j = *group[j]->getProperty< Bounds<double> >("interval");
+						
+						// by volume
+						//double minVol = std::min(interval_i.count, interval_j.count);
+						//double maxVol = std::max(interval_i.count, interval_j.count);
+						//double ratio = minVol / maxVol;
+						
 						ps->addPlane( Vector3((centroid_i+centroid_j) * 0.5), (centroid_i-centroid_j).normalized() );
+						drawArea()->drawSegment(centroid_i,centroid_j);
 						pcount++;
 					}
 				}
