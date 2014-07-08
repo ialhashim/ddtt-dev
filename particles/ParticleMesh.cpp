@@ -273,7 +273,7 @@ GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*
 	for (auto & p : particles)
 	{
 		KDResults matches;
-		tree.ball_search(p.pos, grid.unitlength*1.42, matches);
+		tree.ball_search(p.pos, grid.unitlength*1.01, matches);
 		matches.erase(matches.begin()); // remove self
 
 		for(auto match : matches)

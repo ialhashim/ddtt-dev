@@ -47,3 +47,17 @@ static inline Vector3d orthogonalVector(const Vector3d& n) {
 		abs(n.z()) >= 0.9 * abs(n.y()) ) return Vector3d(-n.z(), 0.0, n.x());
 	else return Vector3d(-n.y(), n.x(), 0.0);
 }
+
+template<typename container>
+static inline double median(const container & vec){
+	typedef container::size_type vec_sz;
+	vec_sz size = vec.size();
+	sort(vec.begin(), vec.end());
+	vec_sz mid = size/2;
+	return size % 2 == 0 ? (vec[mid] + vec[mid-1]) / 2 : vec[mid];
+}
+
+static inline double deg_to_rad(double deg) {
+	double rad = (M_PI * deg) / 180.0;
+	return rad;
+}

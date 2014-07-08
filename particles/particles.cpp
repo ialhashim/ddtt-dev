@@ -39,6 +39,28 @@ std::vector<Spherelib::Sphere*> spheres;
 namespace std{ int isfinite(double x) {return _finite(x);} }
 #endif
 
+void particles::reVoxelize()
+{	
+	if(!widget) return;
+
+	ParticlesWidget * pw = (ParticlesWidget *) widget;
+	pw->pmeshes.clear();
+	for(auto filename : files){
+		SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
+		fromMesh.read( filename.toStdString() );
+		// Rotate if requested
+		double angleDeg = pw->ui->rotateAngle->value();
+		if( angleDeg ){
+			Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
+			for(auto v : fromMesh.vertices()){
+				auto & p = fromMesh.vertex_coordinates()[v];
+				p = rot * p;
+			}
+		}
+		pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+	}
+}
+
 void particles::processShapes()
 {
 	if(!widget) return;
@@ -51,14 +73,8 @@ void particles::processShapes()
 	drawArea()->clear();
 
 	// Check grid size changes, redo voxelization
-	if( pw->pmeshes.front()->grid.gridsize != pw->ui->gridsize->value() ){
-		pw->pmeshes.clear();
-		for(auto filename : files){
-			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
-			fromMesh.read( filename.toStdString() );
-			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
-		}
-	}
+	if( pw->pmeshes.front()->grid.gridsize != pw->ui->gridsize->value() )
+		reVoxelize();
 
 	// Show voxelized meshes
 	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
@@ -930,6 +946,16 @@ void particles::create()
 			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
 			fromMesh.read( filename.toStdString() );
 
+			// Rotate if requested
+			double angleDeg = pw->ui->rotateAngle->value();
+			if( angleDeg ){
+				Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
+				for(auto v : fromMesh.vertices()){
+					auto & p = fromMesh.vertex_coordinates()[v];
+					p = rot * p;
+				}
+			}
+
 			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
 		}
 
@@ -1086,6 +1112,24 @@ void particles::decorate()
 
 bool particles::keyPressEvent(QKeyEvent*e)
 {
+	if(e->key() == Qt::Key_R)
+	{
+		ParticlesWidget * pw = (ParticlesWidget *) widget;
+
+		int steps = 40;
+		double theta = 360 / steps;
+		for(int i = 0; i < steps; i++)
+		{
+			pw->ui->rotateAngle->setValue( theta * i );
+			reVoxelize();
+			processShapes();
+			qApp->processEvents();
+			drawArea()->update();
+			drawArea()->grabFrameBuffer().save(QString("rotate_%1.png").arg(i));
+		}
+		return true;
+	}
+
 	if(e->key() == Qt::Key_Space)
 	{
 		spheres.clear();
