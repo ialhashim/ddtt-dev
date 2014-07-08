@@ -12,7 +12,8 @@ HEADERS += \
     particles-widget.h \
     ParticleMesh.h \
     Particle.h \
-    Raytracing.h
+    Raytracing.h \
+    BasicTable.h
 
 SOURCES += \
     particles.cpp \
