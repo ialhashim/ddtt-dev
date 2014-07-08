@@ -448,12 +448,19 @@ void particles::processShapes()
 				for(int pi = 0; pi < (int)s->particles.size(); pi++)
 				{
 					QMap<double, size_t> fnei;
-					for(auto pj : s->neighbourhood( s->particles[pi], 2 ))
+					for(auto pj : s->neighbourhood( s->particles[pi], 1 ))
 						fnei[ s->particles[pj].measure ] = pj;
 
-					Vector3 axis = ( s->particles[ fnei[fnei.firstKey()] ].pos - 
-									 s->particles[ fnei[fnei.lastKey()] ].pos).normalized();
+					auto fromParticle = fnei[fnei.firstKey()];
+					auto toParticle = fnei[fnei.lastKey()];
 
+					Vector3 a = s->particles[ fromParticle ].pos;
+					Vector3 b = s->particles[ toParticle ].pos;
+					Vector3 axis = ( b - a ).normalized();
+
+					if(fromParticle == toParticle)
+						axis = Vector3(0,0,1);
+					
 					s->particles[pi].axis = axis;
 				}
 
@@ -466,7 +473,7 @@ void particles::processShapes()
 					#pragma omp parallel for
 					for(int pi = 0; pi < (int)s->particles.size(); pi++)
 					{
-						auto nei = s->neighbourhood( s->particles[pi], 2 );
+						auto nei = s->neighbourhood( s->particles[pi], 1 );
 						Vector3 sumAxis(0,0,0);
 						for(auto pj : nei) sumAxis += s->particles[pj].axis;
 						sumAxis /= nei.size();
@@ -478,6 +485,26 @@ void particles::processShapes()
 						s->particles[p.id].axis = smoothedDirections[p.id];
 				}
 
+				// Average
+				{
+					#pragma omp parallel for
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					{
+						auto nei = s->neighbourhood( s->particles[pi], 1 );
+						Vector3 sumAxis(0,0,0);
+						for(auto pj : nei) sumAxis += s->particles[pj].axis;
+						sumAxis /= nei.size();
+
+						s->particles[pi].avgDiameter = sumAxis.norm();
+					}
+				}
+
+				{
+					Bounds<float> b;
+					for(auto & p : s->particles) b.extend(p.avgDiameter);
+					for(auto & p : s->particles) p.avgDiameter = b.normalized(p.avgDiameter);
+				}
+
 				// [DEBUG] visualize axis experiment
 				if( pw->ui->showExperiment->isChecked() )
 				{
@@ -485,8 +512,9 @@ void particles::processShapes()
 					starlab::LineSegments * vs = new starlab::LineSegments(2);
 					for(auto & particle : s->particles){
 						Vector3 d = particle.axis;
-						double angle = abs(dot(d, Vector3(0,0,1)));
-						vs->addLine(particle.pos,  Vector3(particle.pos + d * 0.01), starlab::qtJetColor(angle));
+						//double value = abs(dot(d, Vector3(0,0,1)));
+						double value = particle.avgDiameter;
+						vs->addLine(particle.pos,  Vector3(particle.pos + d * 0.01), starlab::qtJetColor(value));
 					}
 					drawArea()->addRenderObject(vs);
 
