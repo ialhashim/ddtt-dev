@@ -72,6 +72,7 @@ struct Sphere{
 
 	std::vector<Vector3> rays() const;
 	std::vector<size_t> antiRays() const;
+	std::vector< std::vector<size_t> > rotated( int steps ) const;
 
 	std::vector<float> values() const;
 	void setValues(const std::vector<float>& newValues);

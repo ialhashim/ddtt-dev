@@ -171,6 +171,46 @@ std::vector<size_t> Spherelib::Sphere::antiRays() const
 	return result;
 }
 
+std::vector< std::vector<size_t> > Spherelib::Sphere::rotated(int steps) const
+{
+	std::vector< std::vector<size_t> > indices;
+
+	Surface_mesh::Vertex_property<Vector3> points = geometry->vertex_property<Vector3>("v:point");
+
+	double theta = (2.0 * M_PI) / steps;
+
+	for(int i = 0; i < steps; i++)
+	{
+		Eigen::AngleAxisd rotation( theta * i, Vector3::UnitZ() );
+
+		std::vector<size_t> current;
+
+		for(auto vi : geometry->vertices())
+		{
+			double min_dist = std::numeric_limits<Vector3::Scalar>().max();
+			size_t closest;
+
+			for(auto vj : geometry->vertices())
+			{
+				Vector3 rotated = rotation * points[vj];
+
+				double dist = (points[vi] - rotated).norm();
+				if(dist < min_dist)
+				{
+					min_dist = dist;
+					closest = vj.idx();
+				}
+			}
+
+			current.push_back( closest );
+		}
+
+		indices.push_back( current );
+	}
+
+	return indices;
+}
+
 void Spherelib::Sphere::fillRandom()
 {
 	std::uniform_real_distribution<double> unif(0.0, 1.0);
