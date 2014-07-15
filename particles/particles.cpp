@@ -563,11 +563,11 @@ void particles::processShapes()
 		for(auto & s : pw->pmeshes)
 		{
 			#pragma omp parallel for
-			for(int pi = 0; pi < (int)s->particles.size(); pi++)
+			for(int i = 0; i < (int)s->particles.size(); i++)
 			{
-				std::vector<float> new_desc;
+				auto & p = s->particles[i];
 
-				auto & p = s->particles[pi];
+				std::vector<float> new_desc;
 
 				if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
 				if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
@@ -596,7 +596,11 @@ void particles::processShapes()
 		int K = pw->ui->kclusters->value();
 		int numIterations = 300;
 		double minchangesfraction = 0.005;
-		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
+
+		if(pw->ui->l1norm->isChecked())
+			clustering::lpnorm_p = 1;
+		else
+			clustering::lpnorm_p = 2;
 
 		/*bool isClusterShapesTogether = false;
 		if( isClusterShapesTogether )
@@ -623,11 +627,13 @@ void particles::processShapes()
 		else*/
 		{
 			for(auto & s : pw->pmeshes)
-			{	
+			{
 				if(!s->particles.size()) continue;
 
+				typedef std::vector<float> VectorFloat;
+
 				// Cluster
-				clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(s->desc, K);
+				clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(s->desc, K);
 
 				// Special seeding when using ground distance
 				if( pw->ui->useGroundDistSeed->isChecked() )
@@ -777,6 +783,16 @@ void particles::processShapes()
 					}
 
 					Vector3 centroid = sum / c_seg->vertices.size();
+
+					std::vector< std::vector<double> > points;
+					for(auto v : c_seg->vertices) 
+					{
+						std::vector<double> p;
+						for(int i = 0; i < 3; i++) p.push_back(s->particles[v].pos[i]);
+						points.push_back(p);
+					}
+					//geometric_median(points);
+
 					c_seg->setProperty< Vector3 >("centroid", centroid);
 					c_seg->setProperty< Eigen::AlignedBox3d >("bbox", bbox);
 					c_seg->setProperty< Bounds<double> >("interval", interval);
@@ -1008,7 +1024,7 @@ void particles::create()
 
 	// Load and process shapes:
 	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
-		files = QFileDialog::getOpenFileNames(nullptr, "Open Shapes", "", "All Supported (*.obj *.off)");
+		files = QFileDialog::getOpenFileNames(mainWindow(), "Open Shapes", "", "All Supported (*.obj *.off)");
 
 		QElapsedTimer timer; timer.start();
 
@@ -1183,6 +1199,61 @@ void particles::decorate()
 
 bool particles::keyPressEvent(QKeyEvent*e)
 {
+	if(e->key() == Qt::Key_E)
+	{
+		ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+		if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+
+		auto & pmesh = pwidget->pmeshes.front();
+
+		qglviewer::Vec cen = drawArea()->camera()->revolveAroundPoint();
+		size_t pi = pmesh->closestParticles(Vector3 (cen[0],cen[1],cen[2])).front().second;
+
+		starlab::PointSoup * ps = new starlab::PointSoup;
+
+		std::vector<double> diff(pmesh->particles.size());
+		Bounds<float> b;
+
+		Spherelib::Sphere sphere( pwidget->ui->sphereResolution->value() );
+		auto rotatedIndices = sphere.rotated(6);
+
+		for(auto & p : pmesh->particles)
+		{
+			size_t pj = p.id;
+
+			auto di = Eigen::Map<Eigen::VectorXf>(&pmesh->desc[pi][0], pmesh->desc[pi].size());
+			double d = DBL_MAX;
+
+			for( auto indices : rotatedIndices )
+			{
+				std::vector<float> rotated_desc;
+				for(auto idx : indices) rotated_desc.push_back(pmesh->desc[pj][idx]);
+
+				auto dj = Eigen::Map<Eigen::VectorXf>(&rotated_desc[0], rotated_desc.size());
+				auto dist = (di-dj).lpNorm<1>();
+
+				if(dist < d)
+					d = dist;
+			}
+
+			diff[p.id] = d;
+
+			b.extend(d);
+		}
+
+		diff = b.normalize(diff);
+
+		for(auto & p : pmesh->particles)
+		{
+			ps->addPoint(p.pos, starlab::qtJetColor(diff[p.id]));
+		}
+
+		drawArea()->clear();
+		drawArea()->addRenderObject(ps);
+		
+		return true;
+	}
+
 	if(e->key() == Qt::Key_R)
 	{
 		ParticlesWidget * pw = (ParticlesWidget *) widget;
@@ -1216,16 +1287,7 @@ bool particles::keyPressEvent(QKeyEvent*e)
 		qglviewer::Vec cen = drawArea()->camera()->revolveAroundPoint();
 		Vector3 q(cen[0],cen[1],cen[2]);
 
-		size_t pi = 0;
-
-		double minDist = DBL_MAX;
-		for(auto & p : pmesh->particles){
-			double dist = (p.pos-q).norm();
-			if(dist < minDist){
-				minDist = dist;
-				pi = p.id;
-			}
-		}
+		size_t pi = pmesh->closestParticles(q).front().second;
 
 		Spherelib::Sphere * sphere = new Spherelib::Sphere( pwidget->ui->sphereResolution->value(), pmesh->particles[pi].pos, 0.01 );
 

@@ -270,7 +270,7 @@ GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*
 			case ParticleMesh::GEW_DISTANCE:
 				{
 					double d2 = match.second;
-					edge_weight = std::sqrt(d2);
+					edge_weight = d2 /*std::sqrt(d2)*/;
 					break;
 				}
 			case ParticleMesh::GEW_DIAMETER:
@@ -499,6 +499,22 @@ std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step
 	}
 
 	cachedAdj[p.id][step] = result;
+
+	return result;
+}
+
+std::vector< std::pair< double, size_t > > ParticleMesh::closestParticles(const Vector3 & point, double threshold)
+{
+	typedef std::pair< double, size_t > DistParticleID;
+
+	std::vector< DistParticleID > result;
+
+	for(auto & p : particles){
+		double dist = (p.pos-point).norm();
+		if(dist <= threshold) result.push_back( std::make_pair(dist, p.id) );
+	}
+
+	std::sort( result.begin(), result.end(), [](const DistParticleID& a, const DistParticleID & b){ return a.first < b.first; } );
 
 	return result;
 }

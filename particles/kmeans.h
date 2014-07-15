@@ -1,3 +1,5 @@
+// Code from Mathias Eitz and Ronald Richter
+
 #pragma once
 
 #include <vector>
@@ -130,7 +132,7 @@ class kmeans
      * @param initalgorithm Algorithm used to estimate the initial cluster centers
      * @param distfn Distance function used for comparing two samples.
      */
-    kmeans(const collection_t& collection, std::size_t numclusters, KmeansInitAlgorithm initalgorithm = KmeansInitRandom, const dist_fn& distfn = dist_fn())
+    kmeans(const collection_t& collection, std::size_t numclusters, const dist_fn& distfn = dist_fn(), KmeansInitAlgorithm initalgorithm = KmeansInitRandom )
      : _collection(collection), _distfn(distfn), _centers(numclusters), _clusters(collection.size())
     {
         // get initial centers
@@ -384,6 +386,41 @@ struct l2norm_squared{
         }
         return s;
     }
+};
+
+/// L1 norm
+template <class T>
+struct l1norm
+{
+	typedef typename T::value_type R;
+
+	/// L1 distance between a and b.
+	R operator() (const T& a, const T& b) const{
+		R s = 0;
+		for (typename T::const_iterator ai = a.begin(), bi = b.begin(); ai != a.end(); ++ai, ++bi){
+			R d = static_cast<R>(*ai) - static_cast<R>(*bi);
+			s += std::abs(d);
+		}
+		return s;
+	}
+};
+
+int lpnorm_p = 2;
+
+// Run-time selective
+template <class T>
+struct lpnorm
+{
+	typedef typename T::value_type R;
+
+	R operator() (const T& a, const T& b) const{
+		R s = 0;
+		switch (lpnorm_p){
+			case 1:	s = l1norm<T>()(a,b);				break;
+			case 2:	s = l2norm_squared<T>()(a,b);		break;
+		}
+		return s;
+	}
 };
 
 } // namespace

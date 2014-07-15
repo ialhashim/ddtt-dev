@@ -41,6 +41,8 @@ public:
 	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step );
 	std::vector< double > agd( int numStartPoints );
 
+	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );
+
 	void drawParticles( qglviewer::Camera * camera );
 	void drawDebug(QGLWidget & widget);
 	static QVector<QColor> rndcolors;
