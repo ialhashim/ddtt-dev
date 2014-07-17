@@ -583,6 +583,9 @@ void particles::processShapes()
 
 				if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
 
+				// Numerical check
+				for(auto & d : new_desc) if(isnan(d) || !isfinite(d)) d = 0;
+
 				s->desc[p.id] = new_desc;
 			}
 
@@ -784,16 +787,21 @@ void particles::processShapes()
 
 					Vector3 centroid = sum / c_seg->vertices.size();
 
-					std::vector< std::vector<double> > points;
-					for(auto v : c_seg->vertices) 
-					{
-						std::vector<double> p;
-						for(int i = 0; i < 3; i++) p.push_back(s->particles[v].pos[i]);
-						points.push_back(p);
+					uint centroid_id;
+					double minDist = DBL_MAX;
+
+					for(auto v : c_seg->vertices){
+						double dist = (s->particles[v].pos - centroid).norm();
+						if(dist < minDist){
+							minDist = dist;
+							centroid_id = v;
+						}
 					}
-					//geometric_median(points);
+
+					drawArea()->drawPoint(centroid, 10, Qt::black);
 
 					c_seg->setProperty< Vector3 >("centroid", centroid);
+					c_seg->setProperty< uint >("centroid_id", centroid_id);
 					c_seg->setProperty< Eigen::AlignedBox3d >("bbox", bbox);
 					c_seg->setProperty< Bounds<double> >("interval", interval);
 				}
@@ -833,42 +841,92 @@ void particles::processShapes()
 				std::vector<Plane> groupPlanes;
 				
 				// Compare pair of parts in the same segment
-				for(size_t i = 0; i < group.size(); i++){
-					for(size_t j = i+1; j < group.size(); j++){
-						Vector3 centroid_i = *group[i]->getProperty<Vector3>("centroid");
-						Vector3 centroid_j = *group[j]->getProperty<Vector3>("centroid");
-						//if( std::abs(centroid_i.z() - centroid_j.z()) > threshold ) continue;
+				for(size_t i = 0; i < group.size(); i++)
+				{
+					for(size_t j = i+1; j < group.size(); j++)
+					{
+						auto groupI = group[i];
+						auto groupJ = group[j];
+
+						Vector3 centroid_i = *groupI->getProperty<Vector3>("centroid");
+						Vector3 centroid_j = *groupJ->getProperty<Vector3>("centroid");
+
+						uint centroid_id_i = *groupI->getProperty<uint>("centroid_id");
+						uint centroid_id_j = *groupJ->getProperty<uint>("centroid_id");
+
 						Vector3 planeCenter = (centroid_i+centroid_j) * 0.5;
 						Vector3 planeNormal = (centroid_i-centroid_j).normalized();
 
-						Eigen::AlignedBox3d bbox_i = *group[i]->getProperty<Eigen::AlignedBox3d>("bbox");
-						Eigen::AlignedBox3d bbox_j = *group[j]->getProperty<Eigen::AlignedBox3d>("bbox");
-						double bbox_diff = (bbox_i.sizes() - bbox_j.sizes()).norm();
+						/// Filter:
 
-						Bounds<double> interval_i = *group[i]->getProperty< Bounds<double> >("interval");
-						Bounds<double> interval_j = *group[j]->getProperty< Bounds<double> >("interval");
-						
-						// by volume
-						double minVol = std::min(interval_i.count, interval_j.count);
-						double maxVol = std::max(interval_i.count, interval_j.count);
-						double ratio = minVol / maxVol;
-						if(ratio < 0.4) continue;
+						// by measure
+						{
+							uint closest_i, closest_j;
+							float minDist = FLT_MAX;
+							size_t desc_size = s->desc.front().size();
 
-						groupPlanes.push_back( Plane(planeCenter, planeNormal, ratio) );
+							// Find closest pair in feature space
+							/*for(auto vi : random_sampling<uint>(groupI->vertices, 1e12)){
+								Eigen::VectorXf desc_i = Eigen::Map<Eigen::VectorXf>( &s->desc[vi][0], desc_size );
+								for(auto vj : random_sampling<uint>(groupJ->vertices, 1e12)){
+									Eigen::VectorXf desc_j = Eigen::Map<Eigen::VectorXf>( &s->desc[vj][0], desc_size );
+
+									float dist = (desc_i-desc_j).norm();
+
+									if(dist < minDist){
+										minDist = dist;
+										closest_i = vi;
+										closest_j = vj;
+									}
+								}
+							}
+							*/
+
+							// Compare with respect to measure
+							double difference = abs(s->particles[centroid_id_i].measure - s->particles[centroid_id_j].measure);
+
+							if( difference > 0.02 ) continue;
+						}
+
+						// by bounding volume
+						{
+							Eigen::AlignedBox3d bbox_i = *groupI->getProperty<Eigen::AlignedBox3d>("bbox");
+							Eigen::AlignedBox3d bbox_j = *groupJ->getProperty<Eigen::AlignedBox3d>("bbox");
+							double bbox_diff = (bbox_i.sizes() - bbox_j.sizes()).norm();
+						}
+
+						// by mass
+						{
+							Bounds<double> interval_i = *groupI->getProperty< Bounds<double> >("interval");
+							Bounds<double> interval_j = *groupJ->getProperty< Bounds<double> >("interval");
+
+							double minVol = std::min(interval_i.count, interval_j.count);
+							double maxVol = std::max(interval_i.count, interval_j.count);
+							double ratio = minVol / maxVol;
+							//if(ratio < 0.3) continue;
+
+							groupPlanes.push_back( Plane(planeCenter, planeNormal, ratio) );
+						}
 						
-						//ps->addPlane( Vector3(planeCenter, planeNormal);
-						//drawArea()->drawSegment(centroid_i,centroid_j);
+						// DEBUG:
+						{
+							starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.01);
+							ps->addPlane( planeCenter, planeNormal );
+							drawArea()->addRenderObject(ps);
+							drawArea()->drawSegment(centroid_i,centroid_j);
+						}
+
 						pcount++;
 					}
 				}
 
-				auto mergedPlanes = Plane::mergePlanes(groupPlanes, 0.9);
+				auto mergedPlanes = Plane::mergePlanes(groupPlanes, 0.99);
 				for (auto & plane : mergedPlanes) allPlanes.push_back(plane);
 			}
 
 			auto rndColors = rndColors2(pcount);
 
-			auto mergedPlanes = Plane::mergePlanes(allPlanes, 0.9);
+			auto mergedPlanes = Plane::mergePlanes(allPlanes, 0.99);
 
 			for(size_t i = 0; i < mergedPlanes.size(); i++)
 			{
@@ -877,7 +935,7 @@ void particles::processShapes()
 				starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.1 * plane.weight, true, color);
 				ps->addPlane( plane.pos, plane.n );
 
-				drawArea()->addRenderObject(ps);
+				//drawArea()->addRenderObject(ps);
 			}
 
 			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( allSegs.size() ).arg( pcount ));
