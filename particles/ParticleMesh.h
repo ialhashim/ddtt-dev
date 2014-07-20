@@ -13,13 +13,15 @@
 
 #include "voxelization.h"
 
-#include "GenericGraph.h"
-
 #include "SpatialHash.h"
+
+#include "GenericGraph.h"
+typedef GenericGraphs::Graph<uint,double> SegmentGraph;
 
 class ParticleMesh
 {
 public:
+
 	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
 	~ParticleMesh();
 
@@ -31,9 +33,12 @@ public:
 	void computeDistanceToFloor();
 	std::vector<size_t> pathFromFloor;
 
+	void cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm );
+	void shrinkSmallerClusters();
+
 	enum GraphEdgeWeight{ GEW_DISTANCE, GEW_DIAMETER };
-	GenericGraphs::Graph<uint,double> toGraph( GraphEdgeWeight wtype = GEW_DISTANCE );
-	std::vector< GenericGraphs::Graph<uint,double> > segmentToComponents( GenericGraphs::Graph<uint,double> & neiGraph );
+	SegmentGraph toGraph( GraphEdgeWeight wtype = GEW_DISTANCE );
+	std::vector< SegmentGraph > segmentToComponents( SegmentGraph & neiGraph );
 
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();

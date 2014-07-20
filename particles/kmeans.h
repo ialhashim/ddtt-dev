@@ -304,13 +304,17 @@ class kmeans
     template <class T>
     static void add_operation(T& lhs, const T& rhs)
     {
-        for (std::size_t i = 0; i < lhs.size(); i++) lhs[i] += rhs[i];
+		#pragma omp parallel for
+        for (int i = 0; i < (int)lhs.size(); i++) 
+			lhs[i] += rhs[i];
     }
 
     template <class T>
     static void div_operation(T& lhs, double rhs)
-    {
-        for (std::size_t i = 0; i < lhs.size(); i++) lhs[i] /= rhs;
+	{
+		#pragma omp parallel for
+        for (int i = 0; i < (int)lhs.size(); i++) 
+			lhs[i] /= rhs;
     }
 
     private:

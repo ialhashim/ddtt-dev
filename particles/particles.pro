@@ -13,14 +13,20 @@ HEADERS += \
     ParticleMesh.h \
     Particle.h \
     Raytracing.h \
-    BasicTable.h
+    BasicTable.h \
+    StructureAnalysis.h
 
 SOURCES += \
     particles.cpp \
     particles-widget.cpp \
     ParticleMesh.cpp \
-    Raytracing.cpp
+    Raytracing.cpp \
+    StructureAnalysis.cpp
 
+# SVG viewer
+HEADERS += svgview.h
+SOURCES += svgview.cpp
+	
 FORMS       += particles-widget.ui
 RESOURCES   += particles.qrc
 

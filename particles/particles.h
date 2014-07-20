@@ -29,6 +29,7 @@ public:
 
 public slots:
 	void processShapes();
+	void blending();
 	void reVoxelize();
 
 signals:

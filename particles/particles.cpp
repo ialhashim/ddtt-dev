@@ -9,14 +9,6 @@
 #include "SurfaceMeshHelper.h"
 using namespace SurfaceMesh;
 
-#include <QOpenGLShaderProgram>
-#include <QWidget>
-#include <QScrollArea>
-#include <QScrollBar>
-#include <QFileDialog>
-#include <QElapsedTimer>
-
-#define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
 QTimer * timer = NULL;
 
 QStringList files;
@@ -25,41 +17,15 @@ QStringList files;
 #include "myglobals.h"
 #include "Bounds.h"
 
-#include "Raytracing.h"
+#include "StructureAnalysis.h"
 
-#include "kmeans.h"
+#include "Raytracing.h"
 
 #include "spherelib.h"
 #include "SphericalHarmonic.h"
 std::vector<Spherelib::Sphere*> spheres;
 
 #include "BasicTable.h"
-
-#ifdef WIN32
-namespace std{ int isfinite(double x) {return _finite(x);} }
-#endif
-
-void particles::reVoxelize()
-{	
-	if(!widget) return;
-
-	ParticlesWidget * pw = (ParticlesWidget *) widget;
-	pw->pmeshes.clear();
-	for(auto filename : files){
-		SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
-		fromMesh.read( filename.toStdString() );
-		// Rotate if requested
-		double angleDeg = pw->ui->rotateAngle->value();
-		if( angleDeg ){
-			Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
-			for(auto v : fromMesh.vertices()){
-				auto & p = fromMesh.vertex_coordinates()[v];
-				p = rot * p;
-			}
-		}
-		pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
-	}
-}
 
 void particles::processShapes()
 {
@@ -301,24 +267,30 @@ void particles::processShapes()
 						}
 					}
 
+					// KD-tree of medial points (with map)
+					NanoKdTree medial_kdtree;
+					std::map<size_t,size_t> ma_particle;
+					for(size_t i = 0; i < ma_point_active.size(); i++){
+						if( ma_point_active[i] ){
+							ma_particle[ma_particle.size()] = i;
+							medial_kdtree.addPoint( ma_point[i].cast<double>() );
+						}
+					}
+					medial_kdtree.build();
+
 					// Contract medial points to their neighborhood center
 					for( int i = 0; i < pw->ui->contractMedial->value(); i++ )
 					{
-						NanoKdTree kdtree;
-						for(int pi = 0; pi < (int)s->particles.size(); pi++)
-							if( ma_point_active[pi] ) kdtree.addPoint( ma_point[pi].cast<double>() );
-						kdtree.build();
-
 						// Get a set of neighbors for each medial point
 						std::vector< std::vector<Vector3> > nei(s->particles.size());
 						for(int pi = 0; pi < (int)s->particles.size(); pi++){
 							if( !ma_point_active[pi] ) continue;
 
 							KDResults matches;
-							kdtree.ball_search( ma_point[pi].cast<double>(), s->grid.unitlength * 1.5, matches );
+							medial_kdtree.ball_search( ma_point[pi].cast<double>(), s->grid.unitlength * 1.5, matches );
 							for(auto m : matches) 
-								if((kdtree.cloud.pts[m.first]-ma_point[pi].cast<double>()).norm() > 1e-6) 
-									nei[pi].push_back(kdtree.cloud.pts[m.first]);
+								if((medial_kdtree.cloud.pts[m.first]-ma_point[pi].cast<double>()).norm() > 1e-6) 
+									nei[pi].push_back(medial_kdtree.cloud.pts[m.first]);
 						}
 
 						// Move to center of neighborhood
@@ -365,17 +337,6 @@ void particles::processShapes()
 							}
 						}
 
-						// Assign descriptor of all particles to their nearest medial point
-						NanoKdTree medial_kdtree;
-						std::map<size_t,size_t> ma_particle;
-						for(size_t i = 0; i < ma_point_active.size(); i++){
-							if( ma_point_active[i] ){
-								ma_particle[ma_particle.size()] = i;
-								medial_kdtree.addPoint( ma_point[i].cast<double>() );
-							}
-						}
-						medial_kdtree.build();
-
 						#pragma omp parallel for
 						for(int pi = 0; pi < (int)s->particles.size(); pi++)
 						{
@@ -400,15 +361,10 @@ void particles::processShapes()
 					// [DEBUG] show projected skeleton
 					if( pw->ui->projectSkeleton->isChecked() )
 					{
-						NanoKdTree kdtree;
-						for(int pi = 0; pi < (int)s->particles.size(); pi++)
-							if( ma_point_active[pi] ) kdtree.addPoint( ma_point[pi].cast<double>() );
-						kdtree.build();
-
 						SurfaceMeshModel * m = s->surface_mesh->clone();
 						auto points = m->vertex_coordinates();
 						for(auto v : m->vertices())
-							points[v] = kdtree.cloud.pts[ kdtree.closest(points[v]) ];
+							points[v] = medial_kdtree.cloud.pts[ medial_kdtree.closest(points[v]) ];
 
 						document()->addModel( m );
 						drawArea()->setRenderer(m, "Flat Wire");
@@ -457,87 +413,6 @@ void particles::processShapes()
 				}
 			}
 
-			// Axis perpendicular to floor flow
-			int numIterations = pw->ui->experimentIter->value();
-			if( numIterations > 0 )
-			{
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
-				{
-					QMap<double, size_t> fnei;
-					for(auto pj : s->neighbourhood( s->particles[pi], 1 ))
-						fnei[ s->particles[pj].measure ] = pj;
-
-					auto fromParticle = fnei[fnei.firstKey()];
-					auto toParticle = fnei[fnei.lastKey()];
-
-					Vector3 a = s->particles[ fromParticle ].pos;
-					Vector3 b = s->particles[ toParticle ].pos;
-					Vector3 axis = ( b - a ).normalized();
-
-					if(fromParticle == toParticle)
-						axis = Vector3(0,0,1);
-					
-					s->particles[pi].axis = axis;
-				}
-
-				// Average direction
-				for(int itr = 0; itr < numIterations; itr++)
-				{
-					std::vector<Vector3> smoothedDirections(s->particles.size());
-
-					#pragma omp parallel for
-					for(int pi = 0; pi < (int)s->particles.size(); pi++)
-					{
-						auto nei = s->neighbourhood( s->particles[pi], 1 );
-						Vector3 sumAxis(0,0,0);
-						for(auto pj : nei) sumAxis += s->particles[pj].axis;
-						sumAxis /= nei.size();
-
-						smoothedDirections[pi] = sumAxis.normalized();
-					}
-
-					for(auto & p : s->particles)
-						s->particles[p.id].axis = smoothedDirections[p.id];
-				}
-
-				// Average
-				{
-					#pragma omp parallel for
-					for(int pi = 0; pi < (int)s->particles.size(); pi++)
-					{
-						auto nei = s->neighbourhood( s->particles[pi], 1 );
-						Vector3 sumAxis(0,0,0);
-						for(auto pj : nei) sumAxis += s->particles[pj].axis;
-						sumAxis /= nei.size();
-
-						s->particles[pi].avgDiameter = sumAxis.norm();
-					}
-				}
-
-				{
-					Bounds<float> b;
-					for(auto & p : s->particles) b.extend(p.avgDiameter);
-					for(auto & p : s->particles) p.avgDiameter = b.normalized(p.avgDiameter);
-				}
-
-				// [DEBUG] visualize axis experiment
-				if( pw->ui->showExperiment->isChecked() )
-				{
-					drawArea()->clear();
-					starlab::LineSegments * vs = new starlab::LineSegments(2);
-					for(auto & particle : s->particles){
-						Vector3 d = particle.axis;
-						//double value = abs(dot(d, Vector3(0,0,1)));
-						double value = particle.avgDiameter;
-						vs->addLine(particle.pos,  Vector3(particle.pos + d * 0.01), starlab::qtJetColor(value));
-					}
-					drawArea()->addRenderObject(vs);
-
-					return;
-				}
-			}
-
 			// [DEBUG] visualize distance to ground
 			if( pw->ui->showDistGround->isChecked() )
 			{
@@ -555,6 +430,9 @@ void particles::processShapes()
 			}
 		}
 	}
+
+	// Report
+	mainWindow()->setStatusBarMessage( QString("Descriptors ready (%1 ms)").arg( allTimer.elapsed() ) );
 
 	// Special features
 	if( true )
@@ -589,364 +467,82 @@ void particles::processShapes()
 				s->desc[p.id] = new_desc;
 			}
 
-			showTable(s->desc, std::min(size_t(1000),s->particles.size()));
+			//showTable(s->desc, std::min(size_t(1000),s->particles.size()));
 		}
 	}
+
+	QElapsedTimer curTimer; curTimer.start();
 
 	// k-means clustering
 	if( true )
 	{
 		int K = pw->ui->kclusters->value();
-		int numIterations = 300;
-		double minchangesfraction = 0.005;
 
-		if(pw->ui->l1norm->isChecked())
-			clustering::lpnorm_p = 1;
-		else
-			clustering::lpnorm_p = 2;
-
-		/*bool isClusterShapesTogether = false;
-		if( isClusterShapesTogether )
+		for(auto & s : pw->pmeshes)
 		{
-			// Collect descriptors
-			std::vector< std::vector<float> > allDesc;
-			for(auto & s : pw->pmeshes){
-				if( pw->ui->bands->value() > 0 )
-					allDesc.insert(allDesc.end(), s->sig.begin(), s->sig.end());
-				else
-					allDesc.insert(allDesc.end(), s->desc.begin(), s->desc.end());
-			}
+			std::set<size_t> seeds;
 
-			// Cluster
-			clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, K);
-			km.run(numIterations, minchangesfraction);
-
-			// Assign classes
-			int pi = 0;
-			for(auto & s : pw->pmeshes)
-				for(auto & p : s->particles)
-					p.segment = (int) km.clusters()[pi++];
-		}
-		else*/
-		{
-			for(auto & s : pw->pmeshes)
-			{
-				if(!s->particles.size()) continue;
-
-				typedef std::vector<float> VectorFloat;
-
-				// Cluster
-				clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(s->desc, K);
-
-				// Special seeding when using ground distance
-				if( pw->ui->useGroundDistSeed->isChecked() )
+			// Seed based on ground distance
+			if(pw->ui->useGroundDistSeed->isChecked()){
+				for(int i = 0; i < K; i++)
 				{
-					std::set<size_t> seeds;
-					for(int i = 0; i < K; i++)
-					{
-						double t = double(i) / (K-1);
-						int idx = t * (s->pathFromFloor.size()-1);
-						seeds.insert( s->pathFromFloor[idx] );
-					}
-
-					// Add seeds
-					km._centers.clear();
-					for(auto pid : seeds) 
-					{
-						km._centers.push_back( s->desc[pid] );
-
-						// DEBUG
-						if( pw->ui->showSeeds->isChecked() )
-							drawArea()->drawPoint(s->particles[pid].pos, 20, Qt::black);
-					}
-				}
-
-				km.run(numIterations, minchangesfraction);
-
-				// Assign classes
-				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++){
-					auto & p = s->particles[pi];
-					p.segment = (int) km.clusters()[p.id];
+					double t = double(i) / (K-1);
+					int idx = t * (s->pathFromFloor.size()-1);
+					seeds.insert( s->pathFromFloor[idx] );
 				}
 			}
+
+			s->cluster(K, seeds, pw->ui->l1norm->isChecked());
 		}
 	}
+
+	// Report
+	mainWindow()->setStatusBarMessage( QString("Clustering (%1 ms)").arg( curTimer.elapsed() ) );
+	curTimer.restart();
 
 	// Merge smaller clusters with larger ones
 	for(int i = 0; i < pw->ui->simplifyCluster->value(); i++)
 	{
 		for(auto & s : pw->pmeshes)
-		{	
-			std::vector<int> newSegmentAssignment(s->particles.size());
-
-			for(auto & p : s->particles)
-			{
-				std::map<size_t,size_t> clusterHistogram;
-				for( auto pj : s->neighbourhood(p, 2) )
-					clusterHistogram[ s->particles[pj].segment ]++;
-
-				std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
-				std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
-
-				// majority rule
-				newSegmentAssignment[p.id] = (int)ch.back().first;
-				//p.segment = ch.back().first;
-			}
-
-			for(auto & p : s->particles) p.segment = newSegmentAssignment[p.id];
-		}
+			s->shrinkSmallerClusters();
 	}
 
 	// Find symmetric parts
 	if( pw->ui->showSymmetry->isChecked() )
 	{	
-		struct Plane{ 
-			Vector3 pos,n; double weight; 
-			Plane(Vector3 pos, Vector3 n, double weight):pos(pos),n(n),weight(weight){}
-
-			static std::vector<Plane> mergePlanes(const std::vector<Plane> & groupPlanes, double similiairy_threshold)
-			{
-				// Compare planes
-				std::vector<Plane> mergedPlanes;
-				QMap<size_t,int> count;
-				QSet<size_t> used;
-				int k = 0;
-
-				for(size_t i = 0; i < groupPlanes.size(); i++){
-					if(used.contains(i)) continue;
-
-					auto plane_i = groupPlanes[i];
-					mergedPlanes.push_back( plane_i );
-
-					count[k]++;
-
-					for(size_t j = i+1; j < groupPlanes.size(); j++){
-						if(used.contains(j)) continue;
-						auto plane_j = groupPlanes[j];
-
-						double dot = plane_i.n.dot(plane_j.n);
-						double similiairy = abs(dot);
-						if( similiairy > similiairy_threshold )
-						{
-							used.insert(j); // mark as used
-							mergedPlanes[k].pos += plane_j.pos;
-							mergedPlanes[k].n += (dot > 0) ? plane_j.n : -plane_j.n;
-							mergedPlanes[k].weight = std::max(mergedPlanes[k].weight, plane_j.weight);
-							count[k]++;
-						}
-					}
-
-					k++;
-				}
-
-				for(size_t i = 0; i < mergedPlanes.size(); i++){
-					auto & plane = mergedPlanes[i];
-					plane.pos /= count[i];
-					plane.n /= count[i];
-
-					plane.n.normalize();
-				}
-
-				return mergedPlanes;
-			}
-		};
-
 		for(auto & s : pw->pmeshes)
 		{		
-			// Extract groups of similar segments
-			typedef GenericGraphs::Graph<uint,double> GraphType;
-			std::map<int, std::vector<GraphType*> > groupedSegments;
-			std::map<size_t, GraphType*> allSegs;
-			GraphType rawNeiGraph, neiGraph;
+			StructureAnalysis sa( s );
 
-			for(auto seg : s->segmentToComponents( rawNeiGraph ))
-			{
-				int si = s->particles[seg.FirstVertex()].segment;
+			for(auto d : sa.debug) drawArea()->addRenderObject(d);
 
-				auto c_seg = new GraphType( seg );
-				groupedSegments[ si ].push_back( c_seg );
-				c_seg->sid = si;
-
-				// Track segment
-				allSegs[ c_seg->uid ] = c_seg;
-
-				// Segment properties
-				{
-					Vector3 sum(0,0,0);
-					Eigen::AlignedBox3d bbox;
-					Bounds<double> interval;
-					
-					for(auto v : c_seg->vertices) 
-					{
-						Vector3 p = s->particles[v].pos;
-						sum += p;
-						bbox.extend( p );
-						interval.extend( s->particles[v].measure );
-					}
-
-					Vector3 centroid = sum / c_seg->vertices.size();
-
-					uint centroid_id;
-					double minDist = DBL_MAX;
-
-					for(auto v : c_seg->vertices){
-						double dist = (s->particles[v].pos - centroid).norm();
-						if(dist < minDist){
-							minDist = dist;
-							centroid_id = v;
-						}
-					}
-
-					drawArea()->drawPoint(centroid, 10, Qt::black);
-
-					c_seg->setProperty< Vector3 >("centroid", centroid);
-					c_seg->setProperty< uint >("centroid_id", centroid_id);
-					c_seg->setProperty< Eigen::AlignedBox3d >("bbox", bbox);
-					c_seg->setProperty< Bounds<double> >("interval", interval);
-				}
-			}
-
-			// Function to map vertex ID to segment pointer
-			auto mapVertToSegment = [=]( uint v ){ 
-				GraphType * g = NULL;
-				for(auto uid_segment : allSegs) {
-					if( uid_segment.second->IsHasVertex(v) ) {
-						g = uid_segment.second;
-						break;
-					}
-				}
-				return g; 
-			};
-
-			// Record connectivity relations between segments
-			for(auto e : rawNeiGraph.GetEdgesSet())
-			{
-				auto s1 = mapVertToSegment( e.index );
-				auto s2 = mapVertToSegment( e.target );
-
-				if(s1 != s2) neiGraph.AddEdge( (uint)s1->uid, (uint)s2->uid, 1.0 );
-			}
-
-			//double threshold = s->grid.unitlength * 3; // two voxels
-
-			int pcount = 0;
-
-			std::vector<Plane> allPlanes;
-
-			for(auto & segGroup : groupedSegments)
-			{
-				auto & group = segGroup.second;
-
-				std::vector<Plane> groupPlanes;
-				
-				// Compare pair of parts in the same segment
-				for(size_t i = 0; i < group.size(); i++)
-				{
-					for(size_t j = i+1; j < group.size(); j++)
-					{
-						auto groupI = group[i];
-						auto groupJ = group[j];
-
-						Vector3 centroid_i = *groupI->getProperty<Vector3>("centroid");
-						Vector3 centroid_j = *groupJ->getProperty<Vector3>("centroid");
-
-						uint centroid_id_i = *groupI->getProperty<uint>("centroid_id");
-						uint centroid_id_j = *groupJ->getProperty<uint>("centroid_id");
-
-						Vector3 planeCenter = (centroid_i+centroid_j) * 0.5;
-						Vector3 planeNormal = (centroid_i-centroid_j).normalized();
-
-						/// Filter:
-
-						// by measure
-						{
-							uint closest_i, closest_j;
-							float minDist = FLT_MAX;
-							size_t desc_size = s->desc.front().size();
-
-							// Find closest pair in feature space
-							/*for(auto vi : random_sampling<uint>(groupI->vertices, 1e12)){
-								Eigen::VectorXf desc_i = Eigen::Map<Eigen::VectorXf>( &s->desc[vi][0], desc_size );
-								for(auto vj : random_sampling<uint>(groupJ->vertices, 1e12)){
-									Eigen::VectorXf desc_j = Eigen::Map<Eigen::VectorXf>( &s->desc[vj][0], desc_size );
-
-									float dist = (desc_i-desc_j).norm();
-
-									if(dist < minDist){
-										minDist = dist;
-										closest_i = vi;
-										closest_j = vj;
-									}
-								}
-							}
-							*/
-
-							// Compare with respect to measure
-							double difference = abs(s->particles[centroid_id_i].measure - s->particles[centroid_id_j].measure);
-
-							if( difference > 0.02 ) continue;
-						}
-
-						// by bounding volume
-						{
-							Eigen::AlignedBox3d bbox_i = *groupI->getProperty<Eigen::AlignedBox3d>("bbox");
-							Eigen::AlignedBox3d bbox_j = *groupJ->getProperty<Eigen::AlignedBox3d>("bbox");
-							double bbox_diff = (bbox_i.sizes() - bbox_j.sizes()).norm();
-						}
-
-						// by mass
-						{
-							Bounds<double> interval_i = *groupI->getProperty< Bounds<double> >("interval");
-							Bounds<double> interval_j = *groupJ->getProperty< Bounds<double> >("interval");
-
-							double minVol = std::min(interval_i.count, interval_j.count);
-							double maxVol = std::max(interval_i.count, interval_j.count);
-							double ratio = minVol / maxVol;
-							//if(ratio < 0.3) continue;
-
-							groupPlanes.push_back( Plane(planeCenter, planeNormal, ratio) );
-						}
-						
-						// DEBUG:
-						{
-							starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.01);
-							ps->addPlane( planeCenter, planeNormal );
-							drawArea()->addRenderObject(ps);
-							drawArea()->drawSegment(centroid_i,centroid_j);
-						}
-
-						pcount++;
-					}
-				}
-
-				auto mergedPlanes = Plane::mergePlanes(groupPlanes, 0.99);
-				for (auto & plane : mergedPlanes) allPlanes.push_back(plane);
-			}
-
-			auto rndColors = rndColors2(pcount);
-
-			auto mergedPlanes = Plane::mergePlanes(allPlanes, 0.99);
-
-			for(size_t i = 0; i < mergedPlanes.size(); i++)
-			{
-				auto & plane = mergedPlanes[i];
-				auto color = QColor::fromRgbF(rndColors[i].redF(),rndColors[i].greenF(),rndColors[i].blueF());
-				starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.1 * plane.weight, true, color);
-				ps->addPlane( plane.pos, plane.n );
-
-				//drawArea()->addRenderObject(ps);
-			}
-
-			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( allSegs.size() ).arg( pcount ));
+			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( sa.allSegs.size() ).arg( sa.pcount ));
 		}
 	}
+
+	// Report
+	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
+
+	// Experiment
+	blending();
+
+	pw->isReady = true;
+
+	drawArea()->update();
+
+	emit( shapesProcessed() );
+}
+
+void particles::blending()
+{
+	if(!widget) return;
+	ParticlesWidget * pw = (ParticlesWidget *) widget;
+	pw->isReady = false;
+	if(pw->pmeshes.empty()) return;
 
 	/// [ Correspondence ] match particles
 	if( true && pw->pmeshes.size() > 1 )
 	{
-		typedef clustering::l2norm_squared< std::vector<float> > dist_fn;
-
 		for(size_t i = 0; i < pw->pmeshes.size(); i++){
 			for(size_t j = i+1; j < pw->pmeshes.size(); j++){
 				NanoKdTree * itree = pw->pmeshes[i]->relativeKdtree;
@@ -968,8 +564,8 @@ void particles::processShapes()
 						for(auto p : matches) 
 						{
 							double weight = p.second;
-							double desc_dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
-							measures[ weight * desc_dist ] = p.first;
+							//double desc_dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
+							measures[ weight ] = p.first;
 						}
 						iparticle.correspondence = measures[ measures.keys().front() ];
 					}
@@ -991,8 +587,8 @@ void particles::processShapes()
 						for(auto p : matches) 
 						{
 							double weight = p.second;
-							double desc_dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
-							measures[ weight * desc_dist ] = p.first;
+							//double desc_dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
+							measures[ weight ] = p.first;
 						}
 						jparticle.correspondence = measures[ measures.keys().front() ];
 					}
@@ -1000,15 +596,28 @@ void particles::processShapes()
 			}
 		}
 	}
+}
 
-	// Report
-	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
+void particles::reVoxelize()
+{	
+	if(!widget) return;
 
-	pw->isReady = true;
-
-	drawArea()->update();
-
-	emit( shapesProcessed() );
+	ParticlesWidget * pw = (ParticlesWidget *) widget;
+	pw->pmeshes.clear();
+	for(auto filename : files){
+		SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
+		fromMesh.read( filename.toStdString() );
+		// Rotate if requested
+		double angleDeg = pw->ui->rotateAngle->value();
+		if( angleDeg ){
+			Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
+			for(auto v : fromMesh.vertices()){
+				auto & p = fromMesh.vertex_coordinates()[v];
+				p = rot * p;
+			}
+		}
+		pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+	}
 }
 
 void particles::create()
@@ -1370,8 +979,8 @@ bool particles::keyPressEvent(QKeyEvent*e)
 
 		sphere->normalizeValues();
 
-		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3]").arg(pi).arg(*std::max_element(
-			pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(*std::min_element(pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())) );
+		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3] measure [%4]").arg(pi).arg(*std::max_element(
+			pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(*std::min_element(pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(pmesh->particles[pi].measure) );
 
 		spheres.clear();
 		spheres.push_back( sphere );

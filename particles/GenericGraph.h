@@ -11,10 +11,17 @@
 #undef max
 #include <limits>
 
+using namespace std;
+
 #define Max(a,b) (((a) > (b)) ? (a) : (b))
 #define Min(a,b) (((a) < (b)) ? (a) : (b))
 
 static size_t GLOBAL_GRAPH_UID = 0;
+
+// Variant class used for attributes, needs a better alternative
+#include <QVariant>
+#include <QMap>
+typedef QMap<QString,QVariant> PropertyMap;
 
 namespace GenericGraphs{
 
@@ -34,10 +41,12 @@ namespace GenericGraphs{
 			Edge(vertex_t arg_target, weight_t arg_weight, unsigned int edge_index = -1)
 				: target(arg_target), weight(arg_weight), index(edge_index) { }
 
-			bool operator == (const Edge & rhs) const
-			{
+			bool operator == (const Edge & rhs) const{
 				return (target == rhs.target && weight == rhs.weight && index == rhs.index);
 			}
+
+			// Attributes
+			PropertyMap property;
 		};
 
 		struct CompareEdge{
@@ -86,7 +95,7 @@ namespace GenericGraphs{
 		{
 			if(source == lastStart)
 				return;
-			
+
 			lastStart = source;
 			previous.clear();
 
@@ -183,6 +192,13 @@ namespace GenericGraphs{
 		adjacency_map_t adjacency_map;
 		vertex_t lastStart;
 
+		// Attributes
+		std::vector<PropertyMap> vertices_prop;
+		void initAttributes(){ vertices_prop.resize(vertices.size()); }
+
+		// Graph-wide
+		PropertyMap property;
+
 	public:
 
 		std::vector<weight_t> min_distance;
@@ -204,8 +220,10 @@ namespace GenericGraphs{
 			this->previous = from.previous;
 			this->lastStart = from.lastStart;
 			this->sid = from.sid;
+			this->uid = from.uid;
 
-			uid = GLOBAL_GRAPH_UID++; 
+			// Attributes
+			this->vertices_prop = from.vertices_prop;
 		}
 
 		void AddEdge(vertex_t p1, vertex_t p2, weight_t weight, int index = -1)
@@ -229,7 +247,7 @@ namespace GenericGraphs{
 			return *vertices.begin();
 		}
 
-		void removeDirectedEdge(vertex_t p1, vertex_t p2)
+		inline void removeDirectedEdge(vertex_t p1, vertex_t p2)
 		{
 			std::list<Edge> * adj = &adjacency_map[p1];
 
@@ -245,13 +263,13 @@ namespace GenericGraphs{
 			}
 		}
 
-		void removeEdge(vertex_t p1, vertex_t p2)
+		inline void removeEdge(vertex_t p1, vertex_t p2)
 		{
 			removeDirectedEdge(p1, p2);
 			removeDirectedEdge(p2, p1);
 		}
 
-		void SetDirectedEdgeWeight(vertex_t p1, vertex_t p2, weight_t newWeight)
+		inline void SetDirectedEdgeWeight(vertex_t p1, vertex_t p2, weight_t newWeight)
 		{
 			std::list<Edge> * adj = &adjacency_map[p1];
 
@@ -267,10 +285,27 @@ namespace GenericGraphs{
 			}
 		}
 
-		void SetEdgeWeight(vertex_t p1, vertex_t p2, weight_t newWeight)
+		inline void SetEdgeWeight(vertex_t p1, vertex_t p2, weight_t newWeight)
 		{
 			SetDirectedEdgeWeight(p1, p2, newWeight);
 			SetDirectedEdgeWeight(p2, p1, newWeight);
+		}
+
+		inline void SetEdgePropertyDirected(vertex_t p1, vertex_t p2, const QString & propName, const QVariant & propValue){
+			std::list<Edge> * adj = &adjacency_map[p1];
+			for(typename std::list<Edge>::iterator i = adj->begin(); i != adj->end(); i++){
+				Edge * e = &(*i);
+				if(e->target == p2){
+					e->property[propName].setValue(propValue);
+					return;
+				}
+			}
+		}
+
+		inline void SetEdgeProperty(vertex_t p1, vertex_t p2, const QString & propName, const QVariant & propValue)
+		{
+			SetEdgePropertyDirected(p1, p2, propName, propValue);
+			SetEdgePropertyDirected(p2, p1, propName, propValue);
 		}
 
 		vertex_t GetRandomNeighbour(vertex_t p)
@@ -372,7 +407,8 @@ namespace GenericGraphs{
 
 			for(typename std::list<Edge>::iterator i = adj->begin(); i != adj->end(); i++){
 				Edge * e = &(*i);
-				if(e->target == v2) return true;
+				if(e->target == v2)
+					return true;
 			}
 
 			return false;
@@ -392,7 +428,9 @@ namespace GenericGraphs{
 				{
 					Edge e = *i;
 
-					result.push_back(Edge(Min(e.target, v1), e.weight, Max(e.target, v1)));
+					auto ej = Edge(Min(e.target, v1), e.weight, Max(e.target, v1));
+					ej.property = e.property;
+					result.push_back(ej);
 				}
 			}
 
@@ -593,21 +631,109 @@ namespace GenericGraphs{
 			return false;
 		}
 
-		std::map< std::string, std::set<int> > intSet;
-		size_t uid, sid;
+		std::vector<int> getEdges(int x)
+		{
+			std::vector<int> edges;
+			for(typename std::list<Edge>::iterator e = adjacency_map[x].begin(); e != adjacency_map[x].end(); e++)
+				edges.push_back(e->target);
+			return edges;
+		}
 
-		// Warning: memory leak properties
-		std::map<std::string, void*> property;
-		template<typename T>
-		void setProperty(std::string pname, const T & value){
-			T * ptr = new T;
-			(*ptr) = value;
-			property[pname] = (void *) ptr;
+		int findFixP(vector<int> cand) const 
+		{
+			std::vector<int> connections;
+			connections.resize(cand.size());
+
+			// This is necessary for the set_intersection function
+			std::sort(cand.begin(),cand.end());
+
+			// Auxiliary lambda function
+			auto intersection = [&cand, this](int x) -> int {
+				const vector<int>& x_edges = this->getEdges(x);
+				std::vector<int> intersection;
+
+				set_intersection(x_edges.begin(), x_edges.end(),
+					cand.begin(), cand.end(),
+					back_inserter(intersection));
+				return intersection.size();
+			};
+
+			// Create an auxiliary vector with the intersection sizes
+			std::transform(cand.begin(),cand.end(),connections.begin(),intersection);
+
+			// Find the maximum size and return the corresponding edge
+			std::vector<int>::const_iterator it1, it2,itmax;
+			int max = -1;
+			itmax = cand.end();
+			for(it1=cand.begin(),it2=connections.begin(); it1!=cand.end(); ++it1,++it2){
+				if(max < *it2){
+					max = *it2;
+					itmax = it1;
+				}
+			}
+			if(itmax == cand.end()) return -1;
+			else return *itmax;
 		}
-		template<typename T>
-		T * getProperty(std::string pname){
-			if(property.find(pname) == property.end()) return NULL;
-			return (T*)property[pname];
+
+		void cliqueEnumerate(const std::vector<int>& compsub, 
+			std::vector<int> cand, std::vector<int> cnot,
+			std::vector< std::vector<int> >& result) const 
+		{
+			// Function that answer whether the node is connected
+			if(cand.empty()){
+				if(cnot.empty()){
+					// New clique found
+					result.push_back(compsub);
+				}
+			} else {
+				int fixp = findFixP(cand);
+				int cur_v = fixp;
+
+				while(cur_v != -1)
+				{
+					std::vector<int> new_not;
+					std::vector<int> new_cand;
+					std::vector<int> new_compsub;
+
+					// Auxiliary lambda function
+					auto isConected =[cur_v,this](int x) {
+						const std::vector<int>& edges = this->getEdges(x);
+						return find(edges.begin(), edges.end(), cur_v) != edges.end();
+					};
+
+					// Compose new vector
+					// Avoid performance bottlenecks by reserving memory before hand
+					new_compsub.reserve(compsub.size()+1);
+					new_not.reserve(cnot.size());
+					new_cand.reserve(cand.size());
+					copy_if(cnot.begin(),cnot.end(),back_inserter(new_not),isConected);
+					copy_if(cand.begin(),cand.end(),back_inserter(new_cand),isConected);
+					copy(compsub.begin(), compsub.end(), back_inserter(new_compsub));
+					new_compsub.push_back(cur_v);
+
+					// Recursive call
+					cliqueEnumerate(new_compsub, new_cand, new_not, result);
+
+					// Generate new cnot and cand for the loop
+					cnot.push_back(cur_v);
+					cand.erase(find(cand.begin(),cand.end(),cur_v));
+
+					// Last check
+					auto v = find_if(cand.begin(),
+						cand.end(),
+						[fixp,this](int x) {
+							const std::vector<int>& edges = this->getEdges(x);
+							return find(edges.begin(), edges.end(), fixp) == edges.end();
+					});
+
+					// Obtain new cur_v value
+					if(v != cand.end()) cur_v = *v;
+					else break;
+				}
+			}
 		}
+
+		// Custom identifiers
+		size_t uid, sid;
 	};
 }

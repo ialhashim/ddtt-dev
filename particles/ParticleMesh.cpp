@@ -6,6 +6,10 @@
 
 #include "bluenoise.h"
 
+#include "kmeans.h"
+
+Q_DECLARE_METATYPE(Eigen::Vector3d)
+
 QVector<QColor> ParticleMesh::rndcolors = rndColors2(512);
 
 ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
@@ -235,9 +239,9 @@ ParticleMesh::~ParticleMesh()
 	if(relativeKdtree) delete relativeKdtree;
 }
 
-GenericGraphs::Graph<uint,double> ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
+SegmentGraph ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
 {
-	GenericGraphs::Graph<uint,double> graph = GenericGraphs::Graph<uint,double>();
+	SegmentGraph graph = SegmentGraph();
 
 	int eidx = 0;
 
@@ -424,13 +428,15 @@ void ParticleMesh::computeDistanceToFloor()
 	for(auto p : path) if(p < particles.size()) pathFromFloor.push_back(p);
 }
 
-std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponents( GenericGraphs::Graph<uint,double> & neiGraph )
+std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph & neiGraph )
 {
-	std::vector< GenericGraphs::Graph<uint,double> > result;
+	std::vector< SegmentGraph > result;
 	
 	// Make a copy of the graph we will modify
 	auto graph = toGraph();
 	if(graph.IsEmpty()) return result;
+
+	std::vector<SegmentGraph::Edge> cutEdges;
 
 	// Remove edges between two nodes having different segments
 	for(auto e : graph.GetEdgesSet())
@@ -441,12 +447,73 @@ std::vector< GenericGraphs::Graph<uint,double> > ParticleMesh::segmentToComponen
 		if(s1 != s2) 
 		{
 			graph.removeEdge( e.index, e.target );
-
-			neiGraph.AddEdge( e.index, e.target, 1.0 );
+			cutEdges.push_back( e );
 		}
-	} 
+	}
 
-	return graph.toConnectedParts();
+	auto all_parts = graph.toConnectedParts();
+	auto edgeToParts = [&]( SegmentGraph::Edge & e ){
+		std::pair<uint,uint> result;
+		for(auto & part : all_parts) if(part.IsHasVertex(e.index)) {result.first = part.uid; part.sid = particles[e.index].segment;}
+		for(auto & part : all_parts) if(part.IsHasVertex(e.target)) {result.second = part.uid; part.sid = particles[e.target].segment;}
+		return result;
+	};
+
+	auto edgeCenter = [&]( SegmentGraph::Edge & e ){
+		return Vector3(0.5 * ( particles[e.index].pos + particles[e.target].pos ));
+	};
+
+	auto edgeDirection = [&]( SegmentGraph::Edge & e ){
+		return Vector3(( particles[e.index].pos - particles[e.target].pos ).normalized());
+	};
+
+	// Boundary edges
+	typedef std::pair<uint,uint> EdgeID;
+	QMap< EdgeID, std::vector<SegmentGraph::Edge> > boundaryEdges;
+
+	for(auto & e : cutEdges)
+	{
+		// First find parts containing an original edge
+		auto parts = edgeToParts( e );
+
+		auto key = EdgeID(std::min(parts.first, parts.second), std::max(parts.first, parts.second));
+		boundaryEdges[ key ].push_back( e );
+	}
+
+	for(auto key : boundaryEdges.keys())
+	{
+		auto count = boundaryEdges[key].size();
+
+		neiGraph.AddEdge( key.first, key.second, count);
+
+		/// Assign properties:
+
+		// Boundary plane and center:
+		auto e = boundaryEdges[key].front();
+		Vector3 b_normal = edgeDirection(e);
+		Vector3 b_center = edgeCenter(e);
+
+		// Better estimation
+		if(count > 3)
+		{
+			Eigen::MatrixXd points( count, 3 ); int r = 0;
+			for(auto & e : boundaryEdges[key]) points.row(r++) = edgeCenter(e);
+			
+			// Fit a plane to a set of points with help of SVD
+			b_center = Vector3(points.colwise().mean());
+			points = points.rowwise() - b_center.transpose();
+			Eigen::JacobiSVD<Eigen::MatrixXd> svd(points, Eigen::ComputeThinU | Eigen::ComputeThinV);
+			b_normal = svd.matrixV().col(2).normalized();
+		}
+
+		QVariant normalVar; normalVar.setValue( b_normal );
+		QVariant centerVar; centerVar.setValue( b_center );
+
+		neiGraph.SetEdgeProperty( key.first, key.second, "normal", normalVar );
+		neiGraph.SetEdgeProperty( key.first, key.second, "center", centerVar );
+	}
+
+	return all_parts;
 }
 
 std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )
@@ -517,4 +584,82 @@ std::vector< std::pair< double, size_t > > ParticleMesh::closestParticles(const 
 	std::sort( result.begin(), result.end(), [](const DistParticleID& a, const DistParticleID & b){ return a.first < b.first; } );
 
 	return result;
+}
+
+void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm )
+{
+	if(!particles.size()) return;
+
+	typedef std::vector<float> VectorFloat;
+
+	// Clustering engine:
+	clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(desc, K);
+
+	// Distance measure:
+	if(use_l1_norm) clustering::lpnorm_p = 1;
+	else clustering::lpnorm_p = 2;
+
+	// Custom seeding:
+	if( seeds.size() )
+	{
+		km._centers.clear();
+		for(auto pid : seeds) km._centers.push_back( desc[pid] );
+	}
+
+	// Parameters:
+	int numIterations = 300;
+	double minchangesfraction = 0.005;
+
+	km.run(numIterations, minchangesfraction);
+
+	// Assign particles to classes:
+	#pragma omp parallel for
+	for(int pi = 0; pi < (int)particles.size(); pi++){
+		auto & p = particles[pi];
+		p.segment = (int) km.clusters()[p.id];
+	}
+	
+	/*bool isClusterShapesTogether = false;
+	if( isClusterShapesTogether )
+	{
+		// Collect descriptors
+		std::vector< std::vector<float> > allDesc;
+		for(auto & s : pw->pmeshes){
+			if( pw->ui->bandvalue() > 0 )
+				allDesc.insert(allDesc.end(), sig.begin(), sig.end());
+			else
+				allDesc.insert(allDesc.end(), desc.begin(), desc.end());
+		}
+
+		// Cluster
+		clustering::kmeans< std::vector< std::vector<float> >, dist_fn > km(allDesc, K);
+		km.run(numIterations, minchangesfraction);
+
+		// Assign classes
+		int pi = 0;
+		for(auto & s : pw->pmeshes)
+			for(auto & p : particles)
+				p.segment = (int) km.clusters()[pi++];
+	}*/
+}
+
+void ParticleMesh::shrinkSmallerClusters()
+{
+	std::vector<int> newSegmentAssignment(particles.size());
+
+	for(auto & p : particles)
+	{
+		std::map<size_t,size_t> clusterHistogram;
+		for( auto pj : neighbourhood(p, 2) ) 
+			clusterHistogram[ particles[pj].segment ]++;
+
+		std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
+		std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
+
+		// majority rule
+		newSegmentAssignment[p.id] = (int)ch.back().first;
+		//p.segment = ch.back().first; // iterative arbitrary growing
+	}
+
+	for(auto & p : particles) p.segment = newSegmentAssignment[p.id];
 }

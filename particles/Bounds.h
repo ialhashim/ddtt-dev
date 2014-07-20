@@ -51,3 +51,5 @@ struct Bounds
 		return c;
 	}
 };
+
+typedef Bounds<double> Boundsd;

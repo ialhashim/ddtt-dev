@@ -1,5 +1,12 @@
 #pragma once
 
+#include <QOpenGLShaderProgram>
+#include <QWidget>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QFileDialog>
+#include <QElapsedTimer>
+
 #include <vector>
 #include <stdint.h>
 #include <Eigen/Core>
