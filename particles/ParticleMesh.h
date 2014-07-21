@@ -18,6 +18,8 @@
 #include "GenericGraph.h"
 typedef GenericGraphs::Graph<uint,double> SegmentGraph;
 
+typedef std::vector<float> VectorFloat;
+
 class ParticleMesh
 {
 public:
@@ -33,6 +35,7 @@ public:
 	void computeDistanceToFloor();
 	std::vector<size_t> pathFromFloor;
 
+	std::vector<VectorFloat> cluster_centers;
 	void cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm );
 	void shrinkSmallerClusters();
 

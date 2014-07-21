@@ -88,9 +88,4 @@ public:
 			Rank[jrep]++;
 		}
 	}
-
-	/// Return the element count of the set that the specified elements belong to.
-	int SetSize(int i) {
-		return SizeOfSet[Find(i)];
-	}
 };

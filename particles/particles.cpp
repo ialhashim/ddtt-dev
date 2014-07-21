@@ -240,6 +240,12 @@ void particles::processShapes()
 						}
 					}
 
+					NanoKdTree all_medial_kdtree;
+					for(size_t i = 0; i < ma_point_active.size(); i++)
+						if( ma_point_active[i] )
+							all_medial_kdtree.addPoint( ma_point[i].cast<double>() );
+					all_medial_kdtree.build();
+
 					// Filter out not so medial points
 					if( pw->ui->filterMedialPoints->isChecked() )
 					{
@@ -278,47 +284,9 @@ void particles::processShapes()
 					}
 					medial_kdtree.build();
 
-					// Contract medial points to their neighborhood center
-					for( int i = 0; i < pw->ui->contractMedial->value(); i++ )
-					{
-						// Get a set of neighbors for each medial point
-						std::vector< std::vector<Vector3> > nei(s->particles.size());
-						for(int pi = 0; pi < (int)s->particles.size(); pi++){
-							if( !ma_point_active[pi] ) continue;
-
-							KDResults matches;
-							medial_kdtree.ball_search( ma_point[pi].cast<double>(), s->grid.unitlength * 1.5, matches );
-							for(auto m : matches) 
-								if((medial_kdtree.cloud.pts[m.first]-ma_point[pi].cast<double>()).norm() > 1e-6) 
-									nei[pi].push_back(medial_kdtree.cloud.pts[m.first]);
-						}
-
-						// Move to center of neighborhood
-						for(int pi = 0; pi < (int)s->particles.size(); pi++){
-							if( !ma_point_active[pi] ) continue;
-							Vector3 sumv(0,0,0);
-							for(auto v : nei[pi]) sumv += v;
-							ma_point[pi] = sumv.cast<float>() / nei[pi].size();
-						}
-					}
-
 					// Report
 					mainWindow()->setStatusBarMessage( QString("Medial particles (%1 ms)").arg( timer.elapsed() ) );
 					timer.restart();
-
-					// [DEBUG] medial points
-					if( pw->ui->showMedial->isChecked() )
-					{
-						starlab::PointSoup * ps = new starlab::PointSoup;
-						float maxVal = -1;
-						for(size_t i = 0; i < ma_point_active.size(); i++) maxVal = std::max(maxVal, ma_point_rad[i]);
-						for(size_t i = 0; i < ma_point_active.size(); i++) {
-							if(ma_point_active[i])
-								ps->addPoint(Vector3(ma_point[i].cast<double>()), starlab::qtJetColor(ma_point_rad[i], 0, maxVal));
-						}
-						drawArea()->deleteAllRenderObjects();
-						drawArea()->addRenderObject(ps);
-					}
 
 					// Only use descriptors from medial points
 					if( true )
@@ -334,6 +302,23 @@ void particles::processShapes()
 									raytracing::RayHit hit = rt.hit( maPoint, (d + Vector3(1,1,1) * 1e-6).normalized() ); // weird bug..
 									descriptor[pi][r++] = hit.distance;
 								}
+
+								// Compute flatness of my neighbourhood
+								double search_rad = s->grid.unitlength * 4;
+								KDResults matches;
+								all_medial_kdtree.ball_search(maPoint, search_rad, matches);
+
+								Eigen::MatrixXf x(3, matches.size());
+								for(size_t i = 0; i < matches.size(); i++)
+									x.col(i) = all_medial_kdtree.cloud.pts[matches[i].first].cast<float>();
+
+								Eigen::MatrixXf avg = x.rowwise().mean();
+								x = x - avg.replicate(1,x.cols());
+								Eigen::MatrixXf sigma = x * x.transpose() * (1.0 / x.cols());
+								Eigen::JacobiSVD<Eigen::MatrixXf> svd(sigma, Eigen::ComputeFullU | Eigen::ComputeFullV);
+								Eigen::Vector3f values = svd.singularValues().normalized();
+
+								s->particles[pi].flat = values[1] / values[0];
 							}
 						}
 
@@ -345,6 +330,7 @@ void particles::processShapes()
 								size_t pj = ma_particle[medial_kdtree.closest( s->particles[pi].pos )];
 								descriptor[pi] = descriptor[pj];
 
+								s->particles[pi].flat = s->particles[pj].flat;
 								s->particles[pi].avgDiameter = s->particles[pj].avgDiameter;
 								//s->particles[pi].measure = s->particles[pj].measure;
 							}
@@ -354,9 +340,36 @@ void particles::processShapes()
 						}
 					}
 
+					// Normalize diameters
+					if( true )
+					{
+						Bounds<float> b;
+						for(auto & p : s->particles) b.extend(p.avgDiameter);
+						for(auto & p : s->particles) p.avgDiameter = b.normalized(p.avgDiameter);
+					}
+
 					// Report
 					mainWindow()->setStatusBarMessage( QString("Projection to Medial particles (%1 ms)").arg( timer.elapsed() ) );
 					timer.restart();
+
+					// [DEBUG] medial points
+					if( pw->ui->showMedial->isChecked() )
+					{
+						starlab::PointSoup * ps = new starlab::PointSoup;
+						Boundsf interval;
+
+						for(size_t i = 0; i < ma_point_active.size(); i++) 
+							 interval.extend(ma_point_rad[i]);
+
+						for(size_t i = 0; i < ma_point_active.size(); i++) {
+							if(ma_point_active[i]){
+								float val = interval.normalized( ma_point_rad[i] );
+								ps->addPoint(Vector3(ma_point[i].cast<double>()), starlab::qtJetColor(val));
+							}
+						}
+
+						drawArea()->addRenderObject(ps);
+					}
 
 					// [DEBUG] show projected skeleton
 					if( pw->ui->projectSkeleton->isChecked() )
@@ -368,14 +381,6 @@ void particles::processShapes()
 
 						document()->addModel( m );
 						drawArea()->setRenderer(m, "Flat Wire");
-					}
-
-					// Normalize diameters
-					if( true )
-					{
-						Bounds<float> b;
-						for(auto & p : s->particles) b.extend(p.avgDiameter);
-						for(auto & p : s->particles) p.avgDiameter = b.normalized(p.avgDiameter);
 					}
 
 					// [DEBUG] show main 'direction' of particles
@@ -393,7 +398,7 @@ void particles::processShapes()
 			}
 
 			// Rotation invariant descriptor
-			if( pw->ui->bands->value() > 0 )
+			if( pw->ui->useRotationInv->isChecked() && pw->ui->bands->value() > 0 )
 			{
 				s->sig = std::vector< std::vector<float> >(s->particles.size(), std::vector<float>( pw->ui->bands->value() ));
 
@@ -450,6 +455,7 @@ void particles::processShapes()
 				if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
 				if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
 				if(pw->ui->useDiameter->isChecked()   ) 	new_desc.push_back(p.avgDiameter);
+				if(pw->ui->useFlat->isChecked()		  )		new_desc.push_back(p.flat);
 				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
 				if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
 
@@ -507,8 +513,12 @@ void particles::processShapes()
 			s->shrinkSmallerClusters();
 	}
 
+	// Report
+	mainWindow()->setStatusBarMessage( QString("Merging clusters (%1 ms)").arg( curTimer.elapsed() ) );
+	curTimer.restart();
+
 	// Find symmetric parts
-	if( pw->ui->showSymmetry->isChecked() )
+	if( pw->ui->performSturctureAnalysis->isChecked() )
 	{	
 		for(auto & s : pw->pmeshes)
 		{		
@@ -518,6 +528,10 @@ void particles::processShapes()
 
 			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( sa.allSegs.size() ).arg( sa.pcount ));
 		}
+
+		// Report
+		mainWindow()->setStatusBarMessage( QString("Structure analysis (%1 ms)").arg( curTimer.elapsed() ) );
+		curTimer.restart();
 	}
 
 	// Report

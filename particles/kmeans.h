@@ -8,6 +8,7 @@
 #include <set>
 #include <random>
 #include <functional>
+#include <omp.h>
 
 #include <QDebug>
 
@@ -173,15 +174,8 @@ class kmeans
 			std::size_t changes = 0;
 
 			// distribute items on clusters in parallel
-			//thread_group pool;
 			std::size_t idx = 0;
-			//mutex_t mtx;
-			//for (std::size_t i = 0; i < thread::hardware_concurrency(); i++)
-			{
-				//pool.create_thread(boost::bind(&kmeans::distribute_samples, this, ref(idx), ref(changes), ref(mtx)));
-				distribute_samples(idx, changes);
-			}
-			//pool.join_all();
+			distribute_samples(idx, changes);
 
 			iteration++;
 
@@ -234,7 +228,6 @@ class kmeans
 				{
 					std::size_t c = valid[i];
 
-
 					for (std::size_t k = 0; k < _collection.size(); k++)
 					{
 						if (_clusters[k] != c) continue;
@@ -270,14 +263,6 @@ class kmeans
 		std::cout << "kmeans iterations: " << iteration << std::endl;	
 	}
 
-
-    /// Run clustering, using theoretically unlimited number of iterations. Clustering will
-    /// stop when the fraction of changes falls below 0.01
-    void run_default()
-    {
-        this->run(std::numeric_limits<std::size_t>::max(), 0.01);
-    }
-
     /// Vector of cluster membership: clusters[i] = j means that the sample with index i
     /// is a member of cluster j
     const std::vector<std::size_t>& clusters() const
@@ -291,20 +276,9 @@ class kmeans
         return _centers;
     }
 
-
-    /// Convenience function generating a clustering table:
-    /// table[i][j] = k means that the sample with index k belongs to cluster i.
-    template <class index_t>
-    void make_cluster_table(std::vector<std::vector<index_t> >& table)
-    {
-        table.resize(_centers.size());
-        for (std::size_t i = 0; i < _clusters.size(); i++) table[_clusters[i]].push_back(i);
-    }
-
     template <class T>
     static void add_operation(T& lhs, const T& rhs)
     {
-		#pragma omp parallel for
         for (int i = 0; i < (int)lhs.size(); i++) 
 			lhs[i] += rhs[i];
     }
@@ -312,7 +286,6 @@ class kmeans
     template <class T>
     static void div_operation(T& lhs, double rhs)
 	{
-		#pragma omp parallel for
         for (int i = 0; i < (int)lhs.size(); i++) 
 			lhs[i] /= rhs;
     }
@@ -324,43 +297,24 @@ class kmeans
 		std::vector<double> dists(_centers.size());
 		std::size_t currentchanges = 0;
 
-		for (;;)
+		for (; index < _collection.size(); index++ )
 		{
-			std::size_t i;
-
-			{
-				//locker_t locker(mutex);
-				if (index == _collection.size()) break;
-				i = index++;
-			}
-
-			// compute distance of current point to every center
-			//std::transform(_centers.begin(), _centers.end(), dists.begin(), std::bind(_distfn, std::ref(_collection[i]), std::arg<1>()));
-
-			#pragma omp parallel for
+			//#pragma omp parallel for
 			for(int ci = 0; ci < (int)_centers.size(); ci++)
-				dists[ci] = _distfn(_centers[ci], _collection[i]);
+				dists[ci] = _distfn(_centers[ci], _collection[index]);
 
 			// find the minimum distance, i.e. the nearest center
 			std::size_t c = std::distance(dists.begin(), std::min_element(dists.begin(), dists.end()));
 
 			// update cluster membership
+			if (_clusters[index] != c)
 			{
-				//locker_t locker(_mutex);
-
-				if (_clusters[i] != c)
-				{
-					_clusters[i] = c;
-					currentchanges++;
-				}
-				//if (i % 1000 == 0) std::cout << "kmeans distribute: " << i << std::endl;
+				_clusters[index] = c;
+				currentchanges++;
 			}
 		}
 
-		{
-			//locker_t locker(mutex);
-			changes += currentchanges;
-		}
+		changes += currentchanges;
     }
 
     const collection_t& _collection;

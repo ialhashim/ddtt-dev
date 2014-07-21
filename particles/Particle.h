@@ -29,5 +29,5 @@ struct Particle
     Scalar measure;
 	Scalar weight;
 	Scalar alpha;
-	float avgDiameter;
+	float avgDiameter, flat;
 };

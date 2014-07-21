@@ -53,3 +53,4 @@ struct Bounds
 };
 
 typedef Bounds<double> Boundsd;
+typedef Bounds<float> Boundsf;

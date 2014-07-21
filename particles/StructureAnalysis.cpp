@@ -4,6 +4,8 @@
 #include "Bounds.h"
 #include "graph_helper.h"
 
+#include "disjointset.h"
+
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 Q_DECLARE_METATYPE(Eigen::Vector3f)
@@ -19,11 +21,13 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	std::map<int, std::vector<SegmentGraph*> > groupedSegments;
 	SegmentGraph neiGraph;
 
-	for(auto seg : s->segmentToComponents( neiGraph ))
+	auto segments = s->segmentToComponents( neiGraph );
+
+	for(auto & seg : segments)
 	{
 		int si = s->particles[seg.FirstVertex()].segment;
 
-		auto c_seg = new SegmentGraph( seg );
+		auto c_seg = &seg;
 
 		groupedSegments[ si ].push_back( c_seg );
 
@@ -69,6 +73,62 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 
 	debug << segsCentroid;
 
+	// Merge similar isolated segments
+	{
+		segsCentroid->clear();
+
+		std::vector<SegmentGraph*> isolated;
+		for(auto & segGroup : groupedSegments){
+			//if(segGroup.second.size() > 1) continue;
+			//isolated.push_back( segGroup.second.front() );
+
+			for(auto seg : segGroup.second)
+				isolated.push_back(seg);
+		}
+
+		for(auto & seg : isolated)
+			segsCentroid->addPoint(seg->property["centroid"].value<Vector3>(), Qt::black);
+
+		DisjointSet disjointset(isolated.size());
+
+		for(size_t i = 0; i < isolated.size(); i++){
+			auto & segI = isolated[i];
+			for(size_t j = i + 1; j < isolated.size(); j++){
+				auto & segJ = isolated[j];
+
+				// Consider neighbors only
+				if( !neiGraph.IsEdgeExists( segI->uid, segJ->uid ) )
+					continue;
+
+				Vector3 centroid_i = segI->property["centroid"].value<Vector3>();
+				Vector3 centroid_j = segJ->property["centroid"].value<Vector3>();
+
+				uint centroid_id_i = segI->property["centroid_id"].value<uint>();
+				uint centroid_id_j = segJ->property["centroid_id"].value<uint>();
+
+				// Height difference
+				//if( std::abs((centroid_i - centroid_j).z()) > s->grid.unitlength * 3 )
+				//	continue;
+
+				// Flatness similarity
+				auto flat_i = s->particles[centroid_id_i].flat;
+				auto flat_j = s->particles[centroid_id_j].flat;
+				auto ratio = std::min(flat_i,flat_j) / std::max(flat_i,flat_j);
+
+				if( ratio > 0.6 )
+					disjointset.Union(i,j);
+			}
+		}
+
+		for(size_t i = 0; i < isolated.size(); i++){
+			auto & seg = isolated[i];
+			for(auto & v : seg->vertices)
+				s->particles[v].segment = isolated[disjointset.Parent[i]]->sid;
+		}
+
+		return;
+	}
+
 	// Relationships
 	for(auto edge : neiGraph.GetEdgesSet())
 	{
@@ -79,7 +139,7 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 		ps->addPlane(center,normal);
 		debug << ps;
 	}
-
+	
 	// For visualization
 	if(true)
 	{
@@ -101,7 +161,7 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 		static SvgView * viewer = new SvgView;
 		viewer->show( buildSVG( toGraphvizFormat(neiGraph, nodeColors, nodeLabels) ) );
 	}
-
+	/*
 	//double threshold = s->grid.unitlength * 3; // two voxels
 
 	pcount = 0;
@@ -198,5 +258,5 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 
 		//debug << ps;
 	}
-
+	*/
 }

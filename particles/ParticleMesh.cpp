@@ -590,8 +590,6 @@ void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_n
 {
 	if(!particles.size()) return;
 
-	typedef std::vector<float> VectorFloat;
-
 	// Clustering engine:
 	clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(desc, K);
 
@@ -611,6 +609,9 @@ void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_n
 	double minchangesfraction = 0.005;
 
 	km.run(numIterations, minchangesfraction);
+
+	// Record centers
+	this->cluster_centers = km.centers();
 
 	// Assign particles to classes:
 	#pragma omp parallel for
