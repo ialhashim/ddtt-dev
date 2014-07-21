@@ -317,8 +317,15 @@ void particles::processShapes()
 								Eigen::MatrixXf sigma = x * x.transpose() * (1.0 / x.cols());
 								Eigen::JacobiSVD<Eigen::MatrixXf> svd(sigma, Eigen::ComputeFullU | Eigen::ComputeFullV);
 								Eigen::Vector3f values = svd.singularValues().normalized();
+								Eigen::Matrix3f V = svd.matrixV();
 
-								s->particles[pi].flat = values[1] / values[0];
+								auto normal = V.col(0).cross( V.col(1) ).normalized();
+								float ratio = (values[1] / values[0]);
+								
+								s->particles[pi].axis = normal.cast<double>();
+								s->particles[pi].flat = ratio;
+
+								ma_point_rad[pi] = ratio;
 							}
 						}
 
@@ -330,9 +337,10 @@ void particles::processShapes()
 								size_t pj = ma_particle[medial_kdtree.closest( s->particles[pi].pos )];
 								descriptor[pi] = descriptor[pj];
 
-								s->particles[pi].flat = s->particles[pj].flat;
 								s->particles[pi].avgDiameter = s->particles[pj].avgDiameter;
 								//s->particles[pi].measure = s->particles[pj].measure;
+								s->particles[pi].axis = s->particles[pj].axis;
+								s->particles[pi].flat = s->particles[pj].flat;
 							}
 
 							auto maxelement = std::max_element(descriptor[pi].begin(),descriptor[pi].end());
@@ -358,8 +366,9 @@ void particles::processShapes()
 						starlab::PointSoup * ps = new starlab::PointSoup;
 						Boundsf interval;
 
-						for(size_t i = 0; i < ma_point_active.size(); i++) 
-							 interval.extend(ma_point_rad[i]);
+						for(size_t i = 0; i < ma_point_active.size(); i++)
+							if(ma_point_active[i])
+								interval.extend(ma_point_rad[i]);
 
 						for(size_t i = 0; i < ma_point_active.size(); i++) {
 							if(ma_point_active[i]){
@@ -369,6 +378,8 @@ void particles::processShapes()
 						}
 
 						drawArea()->addRenderObject(ps);
+
+						return;
 					}
 
 					// [DEBUG] show projected skeleton
@@ -388,11 +399,13 @@ void particles::processShapes()
 					{
 						starlab::LineSegments * vs = new starlab::LineSegments(2);
 						for(auto & particle : s->particles){
-							Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
+							Vector3 vec = particle.direction;
+							Eigen::Vector4d color(abs(vec[0]), abs(vec[1]), abs(vec[2]), particle.alpha);
 							color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
-							vs->addLine(particle.pos,  Vector3(particle.pos + particle.direction * 0.004), QColor::fromRgbF(color[0],color[1],color[2],1));
+							vs->addLine(particle.pos,  Vector3(particle.pos + vec * 0.01), QColor::fromRgbF(color[0],color[1],color[2],1));
 						}
-						s->debug.push_back(vs);
+						drawArea()->addRenderObject(vs);
+						return;
 					}
 				}
 			}
@@ -403,17 +416,12 @@ void particles::processShapes()
 				s->sig = std::vector< std::vector<float> >(s->particles.size(), std::vector<float>( pw->ui->bands->value() ));
 
 				#pragma omp parallel for
-				for(int pi = 0; pi < (int)s->particles.size(); pi++)
-				{
+				for(int pi = 0; pi < (int)s->particles.size(); pi++){
 					auto & p = s->particles[pi];
-
 					auto desc = s->desc[pi];
-					// Normalize descriptor
-					//desc = Bounds<float>::from( desc ).normalize( desc );
-
+					//desc = Bounds<float>::from( desc ).normalize( desc ); // Normalize descriptor
 					std::vector<float> coeff;
 					sh.SH_project_function(desc, sh_samples, coeff);
-
 					s->sig[p.id] = sh.SH_signature(coeff);
 				}
 			}
@@ -458,12 +466,6 @@ void particles::processShapes()
 				if(pw->ui->useFlat->isChecked()		  )		new_desc.push_back(p.flat);
 				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
 				if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
-
-				if(pw->ui->experimentIter->value())
-				{
-					double vertical = abs(dot(p.axis, Vector3(0,0,1)));
-					new_desc.push_back(vertical);
-				}
 
 				if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
 
