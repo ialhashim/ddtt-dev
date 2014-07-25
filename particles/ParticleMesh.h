@@ -36,7 +36,7 @@ public:
 	std::vector<size_t> pathFromFloor;
 
 	std::vector<VectorFloat> cluster_centers;
-	void cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm );
+	void cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm, bool showSeeds );
 	void shrinkSmallerClusters();
 
 	enum GraphEdgeWeight{ GEW_DISTANCE, GEW_DIAMETER };
@@ -46,8 +46,9 @@ public:
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
-	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step );
 	std::vector< double > agd( int numStartPoints );
+	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step = 2);
+	Particle<Vector3> pointToParticle( const Vector3 & point );
 
 	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );
 
@@ -68,4 +69,5 @@ public:
 
 	QVector<RenderObject::Base*> debug;
 	void distort();
+
 };

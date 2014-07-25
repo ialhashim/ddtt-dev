@@ -19,7 +19,10 @@ struct Particle
 	typedef double Scalar;
 
     explicit Particle(const Vector3& pos) : pos(pos), measure(0.0), weight(1), 
-		alpha(1.0), direction(Vector3(0,0,1)), flag(NONE), avgDiameter(0), segment(0) {}
+		alpha(1.0), direction(Vector3(0,0,1)), flag(NONE), avgDiameter(0), segment(0) 
+	{
+		id = -1; // an invalid ID
+	}
 
 	size_t id, correspondence;
 	uint64_t morton;

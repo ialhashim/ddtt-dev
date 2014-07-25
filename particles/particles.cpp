@@ -262,7 +262,7 @@ void particles::processShapes()
 								float max_rad = ma_point_rad[pi];
 
 								// Look around for access to wider regions
-								for(auto pj : s->neighbourhood( s->particles[pi], 2 ))
+								for(auto pj : s->neighbourhood( s->particles[pi] ))
 									max_rad = std::max(max_rad, ma_point_rad[pj]);
 
 								// A neighbor has wider access than me => I'm not so medial
@@ -500,7 +500,7 @@ void particles::processShapes()
 				}
 			}
 
-			s->cluster(K, seeds, pw->ui->l1norm->isChecked());
+			s->cluster(K, seeds, pw->ui->l1norm->isChecked(), pw->ui->showSeeds->isChecked());
 		}
 	}
 
@@ -995,8 +995,9 @@ bool particles::keyPressEvent(QKeyEvent*e)
 
 		sphere->normalizeValues();
 
-		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3] measure [%4]").arg(pi).arg(*std::max_element(
-			pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(*std::min_element(pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(pmesh->particles[pi].measure) );
+		mainWindow()->setStatusBarMessage( QString("Particle [%1] with maximum [%2] and minimum [%3] measure [%4] flat [%5]").arg(pi).arg(*std::max_element(
+			pmesh->desc[ pi ].begin(),pmesh->desc[ pi ].end())).arg(*std::min_element(pmesh->desc[ pi ].begin(),
+			pmesh->desc[ pi ].end())).arg(pmesh->particles[pi].measure).arg(pmesh->particles[pi].flat) );
 
 		spheres.clear();
 		spheres.push_back( sphere );

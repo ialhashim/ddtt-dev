@@ -113,14 +113,9 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 				// Flatness
 				auto flat_i = s->particles[centroid_id_i].flat;
 				auto flat_j = s->particles[centroid_id_j].flat;
-				//auto ratio = std::min(flat_i,flat_j) / std::max(flat_i,flat_j);
+				auto flat_similiarty = 1 - abs(flat_i - flat_j);
 
-				// Consider only flat segments
-				if(flat_i < 0.5 || flat_j < 0.5)
-					continue;
-
-				//if( ratio > 0.6 )
-				if( abs( s->particles[centroid_id_i].axis.dot(s->particles[centroid_id_j].axis) ) > 0.7 )
+				if( flat_i > 0.7 && flat_similiarty > 0.7 )
 					disjointset.Union(i,j);
 			}
 		}

@@ -10,7 +10,7 @@
 
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 
-QVector<QColor> ParticleMesh::rndcolors = rndColors2(512);
+QVector<QColor> ParticleMesh::rndcolors = rndColors2(10000);
 
 ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
 	raidus(particle_raidus)
@@ -387,10 +387,10 @@ std::vector<size_t> ParticleMesh::randomSamples( int numSamples, bool isSpread )
 	}
 	else
 	{
-		std::uniform_int_distribution<int> uniform(0, int(particles.size()-1));
-		std::random_device rand_dev;
-		std::mt19937 mt(rand_dev()); 
-		for(int i = 0; i < numSamples; i++) set.insert(uniform(mt));
+		std::vector<int> idx;
+		for(size_t i = 0; i < particles.size(); i++) idx.push_back(i);
+		for(int idx : random_sampling<int>(idx, numSamples))
+			set.insert(idx);
 	}
 
 	for(auto i : set) samples.push_back(i);
@@ -586,7 +586,7 @@ std::vector< std::pair< double, size_t > > ParticleMesh::closestParticles(const 
 	return result;
 }
 
-void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm )
+void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm, bool showSeeds )
 {
 	if(!particles.size()) return;
 
@@ -604,8 +604,16 @@ void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_n
 		for(auto pid : seeds) km._centers.push_back( desc[pid] );
 	}
 
+	// [DEBUG] seed points
+	if( showSeeds )
+	{
+		starlab::PointSoup * ps = new starlab::PointSoup(20);
+		for(auto pid : seeds) ps->addPoint(particles[pid].pos, Qt::black);
+		debug.push_back(ps);
+	}
+
 	// Parameters:
-	int numIterations = 300;
+	int numIterations = 1000;
 	double minchangesfraction = 0.005;
 
 	km.run(numIterations, minchangesfraction);
@@ -648,10 +656,12 @@ void ParticleMesh::shrinkSmallerClusters()
 {
 	std::vector<int> newSegmentAssignment(particles.size());
 
-	for(auto & p : particles)
-	{
+	#pragma omp parallel for
+	for(int pi = 0; pi < (int)particles.size(); pi++){
+		auto & p = particles[pi];
+
 		std::map<size_t,size_t> clusterHistogram;
-		for( auto pj : neighbourhood(p, 2) ) 
+		for( auto pj : neighbourhood(p) ) 
 			clusterHistogram[ particles[pj].segment ]++;
 
 		std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
@@ -663,4 +673,23 @@ void ParticleMesh::shrinkSmallerClusters()
 	}
 
 	for(auto & p : particles) p.segment = newSegmentAssignment[p.id];
+}
+
+Particle<Vector3> ParticleMesh::pointToParticle( const Vector3 & point )
+{
+	size_t gridsize = grid.gridsize;
+	double gridlength = gridsize * grid.unitlength;
+
+	Vector3 p = point - grid.translation.cast<double>();
+	Vector3 delta = p / gridlength;
+	Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+	uint64_t m = mortonEncode_LUT(gridpnt.z(),gridpnt.y(),gridpnt.x());
+
+	// Check: not occupied or outside of grid
+	bool isOccupied = grid.occupied[m];
+	bool isOutsideGrid = (gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) 
+			|| (gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1);
+	if( !isOccupied || isOutsideGrid ) return Particle<Vector3>(Vector3(DBL_MAX,DBL_MAX,DBL_MAX));
+
+	return particles[ mortonToParticleID[m] ];
 }

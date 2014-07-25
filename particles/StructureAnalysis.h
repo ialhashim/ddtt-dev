@@ -9,7 +9,7 @@ public:
 
 	ParticleMesh * s;
 
-	std::map<size_t, SegmentGraph*> allSegs;
+	QMap<size_t, SegmentGraph*> allSegs;
 	int pcount;
 
 	QVector<RenderObject::Base*> debug;

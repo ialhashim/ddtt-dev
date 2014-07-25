@@ -299,7 +299,7 @@ class kmeans
 
 		for (; index < _collection.size(); index++ )
 		{
-			//#pragma omp parallel for
+			#pragma omp parallel for
 			for(int ci = 0; ci < (int)_centers.size(); ci++)
 				dists[ci] = _distfn(_centers[ci], _collection[index]);
 
