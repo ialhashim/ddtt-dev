@@ -6,6 +6,8 @@
 
 #include "disjointset.h"
 
+#include "kmedoids.h"
+
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 Q_DECLARE_METATYPE(Eigen::Vector3f)
@@ -14,6 +16,7 @@ Q_DECLARE_METATYPE(Boundsd)
 
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
+
 	// Debug points
 	auto segsCentroid = new starlab::PointSoup(10);
 
@@ -72,6 +75,52 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	}
 
 	debug << segsCentroid;
+
+	// Experiment
+	{
+		std::vector<SegmentGraph*> allSegsVec;
+		for(auto seg : allSegs)
+			allSegsVec.push_back(seg);
+
+		// Similarity matrix
+		int N = allSegsVec.size();
+		Eigen::MatrixXf M = Eigen::MatrixXf( N, N );
+
+		for(size_t i = 0; i < N; i++){
+			for(size_t j = 0; j < N; j++){
+				auto segI = allSegsVec[i];
+				auto segJ = allSegsVec[j];
+
+				uint pi = segI->property["centroid_id"].value<uint>();
+				uint pj = segJ->property["centroid_id"].value<uint>();
+
+				auto di = Eigen::Map<Eigen::VectorXf>(&s->desc[pi][0], s->desc[pi].size());
+				auto dj = Eigen::Map<Eigen::VectorXf>(&s->desc[pj][0], s->desc[pj].size());
+				auto dist = (di-dj).norm();
+
+				M(i,j) = dist;
+			}
+		}
+
+		clustering::kmedoids km( M.rows() );
+		km.pam(M, 5, 0);
+
+		for(size_t i = 0; i < N; i++){
+			auto newSeg = km.cluster_ids[i];
+			auto seg = allSegsVec[i];
+
+			for(auto v : seg->vertices)
+				s->particles[v].segment = newSeg;
+		}
+
+		// For each level of clustering
+		{
+
+		}
+
+		return;
+	}
+
 
 	// Merge similar isolated segments
 	{
