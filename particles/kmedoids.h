@@ -101,7 +101,8 @@ namespace clustering {
 					if (is_medoid(i)) continue;
 
 					double gain = 0.0;
-					for (size_t j=0; j < distance.rows(); j++) {
+					#pragma omp parallel for reduction(+:gain)
+					for (int j=0; j < (int)distance.rows(); j++) {
 						double Dj = distance(j, medoid_ids[cluster_ids[j]]);  // distance from j to its medoid
 						gain += max(Dj - distance(i,j), 0.0);                 // gain from selecting i  
 					}
@@ -221,7 +222,9 @@ namespace clustering {
 
 			// go through and assign each object to nearest medoid, keeping track of total dissimilarity.
 			double total_dissimilarity = 0;
-			for (object_id i=0; i < cluster_ids.size(); i++) {
+
+			#pragma omp parallel for reduction(+:total_dissimilarity)
+			for (int i=0; i < (int)cluster_ids.size(); i++) {
 				double    d1, d2;  // smallest, second smallest distance to medoid, respectively
 				medoid_id m1, m2;  // index of medoids with distances d1, d2 from object i, respectively
 

@@ -112,9 +112,6 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="1">
-    <widget class="QSpinBox" name="experimentIter"/>
-   </item>
    <item row="15" column="0" colspan="2">
     <widget class="QCheckBox" name="useGroundDistSeed">
      <property name="text">
@@ -204,7 +201,7 @@
       <string>l1-norm for clustering</string>
      </property>
      <property name="checked">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
     </widget>
    </item>
@@ -350,6 +347,22 @@
     <widget class="QCheckBox" name="projectSkeleton">
      <property name="text">
       <string>Project skeleton</string>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="1">
+    <widget class="QDoubleSpinBox" name="experimentSpin">
+     <property name="decimals">
+      <number>3</number>
+     </property>
+     <property name="minimum">
+      <double>-1000000.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>1000000.000000000000000</double>
+     </property>
+     <property name="value">
+      <double>1.000000000000000</double>
      </property>
     </widget>
    </item>

@@ -16,7 +16,6 @@ Q_DECLARE_METATYPE(Boundsd)
 
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
-
 	// Debug points
 	auto segsCentroid = new starlab::PointSoup(10);
 
@@ -103,7 +102,7 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 		}
 
 		clustering::kmedoids km( M.rows() );
-		km.pam(M, 5, 0);
+		km.pam(M, groupedSegments.size(), 0);
 
 		for(size_t i = 0; i < N; i++){
 			auto newSeg = km.cluster_ids[i];

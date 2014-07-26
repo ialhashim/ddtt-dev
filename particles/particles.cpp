@@ -441,6 +441,16 @@ void particles::processShapes()
 					drawArea()->drawPoint(particle.pos, 5, starlab::qtJetColor(particle.avgDiameter));
 				return;
 			}
+
+			// Standardize features column-wise to zero mean and unit variance.
+			{
+				//size_t n = s->particles.size();
+				//size_t p = s->desc.front().size();
+				//auto M = toEigenMatrix<float>(s->desc);
+				//M.normalize();
+				//s->desc = fromEigenMatrix<float>(M);
+			}
+			
 		}
 	}
 
@@ -462,9 +472,9 @@ void particles::processShapes()
 
 				if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
 				if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
+				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
 				if(pw->ui->useDiameter->isChecked()   ) 	new_desc.push_back(p.avgDiameter);
 				if(pw->ui->useFlat->isChecked()		  )		new_desc.push_back(p.flat);
-				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
 				if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
 
 				if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
@@ -475,7 +485,7 @@ void particles::processShapes()
 				s->desc[p.id] = new_desc;
 			}
 
-			//showTable(s->desc, std::min(size_t(1000),s->particles.size()));
+			//showTable(s->desc, std::min(size_t(100),s->particles.size()));
 		}
 	}
 
