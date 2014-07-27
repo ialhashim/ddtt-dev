@@ -27,6 +27,8 @@ std::vector<Spherelib::Sphere*> spheres;
 
 #include "BasicTable.h"
 
+#include "consensus.h"
+
 void particles::processShapes()
 {
 	if(!widget) return;
@@ -525,12 +527,45 @@ void particles::processShapes()
 			s->shrinkSmallerClusters();
 	}
 
+	// Consensus clustering
+	if( pw->ui->performSturctureAnalysis->isChecked() )
+	{
+		for(auto & s : pw->pmeshes)
+		{
+			int clustersRuns = 10;
+			int kmeans_k = pw->ui->kclusters->value() * 3;
+			int consensusMaxClusters = pw->ui->kclusters->value();
+
+			Eigen::MatrixXd C = Eigen::MatrixXd(s->particles.size(), clustersRuns);
+
+			for( int i = 0; i < clustersRuns; i++ )
+			{
+				s->cluster(kmeans_k, std::set<size_t>(), pw->ui->l1norm->isChecked(), false);
+
+				for(auto & p : s->particles)
+					C(p.id,i) = p.segment;
+			}
+
+			Eigen::MatrixXd unique_keys, W;
+			std::vector<double> in_weights, out_weights;
+			std::vector<int> sub_mapping;
+
+			cvlab::hash_keys( C.transpose(), in_weights, unique_keys, out_weights, sub_mapping );
+			cvlab::weight_matrix( out_weights, W );
+
+			auto consensus = cvlab::ConsensusClustering(unique_keys, consensusMaxClusters, W);
+
+			for(auto & p : s->particles)
+				p.segment = consensus.clusters[ sub_mapping[p.id] ];
+		}
+	}
+
 	// Report
 	mainWindow()->setStatusBarMessage( QString("Merging clusters (%1 ms)").arg( curTimer.elapsed() ) );
 	curTimer.restart();
 
 	// Find symmetric parts
-	if( pw->ui->performSturctureAnalysis->isChecked() )
+	/*if( pw->ui->performSturctureAnalysis->isChecked() )
 	{	
 		for(auto & s : pw->pmeshes)
 		{		
@@ -544,7 +579,7 @@ void particles::processShapes()
 		// Report
 		mainWindow()->setStatusBarMessage( QString("Structure analysis (%1 ms)").arg( curTimer.elapsed() ) );
 		curTimer.restart();
-	}
+	}*/
 
 	// Report
 	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );

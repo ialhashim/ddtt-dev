@@ -200,10 +200,10 @@ static inline void matrixToFile(const Eigen::MatrixXd & M, QString filename){
 	QFile file( filename );
 	if(!file.open(QFile::WriteOnly | QFile::Text)) return;
 	QTextStream out(&file);
-	for(size_t i = 0; i < M.rows(); i++)
+	for(unsigned int i = 0; i < M.rows(); i++)
 	{
 		QStringList row;
-		for(size_t j = 0; j < M.cols(); j++)
+		for(unsigned int j = 0; j < M.cols(); j++)
 			row << QString::number(M(i,j));
 		out << (row.join(",") + "\n");
 	}

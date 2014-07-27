@@ -6,11 +6,6 @@
 
 #include "disjointset.h"
 
-#undef Y
-#undef X
-#undef Z
-#include "consensus.h"
-
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 Q_DECLARE_METATYPE(Eigen::Vector3f)
@@ -19,37 +14,6 @@ Q_DECLARE_METATYPE(Boundsd)
 
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
-	// Consensus clustering
-	{
-		int clustersRuns = 50;
-		int kmeans_k = 10;
-		int consensusMaxClusters = 10;
-
-		MatrixXd C = Eigen::MatrixXd(s->particles.size(), clustersRuns);
-
-		for( int i = 0; i < clustersRuns; i++ )
-		{
-			s->cluster(kmeans_k, std::set<size_t>(), false, false);
-
-			for(auto & p : s->particles)
-				C(p.id,i) = p.segment;
-		}
-
-		MatrixXd unique_keys, W;
-		std::vector<double> in_weights, out_weights;
-		std::vector<int> sub_mapping;
-
-		cvlab::hash_keys( C.transpose(), in_weights, unique_keys, out_weights, sub_mapping );
-		cvlab::weight_matrix( out_weights, W );
-
-		auto consensus = cvlab::ConsensusClustering(unique_keys, consensusMaxClusters, W);
-
-		for(auto & p : s->particles)
-			p.segment = consensus.clusters[ sub_mapping[p.id] ];
-
-		return;
-	}
-
 	// Debug points
 	auto segsCentroid = new starlab::PointSoup(10);
 

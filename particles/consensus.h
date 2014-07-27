@@ -74,7 +74,7 @@ static inline void hash_keys( const MatrixXd & C, std::vector<double> & in_weigh
 
 static inline void weight_matrix( const std::vector<double> & w, MatrixXd & W )
 {
-	unsigned int n = w.size();
+	unsigned int n = (unsigned int)w.size();
 	W = MatrixXd::Zero( n, n );
 	for(unsigned int i = 0; i < n; i++){
 		for(unsigned int j = 0; j < n; j++){

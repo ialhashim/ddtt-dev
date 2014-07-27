@@ -66,9 +66,9 @@ template <typename T> T clampval(const T& value, const T& low, const T& high) {
 #define FULL_VOXEL 1
 #define OUTER_VOXEL 2
 
-#define X 0
-#define Y 1
-#define Z 2
+#define X_ 0
+#define Y_ 1
+#define Z_ 2
 
 // This struct defines VoxelData for our voxelizer.
 // This is the main memory hogger: the less data you store here, the better.
@@ -289,49 +289,49 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 
 		// PLANE TEST PROPERTIES
 		Vector3 c = Vector3(0.0, 0.0, 0.0); // critical point
-		if (n[X] > 0) { c[X] = unitlength; }
-		if (n[Y] > 0) { c[Y] = unitlength; }
-		if (n[Z] > 0) { c[Z] = unitlength; }
+		if (n[X_] > 0) { c[X_] = unitlength; }
+		if (n[Y_] > 0) { c[Y_] = unitlength; }
+		if (n[Z_] > 0) { c[Z_] = unitlength; }
 		double d1 = n.dot(c - t.v0);
 		double d2 = n.dot(Vector3(delta_p - c) - t.v0);
 
 		// PROJECTION TEST PROPERTIES
 		// XY plane
-		Eigen::Vector2d n_xy_e0 = Eigen::Vector2d(-1.0*e0[Y], e0[X]);
-		Eigen::Vector2d n_xy_e1 = Eigen::Vector2d(-1.0*e1[Y], e1[X]);
-		Eigen::Vector2d n_xy_e2 = Eigen::Vector2d(-1.0*e2[Y], e2[X]);
-		if (n[Z] < 0.0) {
+		Eigen::Vector2d n_xy_e0 = Eigen::Vector2d(-1.0*e0[Y_], e0[X_]);
+		Eigen::Vector2d n_xy_e1 = Eigen::Vector2d(-1.0*e1[Y_], e1[X_]);
+		Eigen::Vector2d n_xy_e2 = Eigen::Vector2d(-1.0*e2[Y_], e2[X_]);
+		if (n[Z_] < 0.0) {
 			n_xy_e0 = -1.0 * n_xy_e0;
 			n_xy_e1 = -1.0 * n_xy_e1;
 			n_xy_e2 = -1.0 * n_xy_e2;
 		}
-		double d_xy_e0 = (-1.0 * (n_xy_e0.dot(Eigen::Vector2d(t.v0[X], t.v0[Y])))) + std::max(0.0, unitlength*n_xy_e0[0]) + std::max(0.0, unitlength*n_xy_e0[1]);
-		double d_xy_e1 = (-1.0 * (n_xy_e1.dot(Eigen::Vector2d(t.v1[X], t.v1[Y])))) + std::max(0.0, unitlength*n_xy_e1[0]) + std::max(0.0, unitlength*n_xy_e1[1]);
-		double d_xy_e2 = (-1.0 * (n_xy_e2.dot(Eigen::Vector2d(t.v2[X], t.v2[Y])))) + std::max(0.0, unitlength*n_xy_e2[0]) + std::max(0.0, unitlength*n_xy_e2[1]);
+		double d_xy_e0 = (-1.0 * (n_xy_e0.dot(Eigen::Vector2d(t.v0[X_], t.v0[Y_])))) + std::max(0.0, unitlength*n_xy_e0[0]) + std::max(0.0, unitlength*n_xy_e0[1]);
+		double d_xy_e1 = (-1.0 * (n_xy_e1.dot(Eigen::Vector2d(t.v1[X_], t.v1[Y_])))) + std::max(0.0, unitlength*n_xy_e1[0]) + std::max(0.0, unitlength*n_xy_e1[1]);
+		double d_xy_e2 = (-1.0 * (n_xy_e2.dot(Eigen::Vector2d(t.v2[X_], t.v2[Y_])))) + std::max(0.0, unitlength*n_xy_e2[0]) + std::max(0.0, unitlength*n_xy_e2[1]);
 		// YZ plane
-		Eigen::Vector2d n_yz_e0 = Eigen::Vector2d(-1.0*e0[Z], e0[Y]);
-		Eigen::Vector2d n_yz_e1 = Eigen::Vector2d(-1.0*e1[Z], e1[Y]);
-		Eigen::Vector2d n_yz_e2 = Eigen::Vector2d(-1.0*e2[Z], e2[Y]);
-		if (n[X] < 0.0) {
+		Eigen::Vector2d n_yz_e0 = Eigen::Vector2d(-1.0*e0[Z_], e0[Y_]);
+		Eigen::Vector2d n_yz_e1 = Eigen::Vector2d(-1.0*e1[Z_], e1[Y_]);
+		Eigen::Vector2d n_yz_e2 = Eigen::Vector2d(-1.0*e2[Z_], e2[Y_]);
+		if (n[X_] < 0.0) {
 			n_yz_e0 = -1.0 * n_yz_e0;
 			n_yz_e1 = -1.0 * n_yz_e1;
 			n_yz_e2 = -1.0 * n_yz_e2;
 		}
-		double d_yz_e0 = (-1.0 * (n_yz_e0.dot(Eigen::Vector2d(t.v0[Y], t.v0[Z])))) + std::max(0.0, unitlength*n_yz_e0[0]) + std::max(0.0, unitlength*n_yz_e0[1]);
-		double d_yz_e1 = (-1.0 * (n_yz_e1.dot(Eigen::Vector2d(t.v1[Y], t.v1[Z])))) + std::max(0.0, unitlength*n_yz_e1[0]) + std::max(0.0, unitlength*n_yz_e1[1]);
-		double d_yz_e2 = (-1.0 * (n_yz_e2.dot(Eigen::Vector2d(t.v2[Y], t.v2[Z])))) + std::max(0.0, unitlength*n_yz_e2[0]) + std::max(0.0, unitlength*n_yz_e2[1]);
+		double d_yz_e0 = (-1.0 * (n_yz_e0.dot(Eigen::Vector2d(t.v0[Y_], t.v0[Z_])))) + std::max(0.0, unitlength*n_yz_e0[0]) + std::max(0.0, unitlength*n_yz_e0[1]);
+		double d_yz_e1 = (-1.0 * (n_yz_e1.dot(Eigen::Vector2d(t.v1[Y_], t.v1[Z_])))) + std::max(0.0, unitlength*n_yz_e1[0]) + std::max(0.0, unitlength*n_yz_e1[1]);
+		double d_yz_e2 = (-1.0 * (n_yz_e2.dot(Eigen::Vector2d(t.v2[Y_], t.v2[Z_])))) + std::max(0.0, unitlength*n_yz_e2[0]) + std::max(0.0, unitlength*n_yz_e2[1]);
 		// ZX plane
-		Eigen::Vector2d n_zx_e0 = Eigen::Vector2d(-1.0*e0[X], e0[Z]);
-		Eigen::Vector2d n_zx_e1 = Eigen::Vector2d(-1.0*e1[X], e1[Z]);
-		Eigen::Vector2d n_zx_e2 = Eigen::Vector2d(-1.0*e2[X], e2[Z]);
-		if (n[Y] < 0.0) {
+		Eigen::Vector2d n_zx_e0 = Eigen::Vector2d(-1.0*e0[X_], e0[Z_]);
+		Eigen::Vector2d n_zx_e1 = Eigen::Vector2d(-1.0*e1[X_], e1[Z_]);
+		Eigen::Vector2d n_zx_e2 = Eigen::Vector2d(-1.0*e2[X_], e2[Z_]);
+		if (n[Y_] < 0.0) {
 			n_zx_e0 = -1.0 * n_zx_e0;
 			n_zx_e1 = -1.0 * n_zx_e1;
 			n_zx_e2 = -1.0 * n_zx_e2;
 		}
-		double d_xz_e0 = (-1.0 * (n_zx_e0.dot(Eigen::Vector2d(t.v0[Z], t.v0[X])))) + std::max(0.0, unitlength*n_zx_e0[0]) + std::max(0.0, unitlength*n_zx_e0[1]);
-		double d_xz_e1 = (-1.0 * (n_zx_e1.dot(Eigen::Vector2d(t.v1[Z], t.v1[X])))) + std::max(0.0, unitlength*n_zx_e1[0]) + std::max(0.0, unitlength*n_zx_e1[1]);
-		double d_xz_e2 = (-1.0 * (n_zx_e2.dot(Eigen::Vector2d(t.v2[Z], t.v2[X])))) + std::max(0.0, unitlength*n_zx_e2[0]) + std::max(0.0, unitlength*n_zx_e2[1]);
+		double d_xz_e0 = (-1.0 * (n_zx_e0.dot(Eigen::Vector2d(t.v0[Z_], t.v0[X_])))) + std::max(0.0, unitlength*n_zx_e0[0]) + std::max(0.0, unitlength*n_zx_e0[1]);
+		double d_xz_e1 = (-1.0 * (n_zx_e1.dot(Eigen::Vector2d(t.v1[Z_], t.v1[X_])))) + std::max(0.0, unitlength*n_zx_e1[0]) + std::max(0.0, unitlength*n_zx_e1[1]);
+		double d_xz_e2 = (-1.0 * (n_zx_e2.dot(Eigen::Vector2d(t.v2[Z_], t.v2[X_])))) + std::max(0.0, unitlength*n_zx_e2[0]) + std::max(0.0, unitlength*n_zx_e2[1]);
 
 		// test possible grid boxes for overlap
 		for (int x = t_bbox_grid.min[0]; x <= t_bbox_grid.max[0]; x++){
@@ -349,19 +349,19 @@ inline void voxelize_schwarz_method(SurfaceMeshModel * mesh, const uint64_t mort
 
 					// PROJECTION TESTS
 					// XY
-					Eigen::Vector2d p_xy = Eigen::Vector2d(p[X], p[Y]);
+					Eigen::Vector2d p_xy = Eigen::Vector2d(p[X_], p[Y_]);
 					if ((n_xy_e0.dot(p_xy) + d_xy_e0) < 0.0){ continue; }
 					if ((n_xy_e1.dot(p_xy) + d_xy_e1) < 0.0){ continue; }
 					if ((n_xy_e2.dot(p_xy) + d_xy_e2) < 0.0){ continue; }
 
 					// YZ
-					Eigen::Vector2d p_yz = Eigen::Vector2d(p[Y], p[Z]);
+					Eigen::Vector2d p_yz = Eigen::Vector2d(p[Y_], p[Z_]);
 					if ((n_yz_e0.dot(p_yz) + d_yz_e0) < 0.0){ continue; }
 					if ((n_yz_e1.dot(p_yz) + d_yz_e1) < 0.0){ continue; }
 					if ((n_yz_e2.dot(p_yz) + d_yz_e2) < 0.0){ continue; }
 
 					// XZ	
-					Eigen::Vector2d p_zx = Eigen::Vector2d(p[Z], p[X]);
+					Eigen::Vector2d p_zx = Eigen::Vector2d(p[Z_], p[X_]);
 					if ((n_zx_e0.dot(p_zx) + d_xz_e0) < 0.0){ continue; }
 					if ((n_zx_e1.dot(p_zx) + d_xz_e1) < 0.0){ continue; }
 					if ((n_zx_e2.dot(p_zx) + d_xz_e2) < 0.0){ continue; }
