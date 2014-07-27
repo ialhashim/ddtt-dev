@@ -161,3 +161,50 @@ inline static std::vector< std::vector<Scalar> > fromEigenMatrix( const Matrix &
 			m[i][j] = M(i,j);
 	return m;
 }
+
+// Input / output Eigen matrix from / to disk
+#include <QFileInfo>
+#include <QTextStream>
+static inline Eigen::MatrixXd matrixFromFile( QString filename, QString splitChar = "," )
+{
+	Eigen::MatrixXd M;
+
+	// Read data
+	QFile file( filename );
+	if(!file.open(QFile::ReadOnly | QFile::Text)) return M;
+	std::vector< std::vector<double> > mat;
+	QTextStream in(&file);
+	QStringList lines = in.readAll().split('\n');
+	for( auto line : lines ){
+		auto row_string = line.split(splitChar, QString::SkipEmptyParts);
+		if(row_string.size() < 1) continue;
+
+		std::vector<double> row;
+		for(auto token : row_string) 
+			row.push_back(token.toDouble());
+		mat.push_back( row );
+	}
+
+	// Copy values
+	M = Eigen::MatrixXd(mat.size(), mat.front().size());
+	for(size_t i = 0; i < mat.size(); i++){
+		for(size_t j = 0; j < mat.front().size(); j++){
+			M(i,j) = mat[i][j];
+		}
+	}
+
+	return M;
+}
+
+static inline void matrixToFile(const Eigen::MatrixXd & M, QString filename){
+	QFile file( filename );
+	if(!file.open(QFile::WriteOnly | QFile::Text)) return;
+	QTextStream out(&file);
+	for(size_t i = 0; i < M.rows(); i++)
+	{
+		QStringList row;
+		for(size_t j = 0; j < M.cols(); j++)
+			row << QString::number(M(i,j));
+		out << (row.join(",") + "\n");
+	}
+}

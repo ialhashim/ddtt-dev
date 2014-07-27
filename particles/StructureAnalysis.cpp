@@ -6,7 +6,10 @@
 
 #include "disjointset.h"
 
-#include "kmedoids.h"
+#undef Y
+#undef X
+#undef Z
+#include "consensus.h"
 
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
@@ -16,6 +19,37 @@ Q_DECLARE_METATYPE(Boundsd)
 
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
+	// Consensus clustering
+	{
+		int clustersRuns = 50;
+		int kmeans_k = 10;
+		int consensusMaxClusters = 10;
+
+		MatrixXd C = Eigen::MatrixXd(s->particles.size(), clustersRuns);
+
+		for( int i = 0; i < clustersRuns; i++ )
+		{
+			s->cluster(kmeans_k, std::set<size_t>(), false, false);
+
+			for(auto & p : s->particles)
+				C(p.id,i) = p.segment;
+		}
+
+		MatrixXd unique_keys, W;
+		std::vector<double> in_weights, out_weights;
+		std::vector<int> sub_mapping;
+
+		cvlab::hash_keys( C.transpose(), in_weights, unique_keys, out_weights, sub_mapping );
+		cvlab::weight_matrix( out_weights, W );
+
+		auto consensus = cvlab::ConsensusClustering(unique_keys, consensusMaxClusters, W);
+
+		for(auto & p : s->particles)
+			p.segment = consensus.clusters[ sub_mapping[p.id] ];
+
+		return;
+	}
+
 	// Debug points
 	auto segsCentroid = new starlab::PointSoup(10);
 
@@ -74,52 +108,6 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	}
 
 	debug << segsCentroid;
-
-	// Experiment
-	{
-		std::vector<SegmentGraph*> allSegsVec;
-		for(auto seg : allSegs)
-			allSegsVec.push_back(seg);
-
-		// Similarity matrix
-		int N = allSegsVec.size();
-		Eigen::MatrixXf M = Eigen::MatrixXf( N, N );
-
-		for(size_t i = 0; i < N; i++){
-			for(size_t j = 0; j < N; j++){
-				auto segI = allSegsVec[i];
-				auto segJ = allSegsVec[j];
-
-				uint pi = segI->property["centroid_id"].value<uint>();
-				uint pj = segJ->property["centroid_id"].value<uint>();
-
-				auto di = Eigen::Map<Eigen::VectorXf>(&s->desc[pi][0], s->desc[pi].size());
-				auto dj = Eigen::Map<Eigen::VectorXf>(&s->desc[pj][0], s->desc[pj].size());
-				auto dist = (di-dj).norm();
-
-				M(i,j) = dist;
-			}
-		}
-
-		clustering::kmedoids km( M.rows() );
-		km.pam(M, groupedSegments.size(), 0);
-
-		for(size_t i = 0; i < N; i++){
-			auto newSeg = km.cluster_ids[i];
-			auto seg = allSegsVec[i];
-
-			for(auto v : seg->vertices)
-				s->particles[v].segment = newSeg;
-		}
-
-		// For each level of clustering
-		{
-
-		}
-
-		return;
-	}
-
 
 	// Merge similar isolated segments
 	{
