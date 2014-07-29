@@ -98,7 +98,8 @@ void kmeans_init_plusplus(std::vector<index_t>& result, const collection_t& coll
             }
         }
 
-        for (std::size_t i = 0; i < collection.size(); i++)
+		#pragma omp parallel for
+        for (int i = 0; i < (int)collection.size(); i++)
         {
             double d = distfn(collection[best_index], collection[i]);
             dists[i] = d*d;
@@ -133,12 +134,9 @@ class kmeans
      * @param initalgorithm Algorithm used to estimate the initial cluster centers
      * @param distfn Distance function used for comparing two samples.
      */
-    kmeans(const collection_t& collection, std::size_t numclusters, const dist_fn& distfn = dist_fn(), KmeansInitAlgorithm initalgorithm = KmeansInitRandom )
+    kmeans(const collection_t& collection, std::size_t numclusters, KmeansInitAlgorithm initalgorithm = KmeansInitRandom, const dist_fn& distfn = dist_fn() )
      : _collection(collection), _distfn(distfn), _centers(numclusters), _clusters(collection.size())
     {
-        // get initial centers
-        std::vector<std::size_t> initindices;
-
         if (initalgorithm == KmeansInitPlusPlus)
         {
             kmeans_init_plusplus(initindices, collection, numclusters, distfn);
@@ -152,6 +150,9 @@ class kmeans
 			_centers[i] = collection[initindices[i]];
     }
 
+	// get initial centers
+	std::vector<std::size_t> initindices;
+
     /**
      * @brief Perform k-means clustering on the dataset provided in the constructor
      *
@@ -161,7 +162,7 @@ class kmeans
      * @param maxiteration Maximum number of iterations
      * @param minchangesfraction Fraction of changes, if less changes happen in a certain iteration, clustering is done.
      */
-	void run(std::size_t maxiteration, double minchangesfraction)
+	void run(std::size_t maxiteration = 1000, double minchangesfraction = 0.005)
 	{
 		// main iteration
 		std::size_t iteration = 0;
@@ -270,6 +271,11 @@ class kmeans
         return _clusters;
     }
 
+	const std::size_t& cluster(size_t i) const
+	{
+		return _clusters[i];
+	}
+
     /// Vector of cluster centers
     const std::vector<sample_t>& centers() const
     {
@@ -363,7 +369,7 @@ struct l1norm
 	}
 };
 
-int lpnorm_p = 2;
+static int lpnorm_p = 2;
 
 // Run-time selective
 template <class T>

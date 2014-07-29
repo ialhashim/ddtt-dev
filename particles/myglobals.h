@@ -208,3 +208,12 @@ static inline void matrixToFile(const Eigen::MatrixXd & M, QString filename){
 		out << (row.join(",") + "\n");
 	}
 }
+
+static inline void saveToTextFile( QString filename, QStringList items ){
+	QFile file( filename );
+	if(!file.open(QFile::WriteOnly | QFile::Text)) return;
+	QTextStream out(&file);
+	for(auto item : items){
+		out << item << "\n";
+	}
+}

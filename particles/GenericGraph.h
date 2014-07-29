@@ -58,10 +58,10 @@ namespace GenericGraphs{
 		};
 
 		typedef std::set<Edge,CompareEdge> EdgesSet;
+		typedef std::set<vertex_t> vertices_set;
 
 	private:
 		typedef std::map<vertex_t, std::list<Edge> > adjacency_map_t;
-		typedef std::set<vertex_t> vertices_set;
 
 		template <typename T1, typename T2>
 		struct pair_first_less{
@@ -208,7 +208,7 @@ namespace GenericGraphs{
 		{
 			lastStart = std::numeric_limits<vertex_t>::max();
 			sid = 0;
-
+			pid = 0;
 			uid = GLOBAL_GRAPH_UID++;
 		}
 
@@ -221,6 +221,7 @@ namespace GenericGraphs{
 			this->lastStart = from.lastStart;
 			this->sid = from.sid;
 			this->uid = from.uid;
+			this->pid = from.pid;
 
 			// Attributes
 			this->vertices_prop = from.vertices_prop;
@@ -734,6 +735,6 @@ namespace GenericGraphs{
 		}
 
 		// Custom identifiers
-		size_t uid, sid;
+		size_t uid, sid, pid;
 	};
 }

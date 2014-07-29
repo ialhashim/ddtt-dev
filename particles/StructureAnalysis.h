@@ -9,8 +9,5 @@ public:
 
 	ParticleMesh * s;
 
-	QMap<size_t, SegmentGraph*> allSegs;
-	int pcount;
-
 	QVector<RenderObject::Base*> debug;
 };

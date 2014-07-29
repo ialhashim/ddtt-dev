@@ -1,3 +1,4 @@
+#include <QMessageBox>
 #include "StructureAnalysis.h"
 #include "myglobals.h"
 #include "Planes.h"
@@ -6,257 +7,178 @@
 
 #include "disjointset.h"
 
+#include "convexhull.h"
+
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 Q_DECLARE_METATYPE(Eigen::Vector3f)
 Q_DECLARE_METATYPE(Eigen::AlignedBox3d)
 Q_DECLARE_METATYPE(Boundsd)
 
+#include "kmeans.h"
+double solidity_threshold = 0.7;
+int max_parts_threshold = 12;
+int level_threshold = 3;
+
+auto rcolors = rndColors2(200);
+int rc = 0;
+QVector<RenderObject::Base*> globalDebug;
+
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
-	// Debug points
-	auto segsCentroid = new starlab::PointSoup(10);
+	rc = 0; // reset random color
+	globalDebug.clear();
 
-	// Extract groups of similar segments
-	std::map<int, std::vector<SegmentGraph*> > groupedSegments;
-	SegmentGraph neiGraph;
+	struct SplitOperation{
+		SegmentGraph seg, neiGraph;
+		double solidity;
+		int level;
+		std::vector<SplitOperation> children;
+		SplitOperation * parent;
+		ConvexHull<Vector3> hull;
+		ParticleMesh * s;
 
-	auto segments = s->segmentToComponents( neiGraph );
+		typedef std::vector<float> FloatVec;
+		typedef std::vector<FloatVec> FloatVecVec;
+		typedef clustering::lpnorm< VectorFloat > DestFn;
 
-	for(auto & seg : segments)
-	{
-		int si = s->particles[seg.FirstVertex()].segment;
-
-		auto c_seg = &seg;
-
-		groupedSegments[ si ].push_back( c_seg );
-
-		// Track segment
-		allSegs[ c_seg->uid ] = c_seg;
-
-		// Segment properties
+		SplitOperation( ParticleMesh * s, const SegmentGraph& seg, int level = 0, SplitOperation* parent = NULL) : 
+			s(s), seg(seg), level(level)
 		{
-			Vector3 sum(0,0,0);
-			Eigen::AlignedBox3d bbox;
-			Boundsd interval;
+			// Compute solidity score
+			hull = ConvexHull<Vector3>( s->particlesCorners( seg.vertices ), "FA Qt" );
 
-			for(auto v : c_seg->vertices) 
+			// Segment solidity (Volume / Convex Volume)
+			double seg_volume = pow(s->grid.unitlength,3) * seg.vertices.size();
+			double convex_volume = hull.volume;
+			solidity = seg_volume / convex_volume;
+		}
+
+		void split()
+		{
+			// Limit depth of search
+			if (level > level_threshold)
+				return;
+
+			// Check if it needs splinting
+			if (solidity < solidity_threshold)
 			{
-				Vector3 p = s->particles[v].pos;
-				sum += p;
-				bbox.extend( p );
-				interval.extend( s->particles[v].measure );
-			}
+				// Collect and map current particles
+				FloatVecVec descs;
+				QMap<size_t,size_t> pmap;
 
-			Vector3 centroid = sum / c_seg->vertices.size();
+				for(auto v : seg.vertices){
+					pmap[v] = pmap.size();
+					descs.push_back( s->desc[v] );
+				}
 
-			// Closest particle to this centroid
-			uint centroid_id;
-			double minDist = DBL_MAX;
-			for(auto v : c_seg->vertices){
-				double dist = (s->particles[v].pos - centroid).norm();
-				if(dist < minDist){
-					minDist = dist;
-					centroid_id = v;
+				// Perform binary split
+				clustering::kmeans<FloatVecVec,DestFn> km( descs, 2 );
+				km._centers.clear();
+				for(auto pid : s->specialSeeding(ParticleMesh::DESCRIPTOR, 2, seg.vertices)) km._centers.push_back( s->desc[pid] );
+				km.run();
+
+				// Assign found clusters
+				for(auto v : seg.vertices) 
+					s->particles[v].segment = km.cluster( pmap[v] );
+
+				auto newSegments = s->segmentToComponents( seg, neiGraph );
+
+				// Create possible split operations
+				std::vector<SplitOperation> newOps;
+				for(auto & newSeg : newSegments)
+					newOps.push_back( SplitOperation(s, newSeg, level + 1, this) );
+
+				// Analyze clusters
+				for(auto & newOp : newOps)
+				{
+					// No further split should happen
+					if(newOp.seg.vertices.size() == seg.vertices.size()){
+						children.clear();
+						break;
+					}
+
+					// Too small of a segment
+					if(newOp.seg.vertices.size() < 4)
+						continue;
+
+					children.push_back(newOp);
+
+					if(newOp.solidity < solidity_threshold)
+					{
+						children.back().split();
+						children.back().seg.pid = seg.uid;
+					}
 				}
 			}
-
-			c_seg->property["centroid"].setValue( centroid );
-			c_seg->property["centroid_id"].setValue( centroid_id );
-			c_seg->property["bbox"].setValue( bbox );
-			c_seg->property["interval"].setValue( interval );
-
-			// Visualize centroid
-			segsCentroid->addPoint(centroid, Qt::black);
-		}
-	}
-
-	debug << segsCentroid;
-
-	// Merge similar isolated segments
-	{
-		segsCentroid->clear();
-
-		std::vector<SegmentGraph*> isolated;
-		for(auto & segGroup : groupedSegments){
-			//if(segGroup.second.size() > 1) continue;
-			//isolated.push_back( segGroup.second.front() );
-
-			for(auto seg : segGroup.second)
-				isolated.push_back(seg);
 		}
 
-		for(auto & seg : isolated)
-			segsCentroid->addPoint(seg->property["centroid"].value<Vector3>(), Qt::black);
+		void collectClusters( std::vector<SplitOperation*> & ops )
+		{
+			if(children.empty()){
+				ops.push_back(this);
+				return;
+			}
 
-		DisjointSet disjointset(isolated.size());
-
-		for(size_t i = 0; i < isolated.size(); i++){
-			auto & segI = isolated[i];
-			for(size_t j = i + 1; j < isolated.size(); j++){
-				auto & segJ = isolated[j];
-
-				// Consider neighbors only
-				if( !neiGraph.IsEdgeExists( segI->uid, segJ->uid ) )
-					continue;
-
-				Vector3 centroid_i = segI->property["centroid"].value<Vector3>();
-				Vector3 centroid_j = segJ->property["centroid"].value<Vector3>();
-
-				uint centroid_id_i = segI->property["centroid_id"].value<uint>();
-				uint centroid_id_j = segJ->property["centroid_id"].value<uint>();
-
-				// Height difference
-				//if( std::abs((centroid_i - centroid_j).z()) > s->grid.unitlength * 3 )
-				//	continue;
-
-				// Flatness
-				auto flat_i = s->particles[centroid_id_i].flat;
-				auto flat_j = s->particles[centroid_id_j].flat;
-				auto flat_similiarty = 1 - abs(flat_i - flat_j);
-
-				if( flat_i > 0.7 && flat_similiarty > 0.7 )
-					disjointset.Union(i,j);
+			for(auto & child : children){
+				child.collectClusters(ops);
+				child.parent = this;
 			}
 		}
 
-		for(size_t i = 0; i < isolated.size(); i++){
-			auto & seg = isolated[i];
-			for(auto & v : seg->vertices)
-				s->particles[v].segment = isolated[disjointset.Parent[i]]->sid;
+		void debugAllChildren(QVector<RenderObject::Base*> & debug)
+		{
+			if(children.empty())
+			{
+				starlab::PolygonSoup * ps = new starlab::PolygonSoup;
+				for(auto f : hull.faces)
+				{
+					QVector<starlab::QVector3> pnts;
+					for(auto v : f) pnts << v;
+					QColor c = rcolors[rc];
+					//c.setAlphaF(0.5);
+					ps->addPoly(pnts, c);
+				}
+				rc++;
+				debug << ps;
+			}
+
+			for(auto & child : children)
+				child.debugAllChildren(debug);
 		}
 
-		return;
-	}
+		void report( QStringList & items )
+		{
+			QString r = QString("[%1 - level %2] solidity (%3) parent(%4) size(%5)").arg(
+				seg.uid).arg(level).arg(solidity).arg(seg.pid).arg(seg.vertices.size());
 
-	// Relationships
-	for(auto edge : neiGraph.GetEdgesSet())
-	{
-		Vector3 normal = edge.property["normal"].value<Vector3>();
-		Vector3 center = edge.property["center"].value<Vector3>();
+			if(!children.empty())
+				r += QString(" children(%1)").arg(children.size());
 
-		starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.05);
-		ps->addPlane(center,normal);
-		debug << ps;
-	}
+			items << r;
+
+			for(auto & child : children)
+				child.report( items );
+		}
+	};
+
+	SplitOperation op( pmesh, s->toGraph() );
+	op.split();
 	
-	// For visualization
-	if(true)
-	{
-		QMap<int,QColor> nodeColors;
-		QMap<int,QString> nodeLabels;
-		for(auto e : neiGraph.GetEdgesSet())
-		{
-			auto si = allSegs[e.index];
-			auto sj = allSegs[e.target];
+	std::vector<SplitOperation*> clusters;
+	op.collectClusters( clusters );
 
-			nodeColors[e.index] = s->rndcolors[si->sid];
-			nodeColors[e.target] = s->rndcolors[sj->sid];
+	std::map<size_t,size_t> mappedClusters;
+	for(auto c : clusters)
+		mappedClusters[c->seg.uid] = mappedClusters.size();
 
-			nodeLabels[e.index] = QString("%1 (%2)").arg(si->sid).arg(si->uid);
-			nodeLabels[e.target] = QString("%1 (%2)").arg(sj->sid).arg(sj->uid);
-		}
-
-		// Show segments graph
-		static SvgView * viewer = new SvgView;
-		viewer->show( buildSVG( toGraphvizFormat(neiGraph, nodeColors, nodeLabels) ) );
-	}
+	for(auto c : clusters)
+		for(auto v : c->seg.vertices)
+			s->particles[v].segment = mappedClusters[c->seg.uid];
+		
 	/*
-	//double threshold = s->grid.unitlength * 3; // two voxels
-
-	pcount = 0;
-
-	std::vector<Plane> allPlanes;
-
-	for(auto & segGroup : groupedSegments)
-	{
-		auto & group = segGroup.second;
-
-		std::vector<Plane> groupPlanes;
-
-		// Compare pair of parts in the same segment
-		for(size_t i = 0; i < group.size(); i++)
-		{
-			for(size_t j = i+1; j < group.size(); j++)
-			{
-				auto groupI = group[i];
-				auto groupJ = group[j];
-
-				Vector3 centroid_i = groupI->property["centroid"].value<Vector3>();
-				Vector3 centroid_j = groupJ->property["centroid"].value<Vector3>();
-
-				uint centroid_id_i = groupI->property["centroid_id"].value<uint>();
-				uint centroid_id_j = groupJ->property["centroid_id"].value<uint>();
-
-				Vector3 planeCenter = (centroid_i+centroid_j) * 0.5;
-				Vector3 planeNormal = (centroid_i-centroid_j).normalized();
-
-				/// Filter:
-
-				// by measure
-				{
-					uint closest_i, closest_j;
-
-					// Compare with respect to measure
-					double difference = abs(s->particles[centroid_id_i].measure - s->particles[centroid_id_j].measure);
-					double similarity = 1-difference;
-
-					if( similarity < 0.9 ) continue;
-				}
-
-				// by mass
-				{
-					Boundsd interval_i = groupI->property["interval"].value< Boundsd >();
-					Boundsd interval_j = groupJ->property["interval"].value< Boundsd >();
-
-					double minVol = std::min(interval_i.count, interval_j.count);
-					double maxVol = std::max(interval_i.count, interval_j.count);
-					double ratio = minVol / maxVol;
-
-					if(ratio < 0.1) continue;
-
-					groupPlanes.push_back( Plane(planeCenter, planeNormal, ratio) );
-				}
-
-				// by bounding volume
-				{
-					Eigen::AlignedBox3d bbox_i = groupI->property["bbox"].value< Eigen::AlignedBox3d >();
-					Eigen::AlignedBox3d bbox_j = groupJ->property["bbox"].value< Eigen::AlignedBox3d >();
-					double bbox_diff = (bbox_i.sizes() - bbox_j.sizes()).norm();
-				}
-
-				// DEBUG:
-				{
-					starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.01);
-					ps->addPlane( planeCenter, planeNormal );
-					debug << ps;
-					debug << new RenderObject::Segment(centroid_i, centroid_j, 1);
-				}
-
-				//Force segment:
-				//for(auto v : groupI->vertices) s->particles[v].segment = 50;
-				//for(auto v : groupJ->vertices) s->particles[v].segment = 50;
-
-				pcount++;
-			}
-		}
-
-		auto mergedPlanes = Plane::mergePlanes(groupPlanes, 0.99);
-		for (auto & plane : mergedPlanes) allPlanes.push_back(plane);
-	}
-
-	auto rndColors = rndColors2(pcount);
-
-	auto mergedPlanes = Plane::mergePlanes(allPlanes, 0.99);
-
-	for(int i = 0; i < (int)mergedPlanes.size(); i++)
-	{
-		auto & plane = mergedPlanes[i];
-		auto color = QColor::fromRgbF(rndColors[i].redF(),rndColors[i].greenF(),rndColors[i].blueF());
-		starlab::PlaneSoup * ps = new starlab::PlaneSoup(0.1 * plane.weight, true, color);
-		ps->addPlane( plane.pos, plane.n );
-
-		//debug << ps;
-	}
-	*/
+	op.debugAllChildren(debug);
+	QStringList rep; op.report(rep);
+	saveToTextFile( "_split_report.txt", rep );
+	for(auto d : globalDebug) debug << d;*/
 }

@@ -502,15 +502,8 @@ void particles::processShapes()
 		{
 			std::set<size_t> seeds;
 
-			// Seed based on ground distance
-			if(pw->ui->useGroundDistSeed->isChecked()){
-				for(int i = 0; i < K; i++)
-				{
-					double t = double(i) / (K-1);
-					int idx = t * (s->pathFromFloor.size()-1);
-					seeds.insert( s->pathFromFloor[idx] );
-				}
-			}
+			if(pw->ui->useGroundDistSeed->isChecked())	seeds = s->specialSeeding(ParticleMesh::GROUND, K);
+			if(pw->ui->useDescSeed->isChecked())		seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K);
 
 			s->cluster(K, seeds, pw->ui->l1norm->isChecked(), pw->ui->showSeeds->isChecked());
 		}
@@ -527,59 +520,24 @@ void particles::processShapes()
 			s->shrinkSmallerClusters();
 	}
 
-	// Consensus clustering
-	if( pw->ui->performSturctureAnalysis->isChecked() )
-	{
-		for(auto & s : pw->pmeshes)
-		{
-			int clustersRuns = 10;
-			int kmeans_k = pw->ui->kclusters->value() * 3;
-			int consensusMaxClusters = pw->ui->kclusters->value();
-
-			Eigen::MatrixXd C = Eigen::MatrixXd(s->particles.size(), clustersRuns);
-
-			for( int i = 0; i < clustersRuns; i++ )
-			{
-				s->cluster(kmeans_k, std::set<size_t>(), pw->ui->l1norm->isChecked(), false);
-
-				for(auto & p : s->particles)
-					C(p.id,i) = p.segment;
-			}
-
-			Eigen::MatrixXd unique_keys, W;
-			std::vector<double> in_weights, out_weights;
-			std::vector<int> sub_mapping;
-
-			cvlab::hash_keys( C.transpose(), in_weights, unique_keys, out_weights, sub_mapping );
-			cvlab::weight_matrix( out_weights, W );
-
-			auto consensus = cvlab::ConsensusClustering(unique_keys, consensusMaxClusters, W);
-
-			for(auto & p : s->particles)
-				p.segment = consensus.clusters[ sub_mapping[p.id] ];
-		}
-	}
-
 	// Report
 	mainWindow()->setStatusBarMessage( QString("Merging clusters (%1 ms)").arg( curTimer.elapsed() ) );
 	curTimer.restart();
 
-	// Find symmetric parts
-	/*if( pw->ui->performSturctureAnalysis->isChecked() )
+	// Analysis
+	if( pw->ui->performSturctureAnalysis->isChecked() )
 	{	
 		for(auto & s : pw->pmeshes)
 		{		
 			StructureAnalysis sa( s );
 
 			for(auto d : sa.debug) drawArea()->addRenderObject(d);
-
-			mainWindow()->setStatusBarMessage(QString("segment count (%1) planes count (%2)").arg( sa.allSegs.size() ).arg( sa.pcount ));
 		}
 
 		// Report
 		mainWindow()->setStatusBarMessage( QString("Structure analysis (%1 ms)").arg( curTimer.elapsed() ) );
 		curTimer.restart();
-	}*/
+	}
 
 	// Report
 	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
@@ -784,7 +742,7 @@ void particles::create()
 	connect(pw->ui->processShapesButton, SIGNAL(clicked()), SLOT(processShapes()));
 
 #ifdef QT_DEBUG
-	pw->ui->gridsize->setValue(32);
+	pw->ui->gridsize->setValue(16);
 #endif
 }
 

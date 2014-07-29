@@ -39,3 +39,6 @@ INCLUDEPATH += ../spherelib
 
 # External library
 win32:LIBS += -L"$$_PRO_FILE_PWD_/embree2/"
+
+# Qhull linker warning in debug mode
+QMAKE_LFLAGS += /ignore:4099

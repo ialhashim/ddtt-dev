@@ -239,28 +239,32 @@ ParticleMesh::~ParticleMesh()
 	if(relativeKdtree) delete relativeKdtree;
 }
 
-SegmentGraph ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
+SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected )
 {
 	SegmentGraph graph = SegmentGraph();
 
 	int eidx = 0;
+	std::vector<size_t> pindices;
 
 	NanoKdTree tree;
-	for(auto p : particles) tree.addPoint(p.pos);
+	for(auto & p : particles) 
+	{
+		bool isInclude = true;
+
+		if(!selected.empty() && selected.find(p.id) == selected.end()) 
+			isInclude = false;
+
+		if( isInclude ){
+			tree.addPoint(p.pos);
+			pindices.push_back(p.id);
+		}
+	}
 	tree.build();
 
-	// Normalization when needed
-	float minVal = FLT_MAX, maxVal = -minVal, range;
-	if(wtype == GEW_DIAMETER){
-		for(auto & p : particles){
-			minVal = std::min(minVal, p.avgDiameter);
-			maxVal = std::max(maxVal, p.avgDiameter);
-		}
-		range = maxVal - minVal;
-	}
-
-	for (auto & p : particles)
+	for (auto & pid : pindices)
 	{
+		auto & p = particles[pid];
+
 		KDResults matches;
 		tree.ball_search(p.pos, grid.unitlength*1.01, matches);
 		matches.erase(matches.begin()); // remove self
@@ -268,25 +272,8 @@ SegmentGraph ParticleMesh::toGraph(GraphEdgeWeight wtype /*= GEW_DISTANCE */)
 		for(auto match : matches)
 		{
 			double edge_weight = 1.0;
-
-			switch (wtype)
-			{
-			case ParticleMesh::GEW_DISTANCE:
-				{
-					double d2 = match.second;
-					edge_weight = d2 /*std::sqrt(d2)*/;
-					break;
-				}
-			case ParticleMesh::GEW_DIAMETER:
-				{
-					float w1 = (particles[p.id].avgDiameter - minVal) / range;
-					float w2 = (particles[match.first].avgDiameter - minVal) / range;
-					edge_weight = 1.0 / (w1 + w2);
-					break;
-				}
-			default: break;
-			}
-
+			double d2 = match.second;
+			edge_weight = d2 /*std::sqrt(d2)*/;
 			graph.AddEdge( uint(p.id), uint(match.first), edge_weight, eidx++ );
 		}
 	}
@@ -428,30 +415,29 @@ void ParticleMesh::computeDistanceToFloor()
 	for(auto p : path) if(p < particles.size()) pathFromFloor.push_back(p);
 }
 
-std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph & neiGraph )
+std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
 {
 	std::vector< SegmentGraph > result;
 	
 	// Make a copy of the graph we will modify
-	auto graph = toGraph();
-	if(graph.IsEmpty()) return result;
+	if(fromGraph.IsEmpty()) return result;
 
 	std::vector<SegmentGraph::Edge> cutEdges;
 
 	// Remove edges between two nodes having different segments
-	for(auto e : graph.GetEdgesSet())
+	for(auto e : fromGraph.GetEdgesSet())
 	{
 		int s1 = particles[e.index].segment;
 		int s2 = particles[e.target].segment;
 
 		if(s1 != s2) 
 		{
-			graph.removeEdge( e.index, e.target );
+			fromGraph.removeEdge( e.index, e.target );
 			cutEdges.push_back( e );
 		}
 	}
 
-	auto all_parts = graph.toConnectedParts();
+	auto all_parts = fromGraph.toConnectedParts();
 	auto edgeToParts = [&]( SegmentGraph::Edge & e ){
 		std::pair<uint,uint> result;
 		for(auto & part : all_parts) if(part.IsHasVertex(e.index)) {result.first = part.uid; part.sid = particles[e.index].segment;}
@@ -511,6 +497,12 @@ std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph & ne
 
 		neiGraph.SetEdgeProperty( key.first, key.second, "normal", normalVar );
 		neiGraph.SetEdgeProperty( key.first, key.second, "center", centerVar );
+	}
+
+	// Disconnected graphs
+	if( boundaryEdges.empty() ){
+		for(auto & part : all_parts) 
+			neiGraph.AddVertex( part.uid );
 	}
 
 	return all_parts;
@@ -591,7 +583,7 @@ void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_n
 	if(!particles.size()) return;
 
 	// Clustering engine:
-	clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(desc, K);
+	clustering::kmeans< std::vector< VectorFloat >, clustering::lpnorm< VectorFloat > > km(desc, K, clustering::KmeansInitPlusPlus);
 
 	// Distance measure:
 	if(use_l1_norm) clustering::lpnorm_p = 1;
@@ -608,7 +600,8 @@ void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_n
 	if( showSeeds )
 	{
 		starlab::PointSoup * ps = new starlab::PointSoup(20);
-		for(auto pid : seeds) ps->addPoint(particles[pid].pos, Qt::black);
+		if(!seeds.empty()) for(auto pid : seeds) ps->addPoint(particles[pid].pos, Qt::black);
+		else for(auto pid : km.initindices) ps->addPoint(particles[pid].pos, Qt::black);
 		debug.push_back(ps);
 	}
 
@@ -692,4 +685,80 @@ Particle<Vector3> ParticleMesh::pointToParticle( const Vector3 & point )
 	if( !isOccupied || isOutsideGrid ) return Particle<Vector3>(Vector3(DBL_MAX,DBL_MAX,DBL_MAX));
 
 	return particles[ mortonToParticleID[m] ];
+}
+
+std::vector< Vector3 > ParticleMesh::particlesCorners( SegmentGraph::vertices_set selected )
+{
+	double gridunit = grid.unitlength;
+	double halfgridunit = 0.5 * gridunit;
+
+	std::vector< Vector3 > points;
+	for(auto & particle : particles) 
+	{
+		bool isInclude = true;
+		if(!selected.empty() && selected.find(particle.id) == selected.end()) isInclude = false;
+		if( isInclude ) 
+		{
+			Vector3 corner = particle.pos - Vector3(halfgridunit,halfgridunit,halfgridunit);
+			QVector<Vector3> cornersBottom, cornersTop;
+
+			// Bottom row
+			cornersBottom.push_back(corner);
+			cornersBottom.push_back(corner + Vector3(gridunit,0,0));
+			cornersBottom.push_back(corner + Vector3(gridunit,gridunit,0));
+			cornersBottom.push_back(corner + Vector3(0,gridunit,0));
+
+			// Top row
+			for(auto & p : cornersBottom) cornersTop << (p + Vector3(0,0,gridunit));
+
+			// Combined
+			for(auto & p : (cornersBottom + cornersTop))
+				points.push_back( p );
+		}
+	}
+	return points;
+}
+
+std::set<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected )
+{
+	std::set<size_t> seeds;
+
+	if( seedType == GROUND )
+	{
+		// Seed based on ground distance
+		for(int i = 0; i < K; i++)
+		{
+			double t = double(i) / (K-1);
+			int idx = t * (pathFromFloor.size()-1);
+			seeds.insert( pathFromFloor[idx] );
+		}
+	}
+
+	if( seedType == DESCRIPTOR )
+	{
+		// Collect sorted list of magnitudes
+		QMap<double,size_t> descParticle;
+		for(auto & p : particles)
+		{
+			bool isInclude = true;
+			if(!selected.empty() && selected.find(p.id) == selected.end()) isInclude = false;
+
+			if( isInclude )
+			{
+				auto d = Eigen::Map<Eigen::VectorXf>(&desc[p.id][0], desc[p.id].size());
+				descParticle[ d.norm() ] = p.id;
+			}
+		}
+		QVector<size_t> sorted = descParticle.values().toVector();
+
+		// Seed based on magnitude of descriptor
+		for(int i = 0; i < K; i++)
+		{
+			double t = double(i) / (K-1);
+			int idx = t * (sorted.size()-1);
+			seeds.insert( sorted[idx] );
+		}
+	}
+
+	return seeds;
 }
