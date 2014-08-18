@@ -6,6 +6,7 @@
 #include <list>
 #include <queue>
 #include <set>
+#include <functional>
 
 #undef min
 #undef max
@@ -44,6 +45,8 @@ namespace GenericGraphs{
 			bool operator == (const Edge & rhs) const{
 				return (target == rhs.target && weight == rhs.weight && index == rhs.index);
 			}
+
+			bool has(vertex_t v){ return index == v || target == v; } // assuming edge index is for a vertex
 
 			// Attributes
 			PropertyMap property;
@@ -468,6 +471,36 @@ namespace GenericGraphs{
 			return leaves;
 		}
 
+		std::vector<vertex_t> BFS( vertex_t start )
+		{
+			std::vector<vertex_t> visitOrder;
+
+			std::queue<vertex_t> toVisit;
+			std::map<vertex_t,bool> explored;
+			for(auto v : vertices) explored[v] = false;
+
+			toVisit.push( start );
+			explored[ start ] = true;
+
+			while( !toVisit.empty() )
+			{
+				auto v = toVisit.front();
+				toVisit.pop();
+				visitOrder.push_back( v );
+
+				for(auto & e : adjacency_map[v])
+				{
+					auto w = e.target;
+					if(explored[w]) continue;
+
+					explored[w] = true;
+					toVisit.push(w);
+				}
+			}
+
+			return visitOrder;
+		}
+
 		void explore(vertex_t seed, std::set<vertex_t> & explored)
 		{
 			std::queue<vertex_t> q;
@@ -637,10 +670,92 @@ namespace GenericGraphs{
 			std::vector<int> edges;
 			for(typename std::list<Edge>::iterator e = adjacency_map[x].begin(); e != adjacency_map[x].end(); e++)
 				edges.push_back(e->target);
+			std::sort(edges.begin(),edges.end());
 			return edges;
 		}
 
-		int findFixP(vector<int> cand) const 
+		// Adapted from python code: http://stackoverflow.com/questions/12367801/finding-all-cycles-in-undirected-graphs/25072113
+		std::vector< std::vector<vertex_t> > findAllCycles( int cycle_length_limit = -1 )
+		{
+			std::vector< std::vector<vertex_t> > cycles;
+
+			auto edges = GetEdgesSet();
+
+			std::function<void(std::vector<vertex_t>)> findNewCycles = [&]( std::vector<vertex_t> sub_path )
+			{
+				auto visisted = []( vertex_t v, const std::vector<vertex_t> & path ){
+					return std::find(path.begin(),path.end(),v) != path.end();
+				};
+
+				auto rotate_to_smallest = []( std::vector<vertex_t> path ){
+					std::rotate(path.begin(), std::min_element(path.begin(), path.end()), path.end());
+					return path;
+				};
+
+				auto invert = [&]( std::vector<vertex_t> path ){
+					std::reverse(path.begin(),path.end());
+					return rotate_to_smallest(path);
+				};
+
+				auto isNew = [&cycles]( const std::vector<vertex_t> & path ){
+					return std::find(cycles.begin(), cycles.end(), path) == cycles.end();
+				};
+
+				vertex_t start_node = sub_path[0];
+				vertex_t next_node;
+
+				// visit each edge and each node of each edge
+				for(auto edge : edges)
+				{
+					if( edge.has(start_node) )
+					{
+						vertex_t node1 = edge.index, node2 = edge.target;
+
+						if(node1 == start_node)
+							next_node = node2;
+						else
+							next_node = node1;
+
+						if( !visisted(next_node, sub_path) )
+						{
+							// neighbor node not on path yet
+							std::vector<vertex_t> sub;
+							sub.push_back(next_node);
+							sub.insert(sub.end(), sub_path.begin(), sub_path.end());
+							findNewCycles( sub );
+						} 
+						else if( sub_path.size() > 2 && next_node == sub_path.back() )
+						{
+							// cycle found
+							auto p = rotate_to_smallest(sub_path);
+							auto inv = invert(p);
+
+							if( isNew(p) && isNew(inv) )
+								cycles.push_back( p );
+						}
+					}
+				}
+			};
+
+			for(auto edge : edges)
+			{
+				findNewCycles( std::vector<vertex_t>(1,edge.target ) );
+				findNewCycles( std::vector<vertex_t>(1,edge.index) );
+			}
+
+			// Option to limit cycles to a specific length
+			if(cycle_length_limit > 1){
+				std::vector< std::vector<vertex_t> > short_cycles;
+				for(auto & cycle : cycles)
+					if(cycle.size() <= cycle_length_limit)
+						short_cycles.push_back(cycle);
+				cycles = short_cycles;
+			}
+
+			return cycles;
+		}
+
+		int findFixP(vector<int> cand) 
 		{
 			std::vector<int> connections;
 			connections.resize(cand.size());
@@ -649,8 +764,8 @@ namespace GenericGraphs{
 			std::sort(cand.begin(),cand.end());
 
 			// Auxiliary lambda function
-			auto intersection = [&cand, this](int x) -> int {
-				const vector<int>& x_edges = this->getEdges(x);
+			auto intersection = [&](int x) -> int {
+				vector<int> x_edges = getEdges(x);
 				std::vector<int> intersection;
 
 				set_intersection(x_edges.begin(), x_edges.end(),
@@ -676,9 +791,23 @@ namespace GenericGraphs{
 			else return *itmax;
 		}
 
+		// Bron–Kerbosch algorithm
+		std::vector< std::vector<int> > cliques()
+		{
+			std::vector< std::vector<int> > result;
+			std::vector<int> compsub;
+			std::vector<int> cand, cnot;
+			for(auto v : vertices) cand.push_back(v);
+
+			cliqueEnumerate(compsub, cand, cnot, result);
+
+			return result;
+		}
+
+		// Adapted from : http://www.tonicebrian.com/2011/08/29/maximal-clique-enumeration-using-c0x-and-the-stl/
 		void cliqueEnumerate(const std::vector<int>& compsub, 
 			std::vector<int> cand, std::vector<int> cnot,
-			std::vector< std::vector<int> >& result) const 
+			std::vector< std::vector<int> >& result) 
 		{
 			// Function that answer whether the node is connected
 			if(cand.empty()){

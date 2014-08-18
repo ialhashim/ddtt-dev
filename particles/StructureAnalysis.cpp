@@ -7,7 +7,7 @@
 
 #include "disjointset.h"
 
-#include "convexhull.h"
+#include "SplitOperation.h"
 
 // Declare property types
 Q_DECLARE_METATYPE(Eigen::Vector3d)
@@ -15,152 +15,10 @@ Q_DECLARE_METATYPE(Eigen::Vector3f)
 Q_DECLARE_METATYPE(Eigen::AlignedBox3d)
 Q_DECLARE_METATYPE(Boundsd)
 
-#include "kmeans.h"
-double solidity_threshold = 0.7;
-int max_parts_threshold = 12;
-int level_threshold = 3;
-
-auto rcolors = rndColors2(200);
-int rc = 0;
-QVector<RenderObject::Base*> globalDebug;
-
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
 	rc = 0; // reset random color
 	globalDebug.clear();
-
-	struct SplitOperation{
-		SegmentGraph seg, neiGraph;
-		double solidity;
-		int level;
-		std::vector<SplitOperation> children;
-		SplitOperation * parent;
-		ConvexHull<Vector3> hull;
-		ParticleMesh * s;
-
-		typedef std::vector<float> FloatVec;
-		typedef std::vector<FloatVec> FloatVecVec;
-		typedef clustering::lpnorm< VectorFloat > DestFn;
-
-		SplitOperation( ParticleMesh * s, const SegmentGraph& seg, int level = 0, SplitOperation* parent = NULL) : 
-			s(s), seg(seg), level(level)
-		{
-			// Compute solidity score
-			hull = ConvexHull<Vector3>( s->particlesCorners( seg.vertices ), "FA Qt" );
-
-			// Segment solidity (Volume / Convex Volume)
-			double seg_volume = pow(s->grid.unitlength,3) * seg.vertices.size();
-			double convex_volume = hull.volume;
-			solidity = seg_volume / convex_volume;
-		}
-
-		void split()
-		{
-			// Limit depth of search
-			if (level > level_threshold)
-				return;
-
-			// Check if it needs splinting
-			if (solidity < solidity_threshold)
-			{
-				// Collect and map current particles
-				FloatVecVec descs;
-				QMap<size_t,size_t> pmap;
-
-				for(auto v : seg.vertices){
-					pmap[v] = pmap.size();
-					descs.push_back( s->desc[v] );
-				}
-
-				// Perform binary split
-				clustering::kmeans<FloatVecVec,DestFn> km( descs, 2 );
-				km._centers.clear();
-				for(auto pid : s->specialSeeding(ParticleMesh::DESCRIPTOR, 2, seg.vertices)) km._centers.push_back( s->desc[pid] );
-				km.run();
-
-				// Assign found clusters
-				for(auto v : seg.vertices) 
-					s->particles[v].segment = km.cluster( pmap[v] );
-
-				auto newSegments = s->segmentToComponents( seg, neiGraph );
-
-				// Create possible split operations
-				std::vector<SplitOperation> newOps;
-				for(auto & newSeg : newSegments)
-					newOps.push_back( SplitOperation(s, newSeg, level + 1, this) );
-
-				// Analyze clusters
-				for(auto & newOp : newOps)
-				{
-					// No further split should happen
-					if(newOp.seg.vertices.size() == seg.vertices.size()){
-						children.clear();
-						break;
-					}
-
-					// Too small of a segment
-					if(newOp.seg.vertices.size() < 4)
-						continue;
-
-					children.push_back(newOp);
-
-					if(newOp.solidity < solidity_threshold)
-					{
-						children.back().split();
-						children.back().seg.pid = seg.uid;
-					}
-				}
-			}
-		}
-
-		void collectClusters( std::vector<SplitOperation*> & ops )
-		{
-			if(children.empty()){
-				ops.push_back(this);
-				return;
-			}
-
-			for(auto & child : children){
-				child.collectClusters(ops);
-				child.parent = this;
-			}
-		}
-
-		void debugAllChildren(QVector<RenderObject::Base*> & debug)
-		{
-			if(children.empty())
-			{
-				starlab::PolygonSoup * ps = new starlab::PolygonSoup;
-				for(auto f : hull.faces)
-				{
-					QVector<starlab::QVector3> pnts;
-					for(auto v : f) pnts << v;
-					QColor c = rcolors[rc];
-					//c.setAlphaF(0.5);
-					ps->addPoly(pnts, c);
-				}
-				rc++;
-				debug << ps;
-			}
-
-			for(auto & child : children)
-				child.debugAllChildren(debug);
-		}
-
-		void report( QStringList & items )
-		{
-			QString r = QString("[%1 - level %2] solidity (%3) parent(%4) size(%5)").arg(
-				seg.uid).arg(level).arg(solidity).arg(seg.pid).arg(seg.vertices.size());
-
-			if(!children.empty())
-				r += QString(" children(%1)").arg(children.size());
-
-			items << r;
-
-			for(auto & child : children)
-				child.report( items );
-		}
-	};
 
 	SplitOperation op( pmesh, s->toGraph() );
 	op.split();
@@ -172,13 +30,186 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	for(auto c : clusters)
 		mappedClusters[c->seg.uid] = mappedClusters.size();
 
+	// Assign new clusters
 	for(auto c : clusters)
 		for(auto v : c->seg.vertices)
-			s->particles[v].segment = mappedClusters[c->seg.uid];
-		
+			s->particles[v].segment = mappedClusters.size() + mappedClusters[c->seg.uid];
+	
+	QMap< unsigned int, SegmentGraph > candidates;
+	QMap< size_t, ConvexHull<Vector3> > hulls;
+
+	bool isDone = false;
+
+	while( !isDone )
+	{
+		isDone = true;
+
+		// Get candidate good segments:
+		SegmentGraph neiGraph;
+		candidates = s->segmentToComponents( s->toGraph(), neiGraph );
+
+		// Pre-compute convex hulls:
+		for(auto & seg : candidates)
+			hulls[seg.uid] = ConvexHull<Vector3>( s->particlesCorners(seg.vertices) );
+
+		// Merge smaller clusters
+		bool isMerge = true;
+		while( isMerge )
+		{
+			isMerge = false;
+
+			// Sort candidates by their size
+			std::vector<SegmentGraph*> sorted;
+			for(auto c : candidates.keys()) if(candidates[c].vertices.size()) sorted.push_back( &candidates[c] );
+			std::sort( sorted.begin(), sorted.end(), [&](const SegmentGraph* a, const SegmentGraph* b){ 
+				return a->vertices.size() < b->vertices.size(); 
+			});
+
+			// Test if small cluster merges to a better solidity score
+			for(auto seg : sorted)
+			{
+				auto & hull = hulls[seg->uid];
+				std::map<int, ConvexHull<Vector3> > newHulls;
+				int bestJ = seg->uid;
+				double bestScore = solidity_threshold;
+				if(seg->vertices.size() < 2) bestScore = solidity_threshold;
+
+				for(auto j : neiGraph.getEdges(seg->uid))
+				{
+					if(candidates[j].vertices.empty()) continue;
+
+					auto newHull = hull.merged(hulls[j]);
+					double solidity = newHull.solidity(s->grid.unitlength);
+				
+					if(solidity > bestScore){
+						bestScore = solidity;
+						bestJ = j;
+						newHulls[j] = newHull;
+					}
+				}
+
+				if(bestJ == seg->uid) continue; // no merge is good
+
+				auto big = &candidates[seg->uid];
+				auto smaller = &candidates[bestJ];
+				if(big->vertices.size() < smaller->vertices.size()) std::swap(big,smaller);
+
+				// Migrate from small to big
+				for(auto v : smaller->vertices) 
+				{
+					big->AddVertex(v);
+					s->particles[v].segment = big->sid;
+				}
+			
+				smaller->vertices.clear();
+
+				hulls[big->uid] = newHulls[bestJ];
+
+				isMerge = true;
+				isDone = false;
+
+				break;
+			}
+		}
+	}
+
+	// Visualize distance
+	/*for(auto & seg : candidates)
+	{
+		std::vector<unsigned int> verts;
+		for(auto v : seg.vertices) verts.push_back(v);
+
+		std::vector<double> measures;
+		for(auto v : verts) measures.push_back( s->particles[v].measure );
+
+		auto bound = std::minmax_element( measures.begin(), measures.end() );
+
+		int min_i = bound.first - measures.begin();
+		int max_i = bound.second - measures.begin();
+		double min_val =  measures[min_i];
+		double max_val = measures[max_i];
+		double range = max_val - min_val;
+
+		for(auto v : seg.vertices)
+		{
+			double normalized = ((s->particles[v].measure-min_val) / range);
+			s->particles[v].weight = pow(abs(normalized - 0.5) * 2,2);
+			s->particles[v].flag = VIZ_WEIGHT;
+		}
+	}*/
+
+	/*
+	// Cluster separated segments:
+	DisjointSet disjoint( candidates.size() );
+
+	auto candidatesIDs = candidates.keys();
+	QMap<size_t,size_t> centroids;
+
+	// Closest particle to centroid
+	for(size_t i = 0; i < candidatesIDs.size(); i++){
+		uint centroid_id;
+		double minDist = DBL_MAX;
+		for(auto v : candidates[candidatesIDs[i]].vertices){
+			double dist = (s->particles[v].pos - hulls[candidatesIDs[i]].center).norm();
+			if(dist < minDist){
+				minDist = dist;
+				centroid_id = v;
+			}
+		}
+
+		centroids[i] = centroid_id;
+	}
+
+	for(size_t i = 0; i < candidatesIDs.size(); i++)
+	{
+		for(size_t j = i + 1; j < candidatesIDs.size(); j++)
+		{
+			double threshold = 0.01;
+
+			auto pi = centroids[i];
+			auto pj = centroids[j];
+			//auto di = Eigen::Map<Eigen::VectorXf>(&s->desc[pi][0], s->desc[pi].size());
+			//auto dj = Eigen::Map<Eigen::VectorXf>(&s->desc[pj][0], s->desc[pj].size());
+			//auto dist = (di.normalized() - dj.normalized()).norm();
+			//auto dist = abs(s->particles[pi].measure - s->particles[pj].measure);
+			
+			auto dist = abs(s->particles[pi].flat - s->particles[pj].flat);
+
+			if(dist < threshold) disjoint.Union(i,j);
+		}
+	}
+
+	for(size_t i = 0; i < candidatesIDs.size(); i++)
+	{
+		for( auto v : candidates[candidatesIDs[i]].vertices )
+		{
+			s->particles[v].segment = disjoint.Parent[i];
+		}
+	}*/
+
+	/*std::set<size_t> seeds;
+	for(auto c : clusters)
+	{
+		// Closest particle to this centroid
+		uint centroid_id;
+		double minDist = DBL_MAX;
+		for(auto v : c->seg.vertices){
+			double dist = (s->particles[v].pos - c->hull.center).norm();
+			if(dist < minDist){
+				minDist = dist;
+				centroid_id = v;
+			}
+		}
+
+		if(seeds.size() < 3) seeds.insert( centroid_id );
+	}
+	s->cluster(seeds.size(), seeds, false, false);*/
+
 	/*
 	op.debugAllChildren(debug);
 	QStringList rep; op.report(rep);
 	saveToTextFile( "_split_report.txt", rep );
-	for(auto d : globalDebug) debug << d;*/
+	*/
+
+	for(auto d : globalDebug) debug << d;
 }

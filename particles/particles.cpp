@@ -111,6 +111,20 @@ void particles::processShapes()
 					p.avgDiameter = 0;
 				}
 
+				// Smooth ray response
+				int smoothRaysIter = pw->ui->fnSmoothIters->value();
+				if(smoothRaysIter > 0)
+				{
+					for(int pi = 0; pi < (int)s->particles.size(); pi++)
+					{
+						auto & p = s->particles[pi];
+
+						sphere.setValues( descriptor[pi] );
+						sphere.smoothValues( smoothRaysIter );
+						descriptor[pi] = sphere.values();
+					}
+				}
+
 				// Report
 				mainWindow()->setStatusBarMessage( QString("Ray tracing: rays (%1) / time (%2 ms)").arg( rayCount ).arg( timer.elapsed() ) );
 				timer.restart();
@@ -494,7 +508,7 @@ void particles::processShapes()
 	QElapsedTimer curTimer; curTimer.start();
 
 	// k-means clustering
-	if( true )
+	if( !pw->ui->performSturctureAnalysis->isChecked() )
 	{
 		int K = pw->ui->kclusters->value();
 

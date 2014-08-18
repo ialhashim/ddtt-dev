@@ -179,7 +179,9 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 		//glNormal3dv( pn.data() );
 
 		QColor c = rndcolors[ particle.segment ];
+		if(particle.flag == VIZ_WEIGHT) c = starlab::qtJetColor(particle.weight); 
 		Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), particle.alpha);
+
 		glColor4dv( color.data() );
 		glVertex3dv( particle.pos.data() );
 	}
@@ -415,9 +417,9 @@ void ParticleMesh::computeDistanceToFloor()
 	for(auto p : path) if(p < particles.size()) pathFromFloor.push_back(p);
 }
 
-std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
+QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
 {
-	std::vector< SegmentGraph > result;
+	QMap< unsigned int, SegmentGraph > result;
 	
 	// Make a copy of the graph we will modify
 	if(fromGraph.IsEmpty()) return result;
@@ -505,7 +507,11 @@ std::vector< SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph from
 			neiGraph.AddVertex( part.uid );
 	}
 
-	return all_parts;
+	// Collect resulting parts indexed by their unique identifier
+	for(auto & part : all_parts)
+		result[part.uid] = part;
+
+	return result;
 }
 
 std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )

@@ -217,3 +217,46 @@ static inline void saveToTextFile( QString filename, QStringList items ){
 		out << item << "\n";
 	}
 }
+
+// Simplify runtime debugging
+#include <QMessageBox>
+template<typename DataType>
+static inline void debugBox( DataType message ){
+	QMessageBox msgBox;
+	msgBox.setTextFormat(Qt::RichText);
+	msgBox.setText( QString("%1").arg(message) );
+	msgBox.setStandardButtons(QMessageBox::Ok);
+	msgBox.exec();
+}
+static inline void debugBoxList( QStringList messages ){
+	debugBox( messages.join("\n") );
+}
+template<typename Container>
+static inline void debugBoxVec( Container data ){
+	QStringList l;
+	for(auto d : data) l << QString("%1").arg(d);
+	debugBoxList(l);
+}
+
+// Generate subsets
+template<typename T>
+std::vector< std::vector<T> > sets( const std::vector<T> & input, int min_size = 1, 
+								   int max_size = 0, bool isSorted = false ){
+	std::vector< std::vector<T> > results;
+	if(input.size() == 0) return results;
+	int total = pow(2, input.size());
+	for(int mask = 0; mask < total; mask++){
+		std::vector<T> result;
+		int i = (int)input.size() - 1; 
+		do{
+			if( (mask & (1 << i)) != 0){
+				result.push_back(input[i]);
+			}
+		}while(i--);
+		if( result.size() < min_size ) continue;
+		if( max_size > 0 && result.size() > max_size ) continue;
+		if( isSorted ) std::sort(result.begin(), result.end());
+		results.push_back(result);
+	}
+	return results; 
+};

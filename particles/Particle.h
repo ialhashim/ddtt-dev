@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <Eigen/Core>
 
-enum ParticleFlags{ NONE, FLOOR, UNPROCESSED };
+enum ParticleFlags{ NONE, FLOOR, UNPROCESSED, VIZ_WEIGHT };
 
 template<typename Vector3>
 struct Particle

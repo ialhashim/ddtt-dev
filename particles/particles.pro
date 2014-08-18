@@ -14,14 +14,17 @@ HEADERS += \
     Particle.h \
     Raytracing.h \
     BasicTable.h \
-    StructureAnalysis.h
+    StructureAnalysis.h \
+    convexhull.h \
+    SplitOperation.h
 
 SOURCES += \
     particles.cpp \
     particles-widget.cpp \
     ParticleMesh.cpp \
     Raytracing.cpp \
-    StructureAnalysis.cpp
+    StructureAnalysis.cpp \
+    SplitOperation.cpp
 
 # SVG viewer
 HEADERS += svgview.h
