@@ -25,6 +25,7 @@ public:
 
 	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
 	~ParticleMesh();
+	PropertyMap property;
 
 	std::vector< Particle<Vector3> > particles;
 	double raidus;
@@ -68,6 +69,7 @@ public:
 	SurfaceMeshModel * surface_mesh;
 	NanoKdTree * relativeKdtree;
 
+	SurfaceMeshModel * meshPoints( const std::vector<Eigen::Vector3f> & points ) const;
 	QVector<RenderObject::Base*> debug;
 	void distort();
 

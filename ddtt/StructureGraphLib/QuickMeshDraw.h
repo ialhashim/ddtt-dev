@@ -33,9 +33,9 @@ struct QuickMeshDraw{
 
 		glBegin(GL_TRIANGLES);
 		for (fit=mesh->faces_begin(); fit!=fend; ++fit){
-			glNormal3( fnormals[fit] );
+			glNormal3dv( fnormals[fit].data() );
 			fvit = fvend = mesh->vertices(fit);
-			do{ glVector3( points[fvit] ); } while (++fvit != fvend);
+			do{ glVertex3dv( points[fvit].data() ); } while (++fvit != fvend);
 		}
 		glEnd();
 
@@ -62,9 +62,9 @@ struct QuickMeshDraw{
 		glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 		for (fit=mesh->faces_begin(); fit!=fend; ++fit){
 			glBegin(GL_POLYGON);
-			glNormal3( fnormals[fit] );
+			glNormal3dv( fnormals[fit].data() );
 			fvit = fvend = mesh->vertices(fit);
-			do{ glVector3( points[fvit] ); } while (++fvit != fvend);
+			do{ glVertex3dv( points[fvit].data() ); } while (++fvit != fvend);
 			glEnd();
 		}
 		glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
@@ -83,7 +83,7 @@ struct QuickMeshDraw{
 		glBegin(GL_TRIANGLES);
 		for (fit=mesh->faces_begin(); fit!=fend; ++fit){
 			fvit = fvend = mesh->vertices(fit);
-			do{ glVector3( points[fvit] ); } while (++fvit != fvend);
+			do{ glVertex3dv( points[fvit].data() ); } while (++fvit != fvend);
 		}
 		glEnd();
 

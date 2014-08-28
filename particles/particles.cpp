@@ -47,6 +47,14 @@ void particles::processShapes()
 	// Show voxelized meshes
 	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
 
+	if(pw->pmeshes.size() > 1)
+	{
+		// Experiment
+		blending();
+		pw->isReady = true;
+		return;
+	}
+
 	QElapsedTimer allTimer; allTimer.start();
 
 	qApp->processEvents();
@@ -543,6 +551,8 @@ void particles::processShapes()
 	{	
 		for(auto & s : pw->pmeshes)
 		{		
+			s->property["showHulls"].setValue( pw->ui->showHulls->isChecked() );
+
 			StructureAnalysis sa( s );
 
 			for(auto d : sa.debug) drawArea()->addRenderObject(d);
@@ -555,9 +565,6 @@ void particles::processShapes()
 
 	// Report
 	mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
-
-	// Experiment
-	blending();
 
 	pw->isReady = true;
 
@@ -812,23 +819,34 @@ void particles::decorate()
 
 	// Collect points
 	std::vector<Eigen::Vector3f> mixedPoints;
-	for(size_t i = 0; i < pwidget->pmeshes.size(); i++)
+
+	ParticleMesh * imesh = pwidget->pmeshes.front();
+	ParticleMesh * jmesh = pwidget->pmeshes.back();
+
+	for(auto particle : imesh->particles){
+		Vector3 p = AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos);
+		mixedPoints.push_back( p.cast<float>() );
+	}
+
+	for(auto particle : jmesh->particles){
+		Vector3 p = AlphaBlend((1.0-alpha), particle.pos, imesh->particles[particle.correspondence].pos);
+		mixedPoints.push_back( p.cast<float>() );
+	}
+
+	// Test meshing
+	if( false )
 	{
-		for(size_t j = i+1; j < pwidget->pmeshes.size(); j++)
-		{
-			ParticleMesh * imesh = pwidget->pmeshes[i];
-			ParticleMesh * jmesh = pwidget->pmeshes[j];
-
-			for(auto particle : imesh->particles){
-				Vector3 p = AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos);
-				mixedPoints.push_back( p.cast<float>() );
-			}
-
-			for(auto particle : jmesh->particles){
-				Vector3 p = AlphaBlend((1.0-alpha), particle.pos, imesh->particles[particle.correspondence].pos);
-				mixedPoints.push_back( p.cast<float>() );
-			}
+		SurfaceMeshModel * m = imesh->meshPoints( mixedPoints );
+		m->update_face_normals();
+		glBegin(GL_QUADS);
+		for(auto f : m->faces()){
+			glNormal3dv(m->face_normals()[f].data());
+			for(auto v : m->vertices(f))
+				glVertex3dv( m->vertex_coordinates()[v].data() );
 		}
+		glEnd();
+		delete m;
+		return;
 	}
 
 	// Setup shader
@@ -874,7 +892,11 @@ void particles::decorate()
 		drawArea()->camera()->getModelViewProjectionMatrix(m);
 		QMatrix4x4 pmvMatrix(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
 
-		QColor color(255,0,0,255);
+		QColor color1(255,0,0,255);
+		QColor color2(255,128,0,255);
+
+		QColor color = QColor::fromHsl(AlphaBlend(alpha,color1.hue(),color2.hue()),color1.saturation(),color1.lightness(), color1.alpha());
+
 		QVector3D lightdir(0,0,1);
 
 		program->bind();

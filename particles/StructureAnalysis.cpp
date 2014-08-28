@@ -17,6 +17,8 @@ Q_DECLARE_METATYPE(Boundsd)
 
 StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 {
+	std::random_shuffle(ParticleMesh::rndcolors.begin(), ParticleMesh::rndcolors.end());
+
 	rc = 0; // reset random color
 	globalDebug.clear();
 
@@ -33,16 +35,16 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	// Assign new clusters
 	for(auto c : clusters)
 		for(auto v : c->seg.vertices)
-			s->particles[v].segment = mappedClusters.size() + mappedClusters[c->seg.uid];
+			s->particles[v].segment = mappedClusters[c->seg.uid];
 	
-	QMap< unsigned int, SegmentGraph > candidates;
-	QMap< size_t, ConvexHull<Vector3> > hulls;
-
 	bool isDone = false;
 
 	while( !isDone )
 	{
 		isDone = true;
+
+		QMap< unsigned int, SegmentGraph > candidates;
+		QMap< size_t, ConvexHull<Vector3> > hulls;
 
 		// Get candidate good segments:
 		SegmentGraph neiGraph;
@@ -72,7 +74,9 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 				std::map<int, ConvexHull<Vector3> > newHulls;
 				int bestJ = seg->uid;
 				double bestScore = solidity_threshold;
-				if(seg->vertices.size() < 2) bestScore = solidity_threshold;
+
+				double mysol = hull.solidity(s->grid.unitlength);
+				if(mysol > 0.9) bestScore = mysol;
 
 				for(auto j : neiGraph.getEdges(seg->uid))
 				{
@@ -111,6 +115,63 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 				break;
 			}
 		}
+
+		// Assign final segment IDs
+		int sid = 0;
+		for(auto & seg : candidates)
+		{
+			for(auto v : seg.vertices)
+				s->particles[v].segment = sid;
+
+			// Draw convex hull
+			if(isDone && s->property["showHulls"].toBool())
+			{
+				starlab::PolygonSoup * ps = new starlab::PolygonSoup;
+				for(auto f : hulls[seg.uid].faces)
+				{
+					QVector<starlab::QVector3> face;
+					for(auto v : f) face << v;
+					ps->addPoly(face, ParticleMesh::rndcolors[sid]);
+				}
+				debug << ps;
+			}
+
+			sid++;
+		}
+
+		// Draw bounding boxes
+		/*for(auto & seg : candidates)
+		{
+			Eigen::AlignedBox3d box;
+
+			for(auto v : seg.vertices)
+				box.extend(s->particles[v].pos);
+
+			QColor c = rndColors2(1).front();
+			QVector<Eigen::Vector3d>  corners;
+			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomLeftFloor));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomRightFloor));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::TopLeftFloor));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::TopRightFloor));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomLeftCeil));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomRightCeil));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::TopLeftCeil));
+			corners.push_back(box.corner(Eigen::AlignedBox3d::TopRightCeil));
+			starlab::LineSegments * lineSeg = new starlab::LineSegments;
+			lineSeg->addLine(corners[0], corners[1], c);
+			lineSeg->addLine(corners[0], corners[2], c);
+			lineSeg->addLine(corners[0], corners[4], c);
+			lineSeg->addLine(corners[1], corners[3], c);
+			lineSeg->addLine(corners[1], corners[5], c);
+			lineSeg->addLine(corners[2], corners[3], c);
+			lineSeg->addLine(corners[2], corners[6], c);
+			lineSeg->addLine(corners[3], corners[7], c);
+			lineSeg->addLine(corners[4], corners[5], c);
+			lineSeg->addLine(corners[4], corners[6], c);
+			lineSeg->addLine(corners[5], corners[7], c);
+			lineSeg->addLine(corners[6], corners[7], c);
+			debug << lineSeg;
+		}*/
 	}
 
 	// Visualize distance

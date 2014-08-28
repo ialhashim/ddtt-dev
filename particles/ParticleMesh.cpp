@@ -768,3 +768,93 @@ std::set<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, Segment
 
 	return seeds;
 }
+
+SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> & points ) const
+{
+	SurfaceMeshModel * m = new SurfaceMeshModel("meshed.obj","meshed");
+
+	size_t gridsize = grid.gridsize;
+	double gridlength = gridsize * grid.unitlength;
+
+	std::vector<char> occupied(grid.occupied.size(), EMPTY_VOXEL);
+	std::set<uint64_t> voxels;
+
+	for(const auto & point : points)
+	{
+		Vector3 p = point.cast<double>() - grid.translation.cast<double>();
+		Vector3 delta = p / gridlength;
+		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+		uint64_t m = mortonEncode_LUT(gridpnt.z(),gridpnt.y(),gridpnt.x());
+
+		occupied[m] = FULL_VOXEL;
+		voxels.insert(m);
+	}
+
+	// Prepare set of quads
+	std::vector< std::pair<uint64_t, Eigen::Vector3i> > allQuads;
+
+	for(auto voxel_morton : voxels)
+	{					
+		unsigned int x,y,z;
+		mortonDecode(voxel_morton, x, y, z);
+
+		std::vector<uint64_t> neigh;
+		if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
+		if(y < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y+1,z) );
+		if(z < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y,z+1) );
+
+		if(x > 0) neigh.push_back( mortonEncode_LUT(x-1,y,z) );
+		if(y > 0) neigh.push_back( mortonEncode_LUT(x,y-1,z) );
+		if(z > 0) neigh.push_back( mortonEncode_LUT(x,y,z-1) );
+
+		// Inside / outside
+		for(auto n : neigh)
+		{
+			if(occupied[n] != occupied[voxel_morton])
+			{
+				unsigned int v[3], w[3];
+				mortonDecode(voxel_morton, v[0], v[1], v[2]);
+				mortonDecode(n, w[0], w[1], w[2]);
+				Eigen::Vector3i direction (int(w[2])-int(v[2]), int(w[1])-int(v[1]), int(w[0])-int(v[0]));
+				allQuads.push_back( std::make_pair(voxel_morton, direction) );
+			}
+		}
+
+		// Edge of grid
+		unsigned int v[3];
+		mortonDecode(voxel_morton, v[2], v[1], v[0]);
+		bool isBoundary = (v[0] == 0 || v[1] == 0 || v[2] == 0) || 
+			(v[0] == gridsize-1 || v[1] == gridsize-1 || v[2] == gridsize-1);
+		if( !isBoundary ) continue;
+
+		for(int i = 0; i < 3; i++)
+		{
+			Eigen::Vector3i d(0,0,0);
+			if(v[i] == 0) d[i] = -1;
+			else if(v[i] == gridsize-1) d[i] = 1;
+			if(d[0]!=0||d[1]!=0||d[2]!=0) 
+				allQuads.push_back( std::make_pair(voxel_morton, d) );
+		}
+	}
+
+	// Generate surface quads in world coordinates
+	double unitlength = grid.unitlength;	
+	Vector3 delta = grid.translation.cast<double>() + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+
+	for(auto p : allQuads)
+	{			
+		unsigned int v[3];
+		mortonDecode(p.first, v[0], v[1], v[2]);
+		std::vector<Vector3> quad = voxelQuad<Vector3>( p.second, unitlength );
+		std::vector<Vertex> quad_verts;
+		for(auto p : quad){
+			p += Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
+			quad_verts.push_back( Vertex(m->n_vertices()) );
+			m->add_vertex( p );
+		}
+
+		m->add_face(quad_verts);
+	}
+
+	return m;
+}
