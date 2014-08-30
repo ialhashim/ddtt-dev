@@ -10,7 +10,7 @@ int rc = 0;
 QVector<RenderObject::Base*> globalDebug;
 
 SplitOperation::SplitOperation(ParticleMesh *s, const SegmentGraph &seg, int level, SplitOperation *parent) :
-    s(s), seg(seg), level(level)
+    s(s), seg(seg), level(level), parent(NULL)
 {
     // Compute solidity score
     hull = ConvexHull<Vector3>( s->particlesCorners( seg.vertices ), "FA Qt" );
@@ -41,7 +41,9 @@ void SplitOperation::split()
 		int K = 2;
         clustering::kmeans<FloatVecVec,DestFn> km( descs, K );
         km._centers.clear();
-        for(auto pid : s->specialSeeding(ParticleMesh::DESCRIPTOR, K, seg.vertices)) km._centers.push_back( s->desc[pid] );
+		auto seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K, seg.vertices);
+
+        for(auto pid : seeds) km._centers.push_back( s->desc[pid] );
         km.run();
 
         // Assign found clusters

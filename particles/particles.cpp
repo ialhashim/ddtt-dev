@@ -79,6 +79,10 @@ void particles::processShapes()
 
 			QElapsedTimer timer; timer.start();
 
+			// Keep record of sampled directions
+			s->usedDirections = sampledRayDirections;
+			s->antiRays = antiRays;
+
 			// Hit results are saved as vector of distances
 			std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
 				s->particles.size(), std::vector<float>( perSampleRaysCount ) ));
@@ -481,38 +485,34 @@ void particles::processShapes()
 	// Report
 	mainWindow()->setStatusBarMessage( QString("Descriptors ready (%1 ms)").arg( allTimer.elapsed() ) );
 
-	// Special features
-	if( true )
+	// Descriptor options
+	for(auto & s : pw->pmeshes)
 	{
-		// Different descriptor options
-		for(auto & s : pw->pmeshes)
+		#pragma omp parallel for
+		for(int i = 0; i < (int)s->particles.size(); i++)
 		{
-			#pragma omp parallel for
-			for(int i = 0; i < (int)s->particles.size(); i++)
-			{
-				auto & p = s->particles[i];
+			auto & p = s->particles[i];
 
-				std::vector<float> new_desc;
+			std::vector<float> new_desc;
 
-				if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
-				if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
-				if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
-				if(pw->ui->useDiameter->isChecked()   ) 	new_desc.push_back(p.avgDiameter);
-				if(pw->ui->useFlat->isChecked()		  )		new_desc.push_back(p.flat);
-				if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
+			if(pw->ui->useDescriptor->isChecked() ) 	new_desc = s->desc[p.id];
+			if(pw->ui->useRotationInv->isChecked())		new_desc = s->sig[p.id];
+			if(pw->ui->useGroundDist->isChecked() )		new_desc.push_back(p.measure);
+			if(pw->ui->useDiameter->isChecked()   ) 	new_desc.push_back(p.avgDiameter);
+			if(pw->ui->useFlat->isChecked()		  )		new_desc.push_back(p.flat);
+			if(pw->ui->useHeight->isChecked()     )		new_desc.push_back(p.pos.z());
 
-				if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
+			if(new_desc.empty()) new_desc.push_back(p.pos.z()); // simply height..
 
-				// Numerical check
-				for(auto & d : new_desc) if(isnan(d) || !isfinite(d)) d = 0;
+			// Numerical check
+			for(auto & d : new_desc) if(isnan(d) || !isfinite(d)) d = 0;
 
-				s->desc[p.id] = new_desc;
-			}
-
-			//showTable(s->desc, std::min(size_t(100),s->particles.size()));
+			s->desc[p.id] = new_desc;
 		}
-	}
 
+		//showTable(s->desc, std::min(size_t(100),s->particles.size()));
+	}
+	
 	QElapsedTimer curTimer; curTimer.start();
 
 	// k-means clustering

@@ -367,6 +367,9 @@
      <property name="text">
       <string>Use descriptor seeds</string>
      </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item row="30" column="1">
@@ -382,7 +385,7 @@
       <string>Visualize Hulls</string>
      </property>
      <property name="checked">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
     </widget>
    </item>

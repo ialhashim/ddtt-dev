@@ -15,9 +15,9 @@ struct SplitOperation{
     double solidity;
     int level;
     std::vector<SplitOperation> children, undecided;
-    SplitOperation * parent;
     ConvexHull<Vector3> hull;
     ParticleMesh * s;
+	SplitOperation * parent;
 
     typedef std::vector<float> FloatVec;
     typedef std::vector<FloatVec> FloatVecVec;

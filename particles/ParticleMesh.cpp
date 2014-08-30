@@ -858,3 +858,27 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 
 	return m;
 }
+
+Vector3 ParticleMesh::mainDirection( size_t particleID )
+{
+	std::vector< bool > isVisisted( usedDirections.size(), false );
+
+	float maxDiam = -FLT_MAX;
+	size_t maxIdx = 0;
+
+	for(size_t idx = 0; idx < usedDirections.size(); idx++)
+	{
+		if(isVisisted[antiRays[idx]]) continue;
+		isVisisted[antiRays[idx]] = true;
+		auto & pdesc = desc[particleID];
+
+		auto diam = pdesc[idx] + pdesc[antiRays[idx]];
+		if(diam > maxDiam)
+		{
+			maxDiam = diam;
+			maxIdx = idx;
+		}
+	}
+
+	return usedDirections[maxIdx];
+}

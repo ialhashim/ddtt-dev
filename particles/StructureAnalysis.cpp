@@ -36,21 +36,19 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	for(auto c : clusters)
 		for(auto v : c->seg.vertices)
 			s->particles[v].segment = mappedClusters[c->seg.uid];
-	
+
 	bool isDone = false;
 
 	while( !isDone )
 	{
 		isDone = true;
 
-		QMap< unsigned int, SegmentGraph > candidates;
-		QMap< size_t, ConvexHull<Vector3> > hulls;
-
 		// Get candidate good segments:
 		SegmentGraph neiGraph;
-		candidates = s->segmentToComponents( s->toGraph(), neiGraph );
+		auto candidates = s->segmentToComponents( s->toGraph(), neiGraph );
 
 		// Pre-compute convex hulls:
+		QMap< size_t, ConvexHull<Vector3> > hulls;
 		for(auto & seg : candidates)
 			hulls[seg.uid] = ConvexHull<Vector3>( s->particlesCorners(seg.vertices) );
 
@@ -122,56 +120,92 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 		{
 			for(auto v : seg.vertices)
 				s->particles[v].segment = sid;
+			sid++;
+		}
+	}
 
-			// Draw convex hull
-			if(isDone && s->property["showHulls"].toBool())
+	// Merge similar segments
+	if( true )
+	{
+		SegmentGraph neiGraph;
+		auto candidates = s->segmentToComponents( s->toGraph(), neiGraph );
+		QMap<size_t,size_t> segMap, mapSeg;
+		QMap<size_t,Vector3> segDirection;
+
+		for(auto & seg : candidates)
+		{
+			mapSeg[segMap.size()] = seg.uid;
+			segMap[seg.uid] = segMap.size();
+
+			Eigen::AlignedBox3d bbox;
+			for(auto v : seg.vertices) bbox.extend( s->particles[v].pos );
+
+			QMap<double,size_t> dists;
+			for(auto v : seg.vertices) dists[(s->particles[v].pos-bbox.center()).norm()] = v;
+			auto rep = dists.values().first();
+			//auto dir = s->mainDirection(rep);
+
+			std::vector<Vector3> pnts;
+			for(auto v : seg.vertices) pnts.push_back(s->particles[v].pos);
+			auto mat = toEigenMatrix<double>(pnts);
+
+			// PCA
+			Eigen::MatrixXd centered = mat.rowwise() - mat.colwise().mean();
+			Eigen::MatrixXd cov = centered.adjoint() * centered;
+			Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(cov);
+
+			// Largest
+			auto dir = eig.eigenvectors().col(2);
+
+			// DEBUG:
+			//auto vs = new starlab::VectorSoup;
+			//vs->addVector(s->particles[rep].pos, Vector3(dir * 0.2));
+			//debug << vs;
+
+			segDirection[seg.uid] = dir;
+		}
+
+		DisjointSet disjoint(candidates.size());
+
+		double similarity_threshold = 0.9;
+
+		for(auto segID : neiGraph.vertices){
+			for(auto neiID : neiGraph.GetNeighbours(segID)){
+				double similarity = abs( segDirection[segID].dot(segDirection[neiID]) );
+				if(similarity > similarity_threshold)
+					disjoint.Union(segMap[segID], segMap[neiID]);
+			}
+		}
+
+		for(size_t i = 0; i < candidates.size(); i++)
+		{
+			auto segID = mapSeg[i];
+			for(auto v: candidates[segID].vertices)
+				s->particles[v].segment = disjoint.Parent[i];
+		}
+	}
+
+	// Draw hull around segments
+	if( s->property["showHulls"].toBool() )
+	{		
+		SegmentGraph neiGraph;
+		auto candidates = s->segmentToComponents( s->toGraph(), neiGraph );
+
+		int sid = 0;
+		
+		for(auto & seg : candidates)
+		{
+			starlab::PolygonSoup * ps = new starlab::PolygonSoup;
+			for( auto f : ConvexHull<Vector3>( s->particlesCorners(seg.vertices) ).faces )
 			{
-				starlab::PolygonSoup * ps = new starlab::PolygonSoup;
-				for(auto f : hulls[seg.uid].faces)
-				{
-					QVector<starlab::QVector3> face;
-					for(auto v : f) face << v;
-					ps->addPoly(face, ParticleMesh::rndcolors[sid]);
-				}
-				debug << ps;
+				QVector<starlab::QVector3> face;
+				for(auto v : f) face << v;
+				ps->addPoly(face, ParticleMesh::rndcolors[sid]);
 			}
 
 			sid++;
+			debug << ps;
 		}
-
-		// Draw bounding boxes
-		/*for(auto & seg : candidates)
-		{
-			Eigen::AlignedBox3d box;
-
-			for(auto v : seg.vertices)
-				box.extend(s->particles[v].pos);
-
-			QColor c = rndColors2(1).front();
-			QVector<Eigen::Vector3d>  corners;
-			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomLeftFloor));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomRightFloor));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::TopLeftFloor));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::TopRightFloor));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomLeftCeil));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::BottomRightCeil));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::TopLeftCeil));
-			corners.push_back(box.corner(Eigen::AlignedBox3d::TopRightCeil));
-			starlab::LineSegments * lineSeg = new starlab::LineSegments;
-			lineSeg->addLine(corners[0], corners[1], c);
-			lineSeg->addLine(corners[0], corners[2], c);
-			lineSeg->addLine(corners[0], corners[4], c);
-			lineSeg->addLine(corners[1], corners[3], c);
-			lineSeg->addLine(corners[1], corners[5], c);
-			lineSeg->addLine(corners[2], corners[3], c);
-			lineSeg->addLine(corners[2], corners[6], c);
-			lineSeg->addLine(corners[3], corners[7], c);
-			lineSeg->addLine(corners[4], corners[5], c);
-			lineSeg->addLine(corners[4], corners[6], c);
-			lineSeg->addLine(corners[5], corners[7], c);
-			lineSeg->addLine(corners[6], corners[7], c);
-			debug << lineSeg;
-		}*/
 	}
 
 	// Visualize distance

@@ -31,6 +31,10 @@ public:
 	double raidus;
 	std::vector< std::map< int, std::vector<size_t> > > cachedAdj;
 
+	std::vector< Vector3 > usedDirections;
+	std::vector< size_t > antiRays;
+	Vector3 mainDirection( size_t particleID );
+
 	void process();
 	void computeDistanceToFloor();
 	std::vector<size_t> pathFromFloor;
@@ -43,6 +47,8 @@ public:
 	std::set<size_t> specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
 
 	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
+	SegmentGraph cachedGraph;
+
 	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
@@ -72,5 +78,4 @@ public:
 	SurfaceMeshModel * meshPoints( const std::vector<Eigen::Vector3f> & points ) const;
 	QVector<RenderObject::Base*> debug;
 	void distort();
-
 };
