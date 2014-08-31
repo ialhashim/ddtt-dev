@@ -39,12 +39,12 @@ public:
 	void computeDistanceToFloor();
 	std::vector<size_t> pathFromFloor;
 
+	void cluster( int K, const std::vector<size_t> & seeds, bool use_l1_norm, bool showSeeds );
 	std::vector<VectorFloat> cluster_centers;
-	void cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm, bool showSeeds );
 	void shrinkSmallerClusters();
 
 	enum SeedType{ RANDOM, PLUS_PLUS, GROUND, DESCRIPTOR };
-	std::set<size_t> specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
+	std::vector<size_t> specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
 
 	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
 	SegmentGraph cachedGraph;

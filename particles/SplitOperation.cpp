@@ -1,7 +1,7 @@
 #include "SplitOperation.h"
 #include "myglobals.h"
 
-double solidity_threshold = 0.6;
+double solidity_threshold = 0.65;
 int max_parts_threshold = 12;
 int level_threshold = 3;
 
@@ -9,7 +9,7 @@ auto rcolors = rndColors2(200);
 int rc = 0;
 QVector<RenderObject::Base*> globalDebug;
 
-SplitOperation::SplitOperation(ParticleMesh *s, const SegmentGraph &seg, int level, SplitOperation *parent) :
+SplitOperation::SplitOperation(ParticleMesh *s, const SegmentGraph &seg, int level) :
     s(s), seg(seg), level(level), parent(NULL)
 {
     // Compute solidity score
@@ -21,68 +21,103 @@ SplitOperation::SplitOperation(ParticleMesh *s, const SegmentGraph &seg, int lev
 
 void SplitOperation::split()
 {
+	// Check if it needs splitting
+	if (solidity > solidity_threshold)
+		return;
+
     // Limit depth of search
     if (level > level_threshold)
         return;
 
-    // Check if it needs splinting
-    if (solidity < solidity_threshold)
-    {
-        // Collect and map current particles
-        FloatVecVec descs;
-        QMap<size_t,size_t> pmap;
+	int small_segment_threshold = 0.25 * s->grid.gridsize;
 
-        for(auto v : seg.vertices){
-            pmap[v] = pmap.size();
-            descs.push_back( s->desc[v] );
-        }
+    // Collect and map current particles
+    FloatVecVec descs;
+    QMap<size_t,size_t> pmap;
 
-        // Perform binary split
-		int K = 2;
-        clustering::kmeans<FloatVecVec,DestFn> km( descs, K );
-        km._centers.clear();
-		auto seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K, seg.vertices);
-
-        for(auto pid : seeds) km._centers.push_back( s->desc[pid] );
-        km.run();
-
-        // Assign found clusters
-        for(auto v : seg.vertices)
-            s->particles[v].segment = km.cluster( pmap[v] );
-
-        auto newSegments = s->segmentToComponents( seg, neiGraph );
-
-        // Create possible split operations
-        std::vector<SplitOperation> newOps;
-        for(auto & newSeg : newSegments)
-            newOps.push_back( SplitOperation(s, newSeg, level + 1, this) );
-
-        // Analyze clusters
-        for(auto & newOp : newOps)
-        {
-            // Too small of a segment
-            if(newOp.seg.vertices.size() < 10){
-                undecided.push_back(newOp);
-                continue;
-            }
-
-            // No further split should happen
-            if(newOp.seg.vertices.size() == seg.vertices.size()){
-                children.clear();
-                break;
-            }
-
-            // Add it
-            children.push_back(newOp);
-
-            // Further split?
-            if(newOp.solidity < solidity_threshold)
-            {
-                children.back().split();
-                children.back().seg.pid = seg.uid;
-            }
-        }
+    for(auto v : seg.vertices){
+        pmap[v] = pmap.size();
+        descs.push_back( s->desc[v] );
     }
+
+    // Perform binary split
+	int K = 2;
+    clustering::kmeans<FloatVecVec,DestFn> km( descs, K );
+    km._centers.clear();
+	auto seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K, seg.vertices);
+
+    for(auto pid : seeds) km._centers.push_back( s->desc[pid] );
+    km.run();
+
+    // Assign found clusters
+    for(auto v : seg.vertices)
+        s->particles[v].segment = km.cluster( pmap[v] );
+
+	// Segment based on clustering
+    auto newSegments = s->segmentToComponents( seg, neiGraph );
+
+    // Create possible split operations
+    std::vector<SplitOperation> newOps;
+    for(auto & newSeg : newSegments)
+        newOps.push_back( SplitOperation(s, newSeg, level + 1) );
+
+	std::vector<SplitOperation> undecided;
+
+    // Analyze clusters
+    for(auto & newOp : newOps)
+	{
+		// No further split happened?
+		if(newOp.seg.vertices.size() == seg.vertices.size())
+			return;
+
+        // Too small of a segment
+        if(newOp.seg.vertices.size() < small_segment_threshold){
+			undecided.push_back(newOp);
+            continue;
+		}
+
+        // Add it
+        children.push_back(newOp);
+
+        // Further split
+		children.back().split();
+		children.back().seg.pid = seg.uid;
+    }
+
+	if(children.empty()) return;
+
+	// Merge with neighbor
+	for(auto & op : undecided)
+	{
+		auto & smallSeg = op.seg;
+
+		// Decide which child to assign to
+		SplitOperation * selected = &children.front();
+		for(auto & child : children){
+			if( neiGraph.IsEdgeExists(smallSeg.uid, child.seg.uid) ){
+				selected = &child;
+				break;
+			}
+		}
+
+		// Bring back old edges
+		for(auto vi : op.seg.vertices){
+			for(auto edge : this->seg.adjacency_map[vi])
+			{
+				auto vj = edge.target;
+
+				// Check if edge is valid
+				bool isOutsideNeighbour = (op.seg.vertices.find(vj) == op.seg.vertices.end());
+
+				// Only neighbors in selected child
+				if( isOutsideNeighbour && selected->seg.vertices.find(vj) == selected->seg.vertices.end() )
+					continue;
+
+				// Add edge back
+				selected->seg.AddEdge(vi, vj, edge.weight, edge.index);
+			}
+		}
+	}
 }
 
 void SplitOperation::collectClusters(std::vector<SplitOperation *> &ops)

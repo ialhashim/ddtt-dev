@@ -3,10 +3,10 @@
 #include "ParticleMesh.h"
 
 #include "convexhull.h"
-
 #include "kmeans.h"
 
 extern double solidity_threshold;
+
 extern int rc;
 extern QVector<RenderObject::Base*> globalDebug;
 
@@ -14,16 +14,16 @@ struct SplitOperation{
     SegmentGraph seg, neiGraph;
     double solidity;
     int level;
-    std::vector<SplitOperation> children, undecided;
+    std::vector<SplitOperation> children;
     ConvexHull<Vector3> hull;
     ParticleMesh * s;
 	SplitOperation * parent;
 
     typedef std::vector<float> FloatVec;
     typedef std::vector<FloatVec> FloatVecVec;
-    typedef clustering::lpnorm< VectorFloat > DestFn;
+    typedef clustering::l2norm_squared<FloatVec> DestFn;
 
-    SplitOperation( ParticleMesh * s, const SegmentGraph& seg, int level = 0, SplitOperation* parent = NULL);
+    SplitOperation( ParticleMesh * s, const SegmentGraph& seg, int level = 0);
 
     void split();
 

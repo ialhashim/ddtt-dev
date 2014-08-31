@@ -584,7 +584,7 @@ std::vector< std::pair< double, size_t > > ParticleMesh::closestParticles(const 
 	return result;
 }
 
-void ParticleMesh::cluster( int K, const std::set<size_t> & seeds, bool use_l1_norm, bool showSeeds )
+void ParticleMesh::cluster( int K, const std::vector<size_t> & seeds, bool use_l1_norm, bool showSeeds )
 {
 	if(!particles.size()) return;
 
@@ -725,7 +725,7 @@ std::vector< Vector3 > ParticleMesh::particlesCorners( SegmentGraph::vertices_se
 	return points;
 }
 
-std::set<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected )
+std::vector<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected )
 {
 	std::set<size_t> seeds;
 
@@ -742,18 +742,16 @@ std::set<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, Segment
 
 	if( seedType == DESCRIPTOR )
 	{
+		if(selected.empty())
+			for(size_t i = 0; i < particles.size();i++)
+				selected.insert(i);
+
 		// Collect sorted list of magnitudes
 		QMap<double,size_t> descParticle;
-		for(auto & p : particles)
+		for(auto particleID : selected)
 		{
-			bool isInclude = true;
-			if(!selected.empty() && selected.find(p.id) == selected.end()) isInclude = false;
-
-			if( isInclude )
-			{
-				auto d = Eigen::Map<Eigen::VectorXf>(&desc[p.id][0], desc[p.id].size());
-				descParticle[ d.norm() ] = p.id;
-			}
+			auto d = Eigen::Map<Eigen::VectorXf>(&desc[particleID][0], desc[particleID].size());
+			descParticle[ d.norm() * this->particles[particleID].flat ] = particleID;
 		}
 		QVector<size_t> sorted = descParticle.values().toVector();
 
@@ -766,7 +764,10 @@ std::set<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, Segment
 		}
 	}
 
-	return seeds;
+	std::vector<size_t> seedsVector;
+	for(auto seed : seeds) seedsVector.push_back(seed);
+
+	return seedsVector;
 }
 
 SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> & points ) const

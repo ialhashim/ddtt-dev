@@ -27,7 +27,7 @@ std::vector<Spherelib::Sphere*> spheres;
 
 #include "BasicTable.h"
 
-#include "consensus.h"
+#include "kmeans.h"
 
 void particles::processShapes()
 {
@@ -522,7 +522,7 @@ void particles::processShapes()
 
 		for(auto & s : pw->pmeshes)
 		{
-			std::set<size_t> seeds;
+			std::vector<size_t> seeds;
 
 			if(pw->ui->useGroundDistSeed->isChecked())	seeds = s->specialSeeding(ParticleMesh::GROUND, K);
 			if(pw->ui->useDescSeed->isChecked())		seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K);
@@ -540,18 +540,21 @@ void particles::processShapes()
 	{
 		for(auto & s : pw->pmeshes)
 			s->shrinkSmallerClusters();
-	}
 
-	// Report
-	mainWindow()->setStatusBarMessage( QString("Merging clusters (%1 ms)").arg( curTimer.elapsed() ) );
-	curTimer.restart();
+		// Report
+		mainWindow()->setStatusBarMessage( QString("Merging clusters (%1 ms)").arg( curTimer.elapsed() ) );
+		curTimer.restart();
+	}
 
 	// Analysis
 	if( pw->ui->performSturctureAnalysis->isChecked() )
 	{	
+		mainWindow()->setStatusBarMessage( QString("Unsupervised clustering..") );
+
 		for(auto & s : pw->pmeshes)
 		{		
 			s->property["showHulls"].setValue( pw->ui->showHulls->isChecked() );
+			s->property["isMerge"].setValue( pw->ui->isMerge->isChecked() );
 
 			StructureAnalysis sa( s );
 
@@ -724,9 +727,53 @@ void particles::create()
 	}
 
 	// General Tests
-	connect(pw->ui->testButton, &QPushButton::released, [=]{
-		//for(auto p : sphere_fibonacci_points( 100 ))drawArea()->drawPoint(p, 5);
-		//drawArea()->update();
+	connect(pw->ui->testButton, &QPushButton::released, [=]
+	{
+		auto s = pw->pmeshes.front();
+		SegmentGraph neiGraph;
+		auto segments = s->segmentToComponents( s->toGraph(), neiGraph );
+
+		int id = 0;
+
+		drawArea()->clear();
+
+		for(auto & seg : segments)
+		{
+			// Collect and map current particles
+			std::vector< std::vector<float> > descs;
+			QMap<size_t,size_t> pmap;
+
+			for(auto v : seg.vertices){
+				pmap[v] = pmap.size();
+				descs.push_back( s->desc[v] );
+			}
+
+			// Perform binary split
+			int K = 2;
+			clustering::kmeans< std::vector< std::vector<float> >, clustering::lpnorm< std::vector<float> > > km( descs, K );
+			km._centers.clear();
+			auto seeds = s->specialSeeding(ParticleMesh::DESCRIPTOR, K, seg.vertices);
+
+			for(auto pid : seeds) km._centers.push_back( s->desc[pid] );
+			km.run();
+
+			// Assign found clusters
+			for(auto v : seg.vertices)
+				s->particles[v].segment = id + km.cluster( pmap[v] );
+
+			// show seeds
+			{
+				auto color = ParticleMesh::rndcolors.at( (double(rand()) / RAND_MAX) * (ParticleMesh::rndcolors.size()-1) );
+				starlab::PointSoup * ps = new starlab::PointSoup(20);
+				if(!seeds.empty()) for(auto pid : seeds) ps->addPoint(s->particles[pid].pos, color);
+				else for(auto pid : km.initindices) ps->addPoint(s->particles[pid].pos, color);
+				drawArea()->addRenderObject(ps);
+			}
+
+			id += 2;
+		}
+
+		drawArea()->update();
 	});
 
 	// Load and process shapes:
