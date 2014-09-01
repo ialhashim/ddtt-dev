@@ -1,7 +1,10 @@
 #include "SplitOperation.h"
 #include "myglobals.h"
+#include "BasicTable.h"
+#include <queue>
 
 double solidity_threshold = 0.65;
+double isect_ratio_threshold = 0.9;
 int max_parts_threshold = 12;
 int level_threshold = 3;
 
@@ -77,14 +80,38 @@ void SplitOperation::split()
 		}
 
         // Add it
-        children.push_back(newOp);
+		children.push_back(newOp);
 
-        // Further split
 		children.back().split();
 		children.back().seg.pid = seg.uid;
     }
 
 	if(children.empty()) return;
+
+	// Check if segment was split to arbitrary interconnected components
+	if( level > 0 )
+	{	
+		// Pick the two largest children
+		std::priority_queue< std::pair<size_t,size_t> > pq;
+		for(size_t i = 0; i < children.size(); i++)
+			pq.push( std::make_pair(children[i].seg.vertices.size(), i) );
+		auto i = pq.top().second; pq.pop();
+		auto j = pq.top().second; pq.pop();
+
+		auto bboxi = children[i].bbox(), bboxj = children[j].bbox();
+		auto bboxivol = bboxi.volume(), bboxjvol = bboxj.volume();
+
+		// Compute intersection ratio
+		auto isect = bboxi.intersection(bboxj);
+		auto isectvol = isect.volume();
+		double isect_ratio = isectvol / std::min(bboxivol, bboxjvol);
+
+		if( isect_ratio > isect_ratio_threshold ){
+			//debugBox( QString("isect_ratio = %1, solidity = %2").arg(isect_ratio).arg(solidity) );
+			children.clear();
+			return;
+		}
+	}
 
 	// Merge with neighbor
 	for(auto & op : undecided)
@@ -131,6 +158,13 @@ void SplitOperation::collectClusters(std::vector<SplitOperation *> &ops)
         child.collectClusters(ops);
         child.parent = this;
     }
+}
+
+Eigen::AlignedBox3d SplitOperation::bbox()
+{
+	Eigen::AlignedBox3d box;
+	for(auto f : hull.faces) for(auto v : f) box.extend(v);
+	return box;
 }
 
 void SplitOperation::debugAllChildren(QVector<RenderObject::Base *> &debug)

@@ -42,6 +42,9 @@ StructureAnalysis::StructureAnalysis(ParticleMesh * pmesh) : s(pmesh)
 	{
 		mergeSimilar();
 		mergeConvex();
+
+		// Final cleanup
+		s->shrinkSmallerClusters();
 	}
 
 	// DEBUG: Draw hull around segments
@@ -177,14 +180,6 @@ void StructureAnalysis::mergeSimilar()
 		mapSeg[segMap.size()] = seg.uid;
 		segMap[seg.uid] = segMap.size();
 
-		Eigen::AlignedBox3d bbox;
-		for(auto v : seg.vertices) bbox.extend( s->particles[v].pos );
-
-		QMap<double,size_t> dists;
-		for(auto v : seg.vertices) dists[(s->particles[v].pos-bbox.center()).norm()] = v;
-		auto rep = dists.values().first();
-		//auto dir = s->mainDirection(rep);
-
 		std::vector<Vector3> pnts;
 		for(auto v : seg.vertices) pnts.push_back(s->particles[v].pos);
 		auto mat = toEigenMatrix<double>(pnts);
@@ -210,6 +205,10 @@ void StructureAnalysis::mergeSimilar()
 	double similarity_threshold = 0.92;
 
 	for(auto segID : neiGraph.vertices){
+		// Ignore bad candidates
+		auto hull = ConvexHull<Vector3>( s->particlesCorners(candidates[segID].vertices) );
+		if(hull.solidity(s->grid.unitlength) < 0.35) continue;
+
 		for(auto neiID : neiGraph.GetNeighbours(segID)){
 			double similarity = abs( segDirection[segID].dot(segDirection[neiID]) );
 			if(similarity > similarity_threshold)
