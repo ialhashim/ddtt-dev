@@ -8,6 +8,8 @@
 
 #include "kmeans.h"
 
+#include "spherelib.h"
+
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 
 QVector<QColor> ParticleMesh::rndcolors = rndColors2(10000);
@@ -758,7 +760,7 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 	size_t gridsize = grid.gridsize;
 	double gridlength = gridsize * grid.unitlength;
 
-	std::vector<char> occupied(grid.occupied.size(), EMPTY_VOXEL);
+	std::vector<char> occupied(pow(gridsize,3), EMPTY_VOXEL);
 	std::set<uint64_t> voxels;
 
 	for(const auto & point : points)
@@ -766,6 +768,8 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 		Vector3 p = point.cast<double>() - grid.translation.cast<double>();
 		Vector3 delta = p / gridlength;
 		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+		if(gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) continue;
+		if(gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1) continue;
 		uint64_t m = mortonEncode_LUT(gridpnt.z(),gridpnt.y(),gridpnt.x());
 
 		occupied[m] = FULL_VOXEL;
@@ -882,7 +886,10 @@ void ParticleMesh::serialize(QDataStream& os) const
 	for(auto & p : particles) os << desc[p.id]; 
 
 	// Grid
-	os << grid.gridsize << grid.unitlength;
+	os << grid.gridsize << grid.unitlength << grid.translation;
+	
+	// Sampling
+	os << sphereResolutionUsed;
 }
 
 void ParticleMesh::deserialize(QDataStream& is)
@@ -893,5 +900,10 @@ void ParticleMesh::deserialize(QDataStream& is)
 	desc.resize(particleCount);
 	for(size_t i = 0; i < particleCount; i++) is >> particles[i];
 	for(size_t i = 0; i < particleCount; i++) is >> desc[i];
-	is >> grid.gridsize >> grid.unitlength;
+	is >> grid.gridsize >> grid.unitlength >> grid.translation;
+
+	is >> sphereResolutionUsed;
+	Spherelib::Sphere sphere( sphereResolutionUsed );
+	usedDirections = sphere.rays();
+	antiRays = sphere.antiRays();
 }

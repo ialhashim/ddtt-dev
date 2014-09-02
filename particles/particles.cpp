@@ -29,6 +29,9 @@ std::vector<Spherelib::Sphere*> spheres;
 
 #include "kmeans.h"
 
+#include "ParticleCorresponder.h"
+#include "ParticleDeformer.h"
+
 void particles::processShapes()
 {
 	if(!widget) return;
@@ -265,7 +268,6 @@ void particles::processShapes()
 
 								// Record average diameter around particle
 								p.avgDiameter = sumDiameter / visitCount;
-								p.isMedial = true;
 							}
 						}
 					}
@@ -299,7 +301,6 @@ void particles::processShapes()
 								double scale = 1.2;
 								if( max_rad > ma_point_rad[pi] * scale ){
 									ma_point_active[pi] = false;
-									s->particles[pi].isMedial = false;
 								}
 							}
 						}
@@ -373,6 +374,14 @@ void particles::processShapes()
 								//s->particles[pi].measure = s->particles[pj].measure;
 								s->particles[pi].axis = s->particles[pj].axis;
 								s->particles[pi].flat = s->particles[pj].flat;
+
+								s->particles[pi].medialID = pj;
+								s->particles[pi].isMedial = false;
+							}
+							else
+							{
+								s->particles[pi].medialID = pi;
+								s->particles[pi].isMedial = true;
 							}
 
 							auto maxelement = std::max_element(descriptor[pi].begin(),descriptor[pi].end());
@@ -585,9 +594,10 @@ void particles::blending()
 	if(!widget) return;
 	ParticlesWidget * pw = (ParticlesWidget *) widget;
 	pw->isReady = false;
-	if(pw->pmeshes.empty()) return;
 
-
+	if(pw->pmeshes.size() < 2) return;
+	ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
+	ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
 }
 
 void particles::reVoxelize()
@@ -784,6 +794,12 @@ void particles::create()
 			pw->pmeshes.push_back(pmesh);
 		}
 
+		if(pw->pmeshes.size() > 1) 
+		{
+			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
+			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+		}
+
 		pw->isReady = true;
 		drawArea()->update();
 	});
@@ -853,14 +869,17 @@ void particles::decorate()
 	ParticleMesh * imesh = pwidget->pmeshes.front();
 	ParticleMesh * jmesh = pwidget->pmeshes.back();
 
-	for(auto particle : imesh->particles){
+	for(auto & particle : imesh->particles){
 		Vector3 p = AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos);
 		mixedPoints.push_back( p.cast<float>() );
 	}
 
-	for(auto particle : jmesh->particles){
-		Vector3 p = AlphaBlend((1.0-alpha), particle.pos, imesh->particles[particle.correspondence].pos);
-		mixedPoints.push_back( p.cast<float>() );
+	if( !pwidget->ui->isOneSided->isChecked() )
+	{
+		for(auto & particle : jmesh->particles){
+			Vector3 p = AlphaBlend((1.0-alpha), particle.pos, imesh->particles[particle.correspondence].pos);
+			mixedPoints.push_back( p.cast<float>() );
+		}
 	}
 
 	// Test meshing

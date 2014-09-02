@@ -18,12 +18,16 @@ inline QDataStream& operator>> (QDataStream& is, Serializable& s) {
 
 // My special types
 inline QDataStream& operator<< (QDataStream& os, const Eigen::Vector3d& v) {
-	os << v[0] << v[1] << v[2];
-	return os;
+	os << v[0] << v[1] << v[2];return os;
 }
 inline QDataStream& operator>> (QDataStream& is, Eigen::Vector3d& v) {
-	is >> v[0] >> v[1] >> v[2];
-	return is;
+	is >> v[0] >> v[1] >> v[2];return is;
+}
+inline QDataStream& operator<< (QDataStream& os, const Eigen::Vector3f& v) {
+	os << v[0] << v[1] << v[2];return os;
+}
+inline QDataStream& operator>> (QDataStream& is, Eigen::Vector3f& v) {
+	is >> v[0] >> v[1] >> v[2];return is;
 }
 
 inline QDataStream& operator<< (QDataStream& os, const std::vector<float>& V) {

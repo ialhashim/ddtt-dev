@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>337</width>
-    <height>685</height>
+    <width>315</width>
+    <height>636</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -325,13 +325,6 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
-    <widget class="QPushButton" name="testButton">
-     <property name="text">
-      <string>test</string>
-     </property>
-    </widget>
-   </item>
    <item row="12" column="0">
     <widget class="QCheckBox" name="useGroundDist">
      <property name="text">
@@ -378,25 +371,47 @@
    </item>
    <item row="37" column="0">
     <widget class="QWidget" name="widget" native="true">
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <property name="spacing">
+       <number>0</number>
+      </property>
+      <item row="0" column="0">
        <widget class="QPushButton" name="saveMeshes">
         <property name="text">
          <string>Save..</string>
         </property>
        </widget>
       </item>
-      <item>
+      <item row="0" column="2">
        <widget class="QPushButton" name="loadMeshes">
         <property name="text">
          <string>Load..</string>
         </property>
        </widget>
       </item>
-      <item>
+      <item row="1" column="2">
        <widget class="QPushButton" name="clearMeshes">
         <property name="text">
          <string>Clear</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QPushButton" name="testButton">
+        <property name="text">
+         <string>test</string>
         </property>
        </widget>
       </item>
@@ -407,6 +422,13 @@
     <widget class="QPushButton" name="loadShapes">
      <property name="text">
       <string>Load shapes...</string>
+     </property>
+    </widget>
+   </item>
+   <item row="35" column="0">
+    <widget class="QCheckBox" name="isOneSided">
+     <property name="text">
+      <string>One sided blend</string>
      </property>
     </widget>
    </item>
