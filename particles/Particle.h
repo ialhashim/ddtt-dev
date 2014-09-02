@@ -37,6 +37,7 @@ struct Particle : public Serializable
 
 	size_t medialID;
 	bool isMedial;
+	Vector3 medialPos;
 
 	// Serialization:
 	void serialize(QDataStream& os) const {
@@ -46,6 +47,7 @@ struct Particle : public Serializable
 		os << avgDiameter << flat;
 		os << medialID;
 		os << isMedial;
+		os << medialPos;
 	}	
 	void deserialize(QDataStream& is) {
 		int flagItem;
@@ -55,6 +57,7 @@ struct Particle : public Serializable
 		is >> avgDiameter >> flat;
 		is >> medialID;
 		is >> isMedial;
+		is >> medialPos;
 		flag = (ParticleFlags)flagItem;
 	}
 };

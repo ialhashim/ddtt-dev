@@ -359,6 +359,8 @@ void particles::processShapes()
 								s->particles[pi].flat = ratio;
 
 								ma_point_rad[pi] = ratio;
+
+								s->particles[pi].medialPos = maPoint;
 							}
 						}
 
@@ -377,6 +379,7 @@ void particles::processShapes()
 
 								s->particles[pi].medialID = pj;
 								s->particles[pi].isMedial = false;
+								s->particles[pi].medialPos = s->particles[pj].medialPos;
 							}
 							else
 							{
