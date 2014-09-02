@@ -872,22 +872,20 @@ std::vector< Vector3 > ParticleMesh::particlesPositions(const std::set<unsigned 
 	return points;
 }
 
-void ParticleMesh::serialize(std::ostream& os) const
+void ParticleMesh::serialize(QDataStream& os) const
 { 
 	// Particles
-	os << particles.size() << std::endl;
+	os << particles.size();
 	for(auto & p : particles) os << p;
 
 	// Descriptors
-	os << std::endl;
 	for(auto & p : particles) os << desc[p.id]; 
 
 	// Grid
-	os << std::endl;
-	os << grid.gridsize << " " << grid.unitlength << " ";
+	os << grid.gridsize << grid.unitlength;
 }
 
-void ParticleMesh::deserialize(std::istream& is)
+void ParticleMesh::deserialize(QDataStream& is)
 {
 	size_t particleCount;
 	is >> particleCount;

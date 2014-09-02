@@ -37,14 +37,14 @@ struct Particle : public Serializable
 	bool isMedial;
 
 	// Serialization:
-	void serialize(std::ostream& os) const {
-		os << id <<" "<< correspondence <<" "<< morton <<" "<< ((int)flag) <<" "<< segment <<" ";
-		os << pos <<" "<< direction <<" "<< axis <<" ";
-		os << measure <<" "<< weight <<" "<< alpha <<" ";
-		os << avgDiameter <<" "<< flat <<" ";
-		os << isMedial <<" ";
+	void serialize(QDataStream& os) const {
+		os << id << correspondence << morton << ((qint32)flag) << segment;
+		os << pos << direction << axis;
+		os << measure << weight << alpha;
+		os << avgDiameter << flat;
+		os << isMedial;
 	}	
-	void deserialize(std::istream& is) {
+	void deserialize(QDataStream& is) {
 		int flagItem;
 		is >> id >> correspondence >> morton >> flagItem >> segment;
 		is >> pos >> direction >> axis;

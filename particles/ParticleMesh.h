@@ -83,6 +83,6 @@ public:
 	void drawDebug(QGLWidget & widget);
 
 	// Serialization:
-	void serialize(std::ostream& os) const;	
-	void deserialize(std::istream&);
+	void serialize(QDataStream& os) const;	
+	void deserialize(QDataStream&);
 };

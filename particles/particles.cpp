@@ -761,26 +761,27 @@ void particles::create()
 
 	connect(pw->ui->saveMeshes, &QPushButton::released, [=]{
 		for(auto pmesh : pw->pmeshes){
-			std::ofstream out;
-			out.open( QFileDialog::getSaveFileName(0,"Save mesh", "", "*.pmesh").toLatin1() );
+			QString filename = QFileDialog::getSaveFileName(mainWindow(),"Save mesh", "", "Particle meshes (*.pmesh)");
+			if(filename.length() < 1) continue;
+			QFile file( filename );
+			file.open(QIODevice::WriteOnly);
+			QDataStream out(&file);
 			out << *pmesh;
-			out.close();
 		}
 	});
 
 	connect(pw->ui->loadMeshes, &QPushButton::released, [=]{
 		pw->pmeshes.clear();
 
-		for(auto filename : QFileDialog::getOpenFileNames(0, "Load mesh", "", "*.pmesh"))
+		for(auto filename : QFileDialog::getOpenFileNames(mainWindow(), "Load mesh", "", "Particle meshes (*.pmesh)"))
 		{
-			std::ifstream in;
-			in.open( filename.toLatin1() );
+			QFile file( filename );
+			file.open(QIODevice::ReadOnly);
+			QDataStream in(&file);
 
 			auto pmesh = new ParticleMesh();
 			in >> *pmesh;
 			pw->pmeshes.push_back(pmesh);
-
-			in.close();
 		}
 
 		pw->isReady = true;
