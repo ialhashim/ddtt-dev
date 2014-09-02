@@ -3,7 +3,6 @@
 #include <QTableView>
 
 class BasicTable : public QAbstractTableModel {
-	Q_OBJECT
 public:
 	BasicTable(const std::vector< std::vector<float> > & data , QObject *parent = 0) 
 		: QAbstractTableModel(parent){

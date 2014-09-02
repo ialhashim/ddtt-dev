@@ -12,9 +12,10 @@ Q_DECLARE_METATYPE(Eigen::Vector3d)
 
 QVector<QColor> ParticleMesh::rndcolors = rndColors2(10000);
 
-ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particle_raidus) : surface_mesh(NULL),
-	raidus(particle_raidus)
+ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh(NULL)
 {
+	if(!mesh) return;
+
 	// Voxelization
 	grid = ComputeVoxelization<VoxelVector>(mesh, gridsize, true, true);
 
@@ -57,25 +58,6 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize, double particl
     }
 
 	grid.findOccupied();
-
-	// KD-tree
-	{
-		relativeKdtree = new NanoKdTree;
-
-		Eigen::AlignedBox3d box = bbox();
-		Vector3 sizes = box.sizes();
-
-		for( auto & particle : particles )
-		{
-			Vector3 mapped = (particle.pos - box.min());
-			for(int i = 0; i < 3; i++) mapped[i] /= sizes[i];
-
-			particle.relativePos = mapped;
-			relativeKdtree->addPoint( particle.relativePos );
-		}
-
-		relativeKdtree->build();
-	}
 
 	// Cache adjacency
 	cachedAdj.resize(particles.size());
@@ -238,7 +220,6 @@ void ParticleMesh::distort()
 ParticleMesh::~ParticleMesh()
 {
 	if(surface_mesh) delete surface_mesh;
-	if(relativeKdtree) delete relativeKdtree;
 }
 
 SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected )
@@ -882,4 +863,37 @@ Vector3 ParticleMesh::mainDirection( size_t particleID )
 	}
 
 	return usedDirections[maxIdx];
+}
+
+std::vector< Vector3 > ParticleMesh::particlesPositions(const std::set<unsigned int> & P)
+{
+	std::vector<Vector3> points;
+	for(auto p : P) points.push_back(particles[p].pos);
+	return points;
+}
+
+void ParticleMesh::serialize(std::ostream& os) const
+{ 
+	// Particles
+	os << particles.size() << std::endl;
+	for(auto & p : particles) os << p;
+
+	// Descriptors
+	os << std::endl;
+	for(auto & p : particles) os << desc[p.id]; 
+
+	// Grid
+	os << std::endl;
+	os << grid.gridsize << " " << grid.unitlength << " ";
+}
+
+void ParticleMesh::deserialize(std::istream& is)
+{
+	size_t particleCount;
+	is >> particleCount;
+	particles.resize(particleCount);
+	desc.resize(particleCount);
+	for(size_t i = 0; i < particleCount; i++) is >> particles[i];
+	for(size_t i = 0; i < particleCount; i++) is >> desc[i];
+	is >> grid.gridsize >> grid.unitlength;
 }

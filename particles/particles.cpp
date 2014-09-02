@@ -82,6 +82,7 @@ void particles::processShapes()
 			// Keep record of sampled directions
 			s->usedDirections = sampledRayDirections;
 			s->antiRays = antiRays;
+			s->sphereResolutionUsed = pw->ui->sphereResolution->value();
 
 			// Hit results are saved as vector of distances
 			std::vector< std::vector<float> > & descriptor = (s->desc = std::vector< std::vector<float> >( 
@@ -264,6 +265,7 @@ void particles::processShapes()
 
 								// Record average diameter around particle
 								p.avgDiameter = sumDiameter / visitCount;
+								p.isMedial = true;
 							}
 						}
 					}
@@ -295,8 +297,10 @@ void particles::processShapes()
 
 								// A neighbor has wider access than me => I'm not so medial
 								double scale = 1.2;
-								if( max_rad > ma_point_rad[pi] * scale )
+								if( max_rad > ma_point_rad[pi] * scale ){
 									ma_point_active[pi] = false;
+									s->particles[pi].isMedial = false;
+								}
 							}
 						}
 					}
@@ -583,62 +587,7 @@ void particles::blending()
 	pw->isReady = false;
 	if(pw->pmeshes.empty()) return;
 
-	/// [ Correspondence ] match particles
-	if( true && pw->pmeshes.size() > 1 )
-	{
-		for(size_t i = 0; i < pw->pmeshes.size(); i++){
-			for(size_t j = i+1; j < pw->pmeshes.size(); j++){
-				NanoKdTree * itree = pw->pmeshes[i]->relativeKdtree;
-				NanoKdTree * jtree = pw->pmeshes[j]->relativeKdtree;
 
-				for(auto & iparticle : pw->pmeshes[i]->particles)
-				{
-					if( false )
-					{
-						iparticle.correspondence = jtree->closest( iparticle.relativePos );
-					}
-					else
-					{
-						// Experiment
-						KDResults matches;
-						jtree->k_closest( iparticle.relativePos, 20, matches );
-
-						QMap<double, size_t> measures;
-						for(auto p : matches) 
-						{
-							double weight = p.second;
-							//double desc_dist = dist_fn()( pw->pmeshes[i]->desc[iparticle.id], pw->pmeshes[j]->desc[p.first] );
-							measures[ weight ] = p.first;
-						}
-						iparticle.correspondence = measures[ measures.keys().front() ];
-					}
-				}
-
-				for(auto & jparticle : pw->pmeshes[j]->particles)
-				{
-					if( true )
-					{
-						jparticle.correspondence = itree->closest( jparticle.relativePos );
-					}
-					else
-					{
-						// Experiment
-						KDResults matches;
-						itree->k_closest( jparticle.relativePos, 20, matches );
-
-						QMap<double, size_t> measures;
-						for(auto p : matches) 
-						{
-							double weight = p.second;
-							//double desc_dist = dist_fn()( pw->pmeshes[j]->desc[jparticle.id], pw->pmeshes[i]->desc[p.first] );
-							measures[ weight ] = p.first;
-						}
-						jparticle.correspondence = measures[ measures.keys().front() ];
-					}
-				}
-			}
-		}
-	}
 }
 
 void particles::reVoxelize()
@@ -768,7 +717,7 @@ void particles::create()
 				if(!seeds.empty()) for(auto pid : seeds) ps->addPoint(s->particles[pid].pos, color);
 				else for(auto pid : km.initindices) ps->addPoint(s->particles[pid].pos, color);
 				drawArea()->addRenderObject(ps);
-			}
+			} 
 
 			id += 2;
 		}
@@ -803,6 +752,39 @@ void particles::create()
 		mainWindow()->setStatusBarMessage(QString("Shapes loaded and voxelized (%1 ms)").arg(timer.elapsed()));
 
 		emit( pw->shapesLoaded() );
+	});
+
+	connect(pw->ui->clearMeshes, &QPushButton::released, [=]{
+		pw->pmeshes.clear();
+		drawArea()->update();
+	});
+
+	connect(pw->ui->saveMeshes, &QPushButton::released, [=]{
+		for(auto pmesh : pw->pmeshes){
+			std::ofstream out;
+			out.open( QFileDialog::getSaveFileName(0,"Save mesh", "", "*.pmesh").toLatin1() );
+			out << *pmesh;
+			out.close();
+		}
+	});
+
+	connect(pw->ui->loadMeshes, &QPushButton::released, [=]{
+		pw->pmeshes.clear();
+
+		for(auto filename : QFileDialog::getOpenFileNames(0, "Load mesh", "", "*.pmesh"))
+		{
+			std::ifstream in;
+			in.open( filename.toLatin1() );
+
+			auto pmesh = new ParticleMesh();
+			in >> *pmesh;
+			pw->pmeshes.push_back(pmesh);
+
+			in.close();
+		}
+
+		pw->isReady = true;
+		drawArea()->update();
 	});
 
 	// Post-processing

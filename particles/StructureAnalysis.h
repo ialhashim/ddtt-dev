@@ -5,11 +5,8 @@
 class StructureAnalysis
 {
 public:
-	StructureAnalysis(ParticleMesh * pmesh);
-	ParticleMesh * s;
-
-	void mergeConvex();
-	void mergeSimilar();
+    StructureAnalysis( ParticleMesh * pmesh );
+    ParticleMesh * s;
 
 	QVector<RenderObject::Base*> debug;
 };

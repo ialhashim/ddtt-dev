@@ -145,8 +145,8 @@ template<typename Scalar, typename Container>
 inline static Eigen::Matrix<Scalar,-1,-1> toEigenMatrix( const Container& vectors ){
 	typedef typename Container::value_type VectorType;
 	Eigen::Matrix<Scalar,-1,-1> M(vectors.size(), vectors.front().size());
-	for(size_t i = 0; i < vectors.size(); i++)
-		for(size_t j = 0; j < vectors.front().size(); j++)
+	for(size_t i = 0; i < (size_t)vectors.size(); i++)
+		for(size_t j = 0; j < (size_t)vectors.front().size(); j++)
 			M(i,j) = vectors[i][j];
 	return M;
 }

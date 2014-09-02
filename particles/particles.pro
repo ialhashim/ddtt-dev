@@ -16,7 +16,10 @@ HEADERS += \
     BasicTable.h \
     StructureAnalysis.h \
     convexhull.h \
-    SplitOperation.h
+    SplitOperation.h \
+    Segmentation.h \
+    ParticleCorresponder.h \
+    ParticleDeformer.h
 
 SOURCES += \
     particles.cpp \
@@ -24,7 +27,10 @@ SOURCES += \
     ParticleMesh.cpp \
     Raytracing.cpp \
     StructureAnalysis.cpp \
-    SplitOperation.cpp
+    SplitOperation.cpp \
+    Segmentation.cpp \
+    ParticleCorresponder.cpp \
+    ParticleDeformer.cpp
 
 # SVG viewer
 HEADERS += svgview.h

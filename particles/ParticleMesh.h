@@ -19,20 +19,28 @@
 typedef GenericGraphs::Graph<uint,double> SegmentGraph;
 typedef std::vector<float> VectorFloat;
 
-class ParticleMesh
+class ParticleMesh : public Serializable
 {
 public:
 
-	ParticleMesh(SurfaceMeshModel * mesh, int gridsize = 64, double particle_raidus = 0.1);
+	ParticleMesh(SurfaceMeshModel * mesh = NULL, int gridsize = 64);
 	~ParticleMesh();
 	PropertyMap property;
 
 	std::vector< Particle<Vector3> > particles;
-	double raidus;
-	std::vector< std::map< int, std::vector<size_t> > > cachedAdj;
+	std::vector< std::vector<float> > desc, sig;
 
+	SurfaceMeshModel * surface_mesh;
+
+	int sphereResolutionUsed;
 	std::vector< Vector3 > usedDirections;
 	std::vector< size_t > antiRays;
+
+	typedef Eigen::Vector3f VoxelVector;
+	VoxelContainer<VoxelVector> grid;
+	std::map<uint64_t,size_t> mortonToParticleID;
+
+public:
 	Vector3 mainDirection( size_t particleID );
 
 	void process();
@@ -47,7 +55,6 @@ public:
 	std::vector<size_t> specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
 
 	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
-	SegmentGraph cachedGraph;
 
 	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );
 	std::vector< std::vector< std::vector<float> > > toGrid();
@@ -57,25 +64,25 @@ public:
 	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step = 2);
 	Particle<Vector3> pointToParticle( const Vector3 & point );
 	std::vector< Vector3 > particlesCorners( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
+	std::vector< Vector3 > particlesPositions(const std::set<unsigned int> & P);
 
 	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );
 
-	void drawParticles( qglviewer::Camera * camera );
-	void drawDebug(QGLWidget & widget);
-	static QVector<QColor> rndcolors;
-
-	typedef Eigen::Vector3f VoxelVector;
-	VoxelContainer<VoxelVector> grid;
-	std::map<uint64_t,size_t> mortonToParticleID;
-
-	std::vector< std::vector<float> > desc, sig;
-
 	Eigen::AlignedBox3d bbox();
 
-	SurfaceMeshModel * surface_mesh;
-	NanoKdTree * relativeKdtree;
-
 	SurfaceMeshModel * meshPoints( const std::vector<Eigen::Vector3f> & points ) const;
-	QVector<RenderObject::Base*> debug;
+
 	void distort();
+
+	std::vector< std::map< int, std::vector<size_t> > > cachedAdj;
+	SegmentGraph cachedGraph;
+
+	static QVector<QColor> rndcolors;
+	QVector<RenderObject::Base*> debug;
+	void drawParticles( qglviewer::Camera * camera );
+	void drawDebug(QGLWidget & widget);
+
+	// Serialization:
+	void serialize(std::ostream& os) const;	
+	void deserialize(std::istream&);
 };
