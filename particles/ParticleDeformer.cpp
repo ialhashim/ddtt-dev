@@ -10,6 +10,8 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 	int numSteps = 10;
 	std::vector<double> errorVector;
 
+	Eigen::AlignedBox3d box = sA->bbox();
+
 	// Overwrite
 	{
 		std::vector<Eigen::Vector3f> originalPoints;
@@ -21,43 +23,42 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 		for(int pi = 0; pi < (int)sA->particles.size(); pi++)
 		{
 			auto & p = sA->particles[pi];
-			if( !p.isMedial ) continue;
 			int r = 0;
 			for(auto d : sA->usedDirections)
 			{
 				raytracing::RayHit hit = rtOriginal.hit( p.pos, d );
-				if(!hit.isHit) hit.distance = sA->grid.unitlength;
 				sA->desc[pi][r++] = hit.distance;
 			}
 		}
 	}
-
 
 	for(int i = 0; i < numSteps; i++)
 	{
 		double t = double(i) / (numSteps-1);
 
 		// Mesh at time 't'
-		std::vector<Eigen::Vector3f> movedPoints;
+		std::vector<Eigen::Vector3d> movedPoints;
 
 		for(auto & particle : sA->particles){
-			Vector3 p = AlphaBlend(t, particle.pos, sB->particles[particle.correspondence].pos);
-			movedPoints.push_back( p.cast<float>() );
+			Vector3 relativePos = AlphaBlend(t, particle.relativePos, sB->particles[particle.correspondence].relativePos);
+			movedPoints.push_back( sA->realPos( relativePos ) );
 		}
 
-		auto curMesh = sA->meshPoints( movedPoints );
+		//auto curMesh = sA->meshPoints( movedPoints );
+		auto curMesh = sA->meshPointsUsingGraph( movedPoints, Vector3(0,0,0) );
 
 		// Accelerated raytracing
 		raytracing::Raytracing<Eigen::Vector3d> rt( curMesh );
 
 		std::vector<double> errors( sA->particles.size(), 0 );
 
+		int misses = 0;
+
 		// Shoot rays around all particles
 		#pragma omp parallel for
 		for(int pi = 0; pi < (int)sA->particles.size(); pi++)
 		{
 			auto & p = sA->particles[pi];
-			if( !p.isMedial ) continue;
 
 			std::vector<float> oldDescriptor = sA->desc[pi];
 			std::vector<float> newDescriptor = sA->desc[pi];
@@ -66,8 +67,11 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 			for(auto d : sA->usedDirections)
 			{
 				raytracing::RayHit hit = rt.hit( movedPoints[pi].cast<double>(), d );
-				if(!hit.isHit) hit.distance = sA->grid.unitlength;
 				newDescriptor[r++] = hit.distance;
+
+
+				#pragma omp critical
+				if(!hit.isHit) misses++;
 			}
 
 			// Compute error
@@ -76,6 +80,9 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 
 			errors[pi] = (di-dj).norm();
 		}
+
+		debugBox(misses);
+		curMesh->write((QString("%1_").arg(i) + "step.off").toStdString());
 
 		double errorSum = 0;
 		for(auto e : errors) errorSum += e;

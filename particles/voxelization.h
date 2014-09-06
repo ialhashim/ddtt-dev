@@ -160,6 +160,11 @@ struct VoxelContainer{
 
 		return result;
 	}
+	inline bool isValidGridPoint( const Eigen::Vector3i& gridpnt ) const{
+		if(gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) return false;
+		if(gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1) return false;
+		return true;
+	}
 };
 
 template<typename Vector3>

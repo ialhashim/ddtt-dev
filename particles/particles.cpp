@@ -117,9 +117,6 @@ void particles::processShapes()
 					for(auto d : sampledRayDirections)
 					{
 						raytracing::RayHit hit = rt.hit( p.pos, d );
-
-						if(!hit.isHit) hit.distance = s->grid.unitlength;
-
 						descriptor[pi][r++] = hit.distance;
 						rayCount++;
 					}
@@ -332,7 +329,7 @@ void particles::processShapes()
 								Vector3 maPoint = ma_point[pi].cast<double>();
 								int r = 0;
 								for(auto d : sampledRayDirections){
-									raytracing::RayHit hit = rt.hit( maPoint, (d + Vector3(1,1,1) * 1e-6).normalized() ); // weird bug..
+									raytracing::RayHit hit = rt.hit( maPoint, d );
 									descriptor[pi][r++] = hit.distance;
 								}
 
@@ -785,6 +782,7 @@ void particles::create()
 
 	connect(pw->ui->loadMeshes, &QPushButton::released, [=]{
 		pw->pmeshes.clear();
+		drawArea()->clear();
 
 		for(auto filename : QFileDialog::getOpenFileNames(mainWindow(), "Load mesh", "", "Particle meshes (*.pmesh)"))
 		{
@@ -801,6 +799,8 @@ void particles::create()
 		{
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
 			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+			
+			for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
 		}
 
 		pw->isReady = true;
@@ -873,17 +873,24 @@ void particles::decorate()
 	ParticleMesh * jmesh = pwidget->pmeshes.back();
 
 	for(auto & particle : imesh->particles){
-		Vector3 p = AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos);
-		mixedPoints.push_back( p.cast<float>() );
+		mixedPoints.push_back( imesh->realPos( AlphaBlend(alpha, particle.relativePos, 
+			jmesh->particles[particle.correspondence].relativePos) ).cast<float>() );
 	}
 
 	if( !pwidget->ui->isOneSided->isChecked() )
 	{
 		for(auto & particle : jmesh->particles){
-			Vector3 p = AlphaBlend((1.0-alpha), particle.pos, imesh->particles[particle.correspondence].pos);
-			mixedPoints.push_back( p.cast<float>() );
+			mixedPoints.push_back( imesh->realPos( AlphaBlend((1.0 - alpha), particle.relativePos, 
+				imesh->particles[particle.correspondence].relativePos) ).cast<float>() );
 		}
 	}
+
+	/*size_t gridsize = imesh->grid.gridsize;
+	for(auto & p : mixedPoints){
+		Vector3 delta = (p.cast<double>() - imesh->grid.translation.cast<double>());
+		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
+		p = gridpnt.cast<float>() * imesh->grid.unitlength + imesh->grid.translation;
+	}*/
 
 	// Test meshing
 	if( false )

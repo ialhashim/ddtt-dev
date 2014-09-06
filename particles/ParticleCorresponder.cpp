@@ -25,10 +25,7 @@ void ParticleCorresponder::basicCorrespondence()
 
 		for( auto & particle : pmesh->particles )
 		{
-			Vector3 mapped = (particle.pos - box.min());
-			for(int i = 0; i < 3; i++) mapped[i] /= sizes[i];
-			particle.relativePos = mapped;
-
+			particle.relativePos = pmesh->relativePos( particle.id );
 			relativeKdtree->addPoint( particle.relativePos );
 		}
 

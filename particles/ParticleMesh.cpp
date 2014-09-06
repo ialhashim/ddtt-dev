@@ -65,6 +65,11 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 	cachedAdj.resize(particles.size());
 
 	process();
+
+	// Bounds
+	auto box = bbox();
+	bbox_min = box.min();
+	bbox_max = box.max();
 }
 
 Eigen::AlignedBox3d ParticleMesh::bbox()
@@ -757,16 +762,15 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 {
 	SurfaceMeshModel * m = new SurfaceMeshModel("meshed.obj","meshed");
 
+	auto unitlength = grid.unitlength;
 	size_t gridsize = grid.gridsize;
-	double gridlength = gridsize * grid.unitlength;
 
 	std::vector<char> occupied(pow(gridsize,3), EMPTY_VOXEL);
 	std::set<uint64_t> voxels;
 
 	for(const auto & point : points)
 	{
-		Vector3 p = point.cast<double>() - grid.translation.cast<double>();
-		Vector3 delta = p / gridlength;
+		Vector3 delta = (point.cast<double>() - grid.translation.cast<double>());
 		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
 		if(gridpnt.x() < 0 || gridpnt.y() < 0 || gridpnt.z() < 0) continue;
 		if(gridpnt.x() > gridsize-1 || gridpnt.y() > gridsize-1 || gridpnt.z() > gridsize-1) continue;
@@ -784,7 +788,7 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 		unsigned int x,y,z;
 		mortonDecode(voxel_morton, x, y, z);
 
-		std::vector<uint64_t> neigh;
+		std::vector<uint64_t> neigh;	
 		if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
 		if(y < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y+1,z) );
 		if(z < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y,z+1) );
@@ -824,9 +828,7 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 	}
 
 	// Generate surface quads in world coordinates
-	double unitlength = grid.unitlength;	
 	Vector3 delta = grid.translation.cast<double>() + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
-
 	for(auto p : allQuads)
 	{			
 		unsigned int v[3];
@@ -841,6 +843,141 @@ SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Eigen::Vector3f> 
 
 		m->add_face(quad_verts);
 	}
+
+	// Turn quads into triangles
+	m->triangulate();
+
+	return m;
+}
+
+SurfaceMeshModel * ParticleMesh::meshPointsUsingGraph(const std::vector<Vector3> & points, Vector3 ratios)
+{	
+	SurfaceMeshModel * m = new SurfaceMeshModel("meshed.obj","meshed");
+
+	auto unitlength = grid.unitlength;
+	size_t gridsize = grid.gridsize;
+
+	std::vector<char> occupied(pow(gridsize,3), EMPTY_VOXEL);
+	std::set<uint64_t> voxels;
+
+	auto g = toGraph();
+
+	for( auto e : g.GetEdgesSet() )
+	{
+		auto pi = points[e.index];
+		auto pj = points[e.target];
+
+		Vector3 delta_i = (pi - grid.translation.cast<double>());
+		Eigen::Vector3i gridpnt_i( delta_i.x() * gridsize, delta_i.y() * gridsize, delta_i.z() * gridsize );
+
+		Vector3 delta_j = (pj - grid.translation.cast<double>());
+		Eigen::Vector3i gridpnt_j( delta_j.x() * gridsize, delta_j.y() * gridsize, delta_j.z() * gridsize );
+
+		bool valid_i = false, valid_j = false;
+		uint64_t mi, mj;
+		if(valid_i = grid.isValidGridPoint(gridpnt_i))	mi = mortonEncode_LUT(gridpnt_i.z(),gridpnt_i.y(),gridpnt_i.x());
+		if(valid_j = grid.isValidGridPoint(gridpnt_j))	mj = mortonEncode_LUT(gridpnt_j.z(),gridpnt_j.y(),gridpnt_j.x());
+
+		if(valid_i){ occupied[mi] = FULL_VOXEL; voxels.insert(mi); }
+		if(valid_j){ occupied[mj] = FULL_VOXEL; voxels.insert(mj); }
+
+		if(mi == mj) continue;
+		if(!valid_i || !valid_j) continue;
+
+		bool isShareX = gridpnt_i[0] == gridpnt_j[0];
+		bool isShareY = gridpnt_i[1] == gridpnt_j[1];
+		bool isShareZ = gridpnt_i[2] == gridpnt_j[2];
+		int shareCount = (isShareX ? 1:0) + (isShareY ? 1:0) + (isShareZ ? 1:0);
+		if(shareCount != 2) continue;
+
+		int w = (!isShareX ? 0 : (!isShareY ? 1 : 2));
+		int diff = gridpnt_i[w] - gridpnt_j[w];
+		if(diff == 1) continue;
+
+		auto startpnt = gridpnt_i, endpnt = gridpnt_j;
+		if(gridpnt_i[w] > gridpnt_j[w]) std::swap( startpnt, endpnt );
+
+		for(int i = startpnt[w] + 1; i < endpnt[w]; i++)
+		{
+			auto gridpnt = startpnt;
+			gridpnt[w] = i;
+
+			if(!grid.isValidGridPoint(gridpnt))	continue;
+
+			auto m = mortonEncode_LUT(gridpnt.z(),gridpnt.y(),gridpnt.x());
+			occupied[m] = FULL_VOXEL; 
+			voxels.insert(m);
+		}
+	}
+
+	debugBox( QString("%1 - new size %2").arg(particles.size()).arg(voxels.size()) );
+
+	// Prepare set of quads
+	std::vector< std::pair<uint64_t, Eigen::Vector3i> > allQuads;
+
+	for(auto voxel_morton : voxels)
+	{					
+		unsigned int x,y,z;
+		mortonDecode(voxel_morton, x, y, z);
+
+		std::vector<uint64_t> neigh;	
+		if(x < gridsize - 1) neigh.push_back( mortonEncode_LUT(x+1,y,z) );
+		if(y < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y+1,z) );
+		if(z < gridsize - 1) neigh.push_back( mortonEncode_LUT(x,y,z+1) );
+
+		if(x > 0) neigh.push_back( mortonEncode_LUT(x-1,y,z) );
+		if(y > 0) neigh.push_back( mortonEncode_LUT(x,y-1,z) );
+		if(z > 0) neigh.push_back( mortonEncode_LUT(x,y,z-1) );
+
+		// Inside / outside
+		for(auto n : neigh)
+		{
+			if(occupied[n] != occupied[voxel_morton])
+			{
+				unsigned int v[3], w[3];
+				mortonDecode(voxel_morton, v[0], v[1], v[2]);
+				mortonDecode(n, w[0], w[1], w[2]);
+				Eigen::Vector3i direction (int(w[2])-int(v[2]), int(w[1])-int(v[1]), int(w[0])-int(v[0]));
+				allQuads.push_back( std::make_pair(voxel_morton, direction) );
+			}
+		}
+
+		// Edge of grid
+		unsigned int v[3];
+		mortonDecode(voxel_morton, v[2], v[1], v[0]);
+		bool isBoundary = (v[0] == 0 || v[1] == 0 || v[2] == 0) || 
+			(v[0] == gridsize-1 || v[1] == gridsize-1 || v[2] == gridsize-1);
+		if( !isBoundary ) continue;
+
+		for(int i = 0; i < 3; i++)
+		{
+			Eigen::Vector3i d(0,0,0);
+			if(v[i] == 0) d[i] = -1;
+			else if(v[i] == gridsize-1) d[i] = 1;
+			if(d[0]!=0||d[1]!=0||d[2]!=0) 
+				allQuads.push_back( std::make_pair(voxel_morton, d) );
+		}
+	}
+
+	// Generate surface quads in world coordinates
+	Vector3 delta = grid.translation.cast<double>() + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
+	for(auto p : allQuads)
+	{			
+		unsigned int v[3];
+		mortonDecode(p.first, v[0], v[1], v[2]);
+		std::vector<Vector3> quad = voxelQuad<Vector3>( p.second, unitlength );
+		std::vector<Vertex> quad_verts;
+		for(auto p : quad){
+			p += Vector3(v[2] * unitlength, v[1] * unitlength, v[0] * unitlength) + delta;
+			quad_verts.push_back( Vertex(m->n_vertices()) );
+			m->add_vertex( p );
+		}
+
+		m->add_face(quad_verts);
+	}
+
+	// Turn quads into triangles
+	m->triangulate();
 
 	return m;
 }
@@ -906,4 +1043,30 @@ void ParticleMesh::deserialize(QDataStream& is)
 	Spherelib::Sphere sphere( sphereResolutionUsed );
 	usedDirections = sphere.rays();
 	antiRays = sphere.antiRays();
+
+	// Bounds
+	auto box = bbox();
+	bbox_min = box.min();
+	bbox_max = box.max();
+}
+
+SurfaceMesh::Vector3 ParticleMesh::relativePos( size_t particleID )
+{
+	Vector3 delta(grid.unitlength,grid.unitlength,grid.unitlength);
+	delta *= 0.5;
+	auto box = Eigen::AlignedBox3d( bbox_min - delta, bbox_max + delta );
+
+	Vector3 mapped = (particles[particleID].pos - box.min());
+	for(int i = 0; i < 3; i++) mapped[i] /= box.sizes()[i];
+	return mapped;
+}
+
+SurfaceMesh::Vector3 ParticleMesh::realPos(Vector3 relative_pos)
+{
+	Vector3 delta(grid.unitlength,grid.unitlength,grid.unitlength);
+	delta *= 0.5;
+	auto box = Eigen::AlignedBox3d( bbox_min - delta, bbox_max + delta );
+
+	for(int i = 0; i < 3; i++) relative_pos[i] *= box.sizes()[i];
+	return relative_pos + box.min();
 }

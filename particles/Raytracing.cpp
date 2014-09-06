@@ -25,7 +25,7 @@ raytracing::Raytracing<Vector3>::Raytracing( SurfaceMesh::SurfaceMeshModel * mes
 		rtcInit( NULL );
 
 		/* create scene */
-		RTCScene scene = rtcNewScene( RTC_SCENE_STATIC, RTC_INTERSECT1 );
+		RTCScene scene = rtcNewScene( RTC_SCENE_ROBUST, RTC_INTERSECT1 );
 
 		/* Triangle mesh loading */
 		int numTriangles = mesh->n_faces();
