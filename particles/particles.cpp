@@ -885,15 +885,8 @@ void particles::decorate()
 		}
 	}
 
-	/*size_t gridsize = imesh->grid.gridsize;
-	for(auto & p : mixedPoints){
-		Vector3 delta = (p.cast<double>() - imesh->grid.translation.cast<double>());
-		Eigen::Vector3i gridpnt( delta.x() * gridsize, delta.y() * gridsize, delta.z() * gridsize );
-		p = gridpnt.cast<float>() * imesh->grid.unitlength + imesh->grid.translation;
-	}*/
-
 	// Test meshing
-	if( false )
+	/*if( false )
 	{
 		SurfaceMeshModel * m = imesh->meshPoints( mixedPoints );
 		m->update_face_normals();
@@ -906,7 +899,7 @@ void particles::decorate()
 		glEnd();
 		delete m;
 		return;
-	}
+	}*/
 
 	// Setup shader
 	static QMap<QString, int> location;

@@ -74,8 +74,7 @@ public:
 	Vector3 relativePos( size_t particleID );
 	Vector3 realPos( Vector3 relative_pos );
 
-	SurfaceMeshModel * meshPoints( const std::vector<Eigen::Vector3f> & points ) const;
-	SurfaceMeshModel * meshPointsUsingGraph(const std::vector<Vector3> & points, Vector3 ratios);
+	SurfaceMeshModel * meshPoints( const std::vector<Vector3> & points, Eigen::Vector3i ratios ) const;
 
 	void distort();
 
