@@ -167,7 +167,13 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 		//Vector3 pn = (d - 2*(d.dot(n)) * n).normalized();
 		//glNormal3dv( pn.data() );
 
-		QColor c = rndcolors[ particle.segment ];
+		QColor c;
+
+		if( particle.segment < rndcolors.size() - 1 )
+			c = rndcolors[ particle.segment ];
+		else
+			c = rndColors2(1).front();
+
 		if(particle.flag == VIZ_WEIGHT) c = starlab::qtJetColor(particle.weight); 
 		Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), particle.alpha);
 

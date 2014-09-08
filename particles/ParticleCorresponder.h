@@ -8,6 +8,7 @@ public:
 
     ParticleMesh *sA, *sB;
 
+	void descriptorCorrespondence();
 	void basicCorrespondence();
 
     QVector<RenderObject::Base*> debug;

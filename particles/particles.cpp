@@ -795,12 +795,18 @@ void particles::create()
 			pw->pmeshes.push_back(pmesh);
 		}
 
+		if(pw->pmeshes.empty()) return;
+
 		if(pw->pmeshes.size() > 1) 
 		{
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
-			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
-			
-			for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
+
+			// DEBUG:
+			pw->pmeshes.front()->property["debug"].setValue(true);
+			for(auto d : pc.debug) drawArea()->addRenderObject(d);
+
+			//ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+			//for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
 		}
 
 		pw->isReady = true;
@@ -826,7 +832,11 @@ void particles::decorate()
 		sphere->draw();
 	}
 
-	if(pwidget->pmeshes.size() < 2) 
+	bool isDebugVisualization = false;
+	if(pwidget->pmeshes.size() > 1 && pwidget->pmeshes.front()->property["debug"].toBool())
+		isDebugVisualization = true;
+
+	if( pwidget->pmeshes.size() < 2 || isDebugVisualization ) 
 	{
 		glPushMatrix();
 
@@ -836,13 +846,14 @@ void particles::decorate()
 			s->drawParticles( drawArea()->camera() );
 			s->drawDebug( *drawArea() );
 
-			glTranslated(s->bbox().sizes().x() * 1.1, 0, 0);
+			glTranslated(1, 0, 0);
 		}
 
 		glPopMatrix();
 
 		return;
 	}
+
 
 	// Experimental
 	static bool isForward = true;
@@ -852,9 +863,10 @@ void particles::decorate()
 	if(alpha < 0.0){alpha = 0.0;isForward = true;}
 
 	// Prepare scene once
-	Eigen::AlignedBox3d largeBox;
-	for(auto pmesh : pwidget->pmeshes) largeBox.extend(pmesh->bbox());
 	if(timer == NULL){
+		Eigen::AlignedBox3d largeBox;
+		for(auto pmesh : pwidget->pmeshes) largeBox.extend(pmesh->bbox());
+
 		drawArea()->setSceneRadius( largeBox.sizes().norm() * 2 );
 		drawArea()->showEntireScene();
 

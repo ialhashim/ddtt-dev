@@ -2,6 +2,7 @@ include($$[STARLAB])
 include($$[SURFACEMESH])
 include($$[OCTREE])
 include($$[NANOFLANN])
+include($$[FLANN])
 include($$[QHULL])
 StarlabTemplate(plugin)
 
