@@ -1,48 +1,71 @@
 #include "ParticleCorresponder.h"
 #include "Bounds.h"
 
-#pragma warning( disable : 4005 4100 4267 4616 4700 ) // its not my code..
+#pragma warning( disable : 4005 4100 4267 4616 4700 4291 4189 4267 4996 4267 ) // its not my code..
 #include "flann/flann.hpp"
 using namespace flann;
 
 ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
     sA(pmeshA), sB(pmeshB)
 {
+	// Clear correspondences
 	for(auto & p : sA->particles) p.correspondence = 0;
 	for(auto & p : sB->particles) p.correspondence = 0;
 
 	//basicCorrespondence();
 
 	descriptorCorrespondence();
+
+	// Compute relative positions
+	for( auto & particle : sA->particles )	particle.relativePos = sA->relativePos( particle.id );
+	for( auto & particle : sB->particles )	particle.relativePos = sB->relativePos( particle.id );
 }
 
 void ParticleCorresponder::descriptorCorrespondence()
 {
-	size_t selectedID = 0;
-	auto & selected = sA->particles[selectedID];
-	auto ps = new starlab::PointSoup(15);
-	ps->addPoint( selected.pos );
-	debug << ps;
+	typedef Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> MatrixXf;
 
-	Boundsd bound;
-	for(auto & p : sB->particles)
+	// Fill dataset
+	MatrixXf m( sB->particles.size(), sB->desc.front().size() );
+	for(auto & p : sB->particles) 
+		m.row(p.id) = Eigen::Map<Eigen::VectorXf>(&sB->desc[p.id][0], sB->desc[p.id].size());
+	Matrix<float> dataset( m.data(), m.rows(), m.cols() );
+
+	// construct index using 4 kd-trees
+	Index< L2<float> > index(dataset, flann::KDTreeIndexParams());
+	index.buildIndex();
+
+	int knn = 12;	
+	flann::SearchParams params;
+	params.cores = omp_get_num_procs();
+
+	MatrixXf q( sA->particles.size(), m.cols() );
+	for(auto & p : sA->particles) 
+		q.row(p.id) = Eigen::Map<Eigen::VectorXf>(&sA->desc[p.id][0], sA->desc[p.id].size());
+	Matrix<float> queries( q.data(), q.rows(), q.cols() );
+
+	std::vector< std::vector<int> > indices;
+	std::vector< std::vector<float> > dists;
+
+	index.knnSearch( queries, indices, dists, knn, params );
+
+	for(auto & p : sB->particles) p.weight = DBL_MAX;
+
+	for(auto & p : sA->particles)
 	{
-		auto di = Eigen::Map<Eigen::VectorXf>(&sA->desc[selectedID][0], sA->desc[selectedID].size());
-		auto dj = Eigen::Map<Eigen::VectorXf>(&sB->desc[p.id][0], sB->desc[p.id].size());
+		for(size_t j = 0; j < indices[p.id].size(); j++)
+		{
+			int idx = indices[p.id][j];
+			double dist = dists[p.id][j];
 
-		bound.extend( (di - dj).norm() );
-	}
+			if( dist < sB->particles[idx].weight )
+			{
+				sB->particles[idx].correspondence = p.id;
+				sA->particles[p.id].correspondence = idx;
 
-	for(auto & p : sB->particles)
-	{
-		p.flag = VIZ_WEIGHT;
-
-		auto di = Eigen::Map<Eigen::VectorXf>(&sA->desc[selectedID][0], sA->desc[selectedID].size());
-		auto dj = Eigen::Map<Eigen::VectorXf>(&sB->desc[p.id][0], sB->desc[p.id].size());
-
-		double dist = (di - dj).norm();
-
-		p.weight = bound.normalized( dist );
+				sB->particles[idx].weight = dist;
+			}
+		}
 	}
 }
 

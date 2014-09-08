@@ -800,13 +800,11 @@ void particles::create()
 		if(pw->pmeshes.size() > 1) 
 		{
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
+			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
 
 			// DEBUG:
-			pw->pmeshes.front()->property["debug"].setValue(true);
-			for(auto d : pc.debug) drawArea()->addRenderObject(d);
-
-			//ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
-			//for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
+			//pw->pmeshes.front()->property["debug"].setValue(true);
+			for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
 		}
 
 		pw->isReady = true;

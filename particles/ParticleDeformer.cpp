@@ -92,7 +92,7 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 						auto vs = new starlab::VectorSoup;
 						vs->addVector(movedPoints[pi].cast<double>(), d);
 						debug << vs;
-						curMesh->write("missMesh.off");
+						//curMesh->write("missMesh.off");
 					}
 				}
 			}
@@ -105,7 +105,7 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 		}
 
 		if( misses ){
-			debugBox(QString("Missed rays = ").arg(misses));
+			debugBox(QString("Missed rays = %1").arg(misses));
 			curMesh->write((QString("%1_").arg(i) + "step.off").toStdString());
 		}
 
