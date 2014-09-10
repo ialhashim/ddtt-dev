@@ -24,46 +24,61 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 void ParticleCorresponder::descriptorCorrespondence()
 {
 	typedef Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> MatrixXf;
-
-	// Fill dataset
-	MatrixXf m( sB->particles.size(), sB->desc.front().size() );
-	for(auto & p : sB->particles) 
-		m.row(p.id) = Eigen::Map<Eigen::VectorXf>(&sB->desc[p.id][0], sB->desc[p.id].size());
-	Matrix<float> dataset( m.data(), m.rows(), m.cols() );
-
-	// construct index using 4 kd-trees
-	Index< L2<float> > index(dataset, flann::KDTreeIndexParams());
-	index.buildIndex();
+	typedef Index< L2<float> > FlannIndex;
 
 	int knn = 12;	
 	flann::SearchParams params;
 	params.cores = omp_get_num_procs();
 
-	MatrixXf q( sA->particles.size(), m.cols() );
-	for(auto & p : sA->particles) 
-		q.row(p.id) = Eigen::Map<Eigen::VectorXf>(&sA->desc[p.id][0], sA->desc[p.id].size());
-	Matrix<float> queries( q.data(), q.rows(), q.cols() );
+	QVector<ParticleMesh*> inputs;
+	inputs << sA << sB;
 
-	std::vector< std::vector<int> > indices;
-	std::vector< std::vector<float> > dists;
+	QVector<MatrixXf*> matrices;
+	QVector<FlannIndex*> trees;
 
-	index.knnSearch( queries, indices, dists, knn, params );
-
-	for(auto & p : sB->particles) p.weight = DBL_MAX;
-
-	for(auto & p : sA->particles)
+	for(auto & pmesh : inputs)
 	{
-		for(size_t j = 0; j < indices[p.id].size(); j++)
+		// Fill dataset
+		auto m = new MatrixXf( pmesh->particles.size(), pmesh->desc.front().size() );
+		for(auto & p : pmesh->particles) 
+			m->row(p.id) = Eigen::Map<Eigen::VectorXf>(&pmesh->desc[p.id][0], pmesh->desc[p.id].size());
+		Matrix<float> dataset( m->data(), m->rows(), m->cols() );
+
+		// construct index using 4 kd-trees
+		auto index = new FlannIndex(dataset, flann::KDTreeIndexParams());
+		index->buildIndex();
+
+		trees << index;
+		matrices << m;
+	}
+
+	for(size_t i = 0; i < inputs.size(); i++)
+	{
+		auto j = (i+1) % inputs.size();
+		auto pi = inputs[i], pj = inputs[j];
+
+		std::vector< std::vector<int> > indices;
+		std::vector< std::vector<float> > dists;
+
+		// Query the 'j's in the 'i's
+		MatrixXf q( pj->particles.size(), pj->desc.front().size() );
+		for(auto & p : pj->particles) q.row(p.id) = Eigen::Map<Eigen::VectorXf>(&pj->desc[p.id][0], pj->desc[p.id].size());
+		trees[i]->knnSearch( Matrix<float>( q.data(), q.rows(), q.cols() ), indices, dists, knn, params );
+
+		for(auto & p : pi->particles) p.weight = DBL_MAX;
+
+		for(auto & p : pj->particles)
 		{
-			int idx = indices[p.id][j];
-			double dist = dists[p.id][j];
-
-			if( dist < sB->particles[idx].weight )
+			for(size_t w = 0; w < indices[p.id].size(); w++)
 			{
-				sB->particles[idx].correspondence = p.id;
-				sA->particles[p.id].correspondence = idx;
+				int idx = indices[p.id][w];
+				double dist = dists[p.id][w];
 
-				sB->particles[idx].weight = dist;
+				if( dist < pi->particles[idx].weight )
+				{
+					pi->particles[idx].correspondence = p.id;
+					pi->particles[idx].weight = dist;
+				}
 			}
 		}
 	}
