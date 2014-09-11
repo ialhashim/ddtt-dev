@@ -62,6 +62,7 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 	grid.findOccupied();
 
 	// Cache adjacency
+	cachedAdj.clear();
 	cachedAdj.resize(particles.size());
 
 	process();
@@ -111,7 +112,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 		glMateriali(GL_FRONT, GL_SHININESS, 56);
 	}
 
-	// Setup
+	// Camera setup
 	qglviewer::Vec pos = camera->position();
 	qglviewer::Vec dir = camera->viewDirection();
 	qglviewer::Vec revolve = camera->revolveAroundPoint();
@@ -132,7 +133,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 
 	// Sort
 	std::vector<std::pair<size_t,double> > myVec(distances.begin(), distances.end());
-	std::sort( myVec.begin(), myVec.end(), [](std::pair<size_t,double> a, std::pair<size_t,double> b){ return a.second < b.second; } );
+	//std::sort( myVec.begin(), myVec.end(), [](std::pair<size_t,double> a, std::pair<size_t,double> b){ return a.second < b.second; } );
 
 	glDisable( GL_LIGHTING );
 	//glEnable(GL_LIGHTING);
@@ -143,7 +144,9 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	double camDist = (eye - center).norm();
 	double ratio = 1.0 / camDist;
 
-	glPointSize( std::max(2, std::min(10, int(8.0 * ratio))) );
+	//double curPointSize = std::max(2, std::min(10, int(8.0 * ratio)));
+	double curPointSize = 5;
+	glPointSize( curPointSize );
 
 	glBegin(GL_POINTS);
 
@@ -176,12 +179,41 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 
 		if(particle.flag == VIZ_WEIGHT) c = starlab::qtJetColor(particle.weight); 
 		Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), particle.alpha);
-
 		glColor4dv( color.data() );
+
 		glVertex3dv( particle.pos.data() );
 	}
 
 	glEnd();
+
+	// Highlight edge particles
+	{
+		glPointSize(curPointSize * 2);
+		glBegin(GL_POINTS);
+		for(auto & p : particles)
+		{
+			if(p.neighbour == -1) continue;
+			QColor c;
+			if( p.segment < rndcolors.size() - 1 ) c = rndcolors[ p.segment ];
+			else c = rndColors2(1).front();
+			if(p.flag == VIZ_WEIGHT) c = starlab::qtJetColor(p.weight); 
+			Eigen::Vector4d color(c.redF(),c.greenF(),c.blueF(), p.alpha);
+			glColor4dv( color.data() );
+			glVertex3dv( p.pos.data() );
+		}
+		glEnd();
+		glPointSize(curPointSize);
+	}
+
+	// Draw grid bounds
+	glLineWidth(3);
+	glColor3d(0,0,1);
+	Vector3 gridBottomCorner = grid.translation.cast<double>();
+	Vector3 gridTopCorner = gridBottomCorner + Vector3(grid.unitlength, grid.unitlength, grid.unitlength) * grid.gridsize;
+	Eigen::AlignedBox3d grid_bbox(gridBottomCorner, gridTopCorner);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	starlab::BoxSoup::drawBox( grid_bbox );
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 	//glDepthMask(GL_TRUE);
 	glEnable(GL_LIGHTING);
@@ -414,6 +446,9 @@ QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGra
 
 	std::vector<SegmentGraph::Edge> cutEdges;
 
+	// We will keep track of edge particles
+	for(auto pid : fromGraph.vertices) particles[pid].neighbour = -1;
+
 	// Remove edges between two nodes having different segments
 	for(auto e : fromGraph.GetEdgesSet())
 	{
@@ -424,6 +459,9 @@ QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGra
 		{
 			fromGraph.removeEdge( e.index, e.target );
 			cutEdges.push_back( e );
+
+			particles[e.index].neighbour = particles[e.target].segment;
+			particles[e.target].neighbour = particles[e.index].segment;
 		}
 	}
 

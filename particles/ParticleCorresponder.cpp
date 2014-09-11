@@ -12,9 +12,9 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 	for(auto & p : sA->particles) p.correspondence = 0;
 	for(auto & p : sB->particles) p.correspondence = 0;
 
-	//basicCorrespondence();
+	basicCorrespondence();
 
-	descriptorCorrespondence();
+	//descriptorCorrespondence();
 
 	// Compute relative positions
 	for( auto & particle : sA->particles )	particle.relativePos = sA->relativePos( particle.id );

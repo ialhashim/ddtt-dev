@@ -21,7 +21,7 @@ struct Particle : public Serializable
 	typedef double Scalar;
 
     explicit Particle(const Vector3& pos = Vector3(0,0,0)) : pos(pos), measure(0.0), weight(1), 
-		alpha(1.0), direction(Vector3(0,0,1)), flag(NONE), avgDiameter(0), segment(0), isMedial(false), medialID(-1)
+		alpha(1.0), direction(Vector3(0,0,1)), flag(NONE), avgDiameter(0), segment(0), neighbour(-1), isMedial(false), medialID(-1)
 	{
 		id = -1; // an invalid ID
 		correspondence = -1;
@@ -30,7 +30,7 @@ struct Particle : public Serializable
 	size_t id, correspondence;
 	uint64_t morton;
 	ParticleFlags flag;
-	int segment;
+	int segment, neighbour;
     Vector3 pos, direction, axis, relativePos;
     Scalar measure, weight, alpha;
 	Scalar avgDiameter, flat;
@@ -41,7 +41,7 @@ struct Particle : public Serializable
 
 	// Serialization:
 	void serialize(QDataStream& os) const {
-		os << id << correspondence << morton << ((qint32)flag) << segment;
+		os << id << correspondence << morton << ((qint32)flag) << segment << neighbour;
 		os << pos << direction << axis;
 		os << measure << weight << alpha;
 		os << avgDiameter << flat;
@@ -51,7 +51,7 @@ struct Particle : public Serializable
 	}	
 	void deserialize(QDataStream& is) {
 		int flagItem;
-		is >> id >> correspondence >> morton >> flagItem >> segment;
+		is >> id >> correspondence >> morton >> flagItem >> segment >> neighbour;
 		is >> pos >> direction >> axis;
 		is >> measure >> weight >> alpha;
 		is >> avgDiameter >> flat;

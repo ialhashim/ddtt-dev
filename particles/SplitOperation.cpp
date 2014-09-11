@@ -89,7 +89,7 @@ void SplitOperation::split()
 	if(children.empty()) return;
 
 	// Check if segment was split to arbitrary interconnected components
-	if( level > 0 )
+	if( level > 0 && children.size() > 1 )
 	{	
 		// Pick the two largest children
 		std::priority_queue< std::pair<size_t,size_t> > pq;

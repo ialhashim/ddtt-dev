@@ -53,13 +53,17 @@ Segmentation::Segmentation(ParticleMesh *fromMesh) : s(fromMesh)
 
                 for(auto & smallSeg : candidates){
                     if(smallSeg.vertices.size() > small_segment_threshold) continue;
-                    Vector3 smallCenter = toEigenMatrix<double>(s->particlesPositions(smallSeg.vertices)).rowwise().mean();
 
+					auto Msmall = toEigenMatrix<double>(s->particlesPositions(smallSeg.vertices));
+                    Vector3 smallCenter = Msmall.colwise().mean();
+					
                     std::map<size_t,Vector3> candiateCenters;
                     for(auto largeID : neiGraph.GetNeighbours((unsigned int)smallSeg.uid)){
                         auto & largeSeg = candidates[largeID];
                         if(largeSeg.vertices.size() <= small_segment_threshold) continue;
-                        candiateCenters[largeID] = toEigenMatrix<double>(s->particlesPositions(largeSeg.vertices)).rowwise().mean();
+
+						auto Mlarge = toEigenMatrix<double>(s->particlesPositions(largeSeg.vertices));
+                        candiateCenters[largeID] = Mlarge.colwise().mean();
                     }
 
                     if(candiateCenters.size() < 1) continue;
