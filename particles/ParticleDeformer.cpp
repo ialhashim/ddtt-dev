@@ -10,13 +10,14 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 	int numSteps = 10;
 	std::vector<double> errorVector;
 
-	Eigen::AlignedBox3d boxA( sA->bbox_min, sA->bbox_max );
+	/*Eigen::AlignedBox3d boxA( sA->bbox_min, sA->bbox_max );
 	Eigen::AlignedBox3d boxB( sB->bbox_min, sB->bbox_max );
 	Vector3 bbox_ratios(0,0,0);
 	for(int i = 0; i < 3; i++){
 		bbox_ratios[i] = boxA.sizes()[i] / boxB.sizes()[i];
 		if(bbox_ratios[i] <= 1.49) bbox_ratios[i] = 0;
-	}
+	}*/
+	Eigen::Vector3d bbox_ratios(0,0,0);
 
 	// Compute original descriptors
 	{
@@ -49,8 +50,7 @@ ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
 		std::vector<Eigen::Vector3d> movedPoints;
 
 		for(auto & particle : sA->particles){
-			Vector3 relativePos = AlphaBlend(t, particle.relativePos, sB->particles[particle.correspondence].relativePos);
-			movedPoints.push_back( sA->realPos( relativePos ) );
+			movedPoints.push_back( AlphaBlend(t, particle.pos, sB->particles[particle.correspondence].pos) );
 		}
 
 		auto curMesh = sA->meshPoints( movedPoints, bbox_ratios.cast<int>() );

@@ -804,7 +804,7 @@ void particles::create()
 
 			// DEBUG:
 			//pw->pmeshes.front()->property["debug"].setValue(true);
-			for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
+			//for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
 		}
 
 		pw->isReady = true;
@@ -844,7 +844,7 @@ void particles::decorate()
 			s->drawParticles( drawArea()->camera() );
 			s->drawDebug( *drawArea() );
 
-			glTranslated(1, 0, 0);
+			//glTranslated(1, 0, 0);
 		}
 
 		glPopMatrix();
@@ -883,15 +883,19 @@ void particles::decorate()
 	ParticleMesh * jmesh = pwidget->pmeshes.back();
 
 	for(auto & particle : imesh->particles){
-		mixedPoints.push_back( imesh->realPos( AlphaBlend(alpha, particle.relativePos, 
-			jmesh->particles[particle.correspondence].relativePos) ).cast<float>() );
+		//mixedPoints.push_back( imesh->realPos( AlphaBlend(alpha, particle.relativePos, 
+		//	jmesh->particles[particle.correspondence].relativePos) ).cast<float>() );
+
+		mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
 	}
 
 	if( !pwidget->ui->isOneSided->isChecked() )
 	{
 		for(auto & particle : jmesh->particles){
-			mixedPoints.push_back( imesh->realPos( AlphaBlend((1.0 - alpha), particle.relativePos, 
-				imesh->particles[particle.correspondence].relativePos) ).cast<float>() );
+			//mixedPoints.push_back( imesh->realPos( AlphaBlend((1.0 - alpha), particle.relativePos, 
+			//	imesh->particles[particle.correspondence].relativePos) ).cast<float>() );
+
+			mixedPoints.push_back(AlphaBlend((1.0 - alpha), particle.pos, imesh->particles[particle.correspondence].pos).cast<float>());
 		}
 	}
 

@@ -68,13 +68,15 @@ public:
 
 	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );
 
-	Eigen::AlignedBox3d bbox();
-	Vector3 bbox_min, bbox_max;
-
 	Vector3 relativePos( size_t particleID );
 	Vector3 realPos( Vector3 relative_pos );
 
-	SurfaceMeshModel * meshPoints( const std::vector<Vector3> & points, Eigen::Vector3i ratios ) const;
+	SurfaceMeshModel * meshPoints( std::vector<Vector3> points = std::vector<Vector3>(), Eigen::Vector3i ratios = Eigen::Vector3i(0,0,0) ) const;
+
+	Eigen::AlignedBox3d bbox();
+	Vector3 bbox_min, bbox_max;
+
+	void centerInsideGrid( bool isNormalizeAndCenter = true );
 
 	void distort();
 

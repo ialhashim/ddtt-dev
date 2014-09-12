@@ -22,7 +22,7 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 	grid = ComputeVoxelization<VoxelVector>(mesh, gridsize, true, true);
 
 	// Build voxelization mesh
-	QString objectName = mesh->name;
+	/*QString objectName = mesh->name;
 	surface_mesh = new SurfaceMeshModel(objectName + ".obj", objectName);
 	{
 		int voffset = 0;
@@ -39,7 +39,7 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 		surface_mesh->garbage_collection();
 		surface_mesh->triangulate();
 		meregeVertices( surface_mesh );
-	}
+	}*/
 
 	// Remove outer most voxel
 	//container.data.erase(std::remove_if(container.data.begin(), container.data.end(), 
@@ -67,10 +67,14 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 
 	process();
 
+	centerInsideGrid();
+
 	// Bounds
-	auto box = bbox();
-	bbox_min = box.min();
-	bbox_max = box.max();
+	auto curbox = bbox();
+	bbox_min = curbox.min();
+	bbox_max = curbox.max();
+
+	surface_mesh = this->meshPoints();
 }
 
 Eigen::AlignedBox3d ParticleMesh::bbox()
@@ -689,12 +693,15 @@ void ParticleMesh::shrinkSmallerClusters()
 		for( auto pj : neighbourhood(p) ) 
 			clusterHistogram[ particles[pj].segment ]++;
 
-		std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
-		std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
+		if(clusterHistogram.size())
+		{
+			std::vector< std::pair<size_t,size_t> > ch( clusterHistogram.begin(), clusterHistogram.end() );
+			std::sort(ch.begin(),ch.end(),[](std::pair<size_t,size_t> a, std::pair<size_t,size_t> b){ return a.second < b.second; });
 
-		// majority rule
-		newSegmentAssignment[p.id] = (int)ch.back().first;
-		//p.segment = ch.back().first; // iterative arbitrary growing
+			// majority rule
+			newSegmentAssignment[p.id] = (int)ch.back().first;
+			//p.segment = ch.back().first; // iterative arbitrary growing
+		}
 	}
 
 	for(auto & p : particles) p.segment = newSegmentAssignment[p.id];
@@ -795,9 +802,14 @@ std::vector<size_t> ParticleMesh::specialSeeding( SeedType seedType, int K, Segm
 	return seedsVector;
 }
 
-SurfaceMeshModel * ParticleMesh::meshPoints( const std::vector<Vector3> & points, Eigen::Vector3i scaling ) const
+SurfaceMeshModel * ParticleMesh::meshPoints( std::vector<Vector3> points, Eigen::Vector3i scaling ) const
 {
 	SurfaceMeshModel * m = new SurfaceMeshModel("meshed.obj","meshed");
+
+	if(!points.size()){
+		for(auto & p : particles)
+			points.push_back(p.pos);
+	}
 
 	auto unitlength = grid.unitlength;
 	size_t gridsize = grid.gridsize;
@@ -988,4 +1000,49 @@ SurfaceMesh::Vector3 ParticleMesh::realPos(Vector3 relative_pos)
 
 	for(int i = 0; i < 3; i++) relative_pos[i] *= box.sizes()[i];
 	return relative_pos + box.min();
+}
+
+void ParticleMesh::centerInsideGrid( bool isNormalizeAndCenter )
+{
+	auto box = bbox();
+	double unitlength = grid.unitlength;
+
+	Eigen::Vector3i mincorner = ((box.min() - grid.translation.cast<double>()) / unitlength).cast<int>();
+	Eigen::Vector3i maxcorner = ((box.max() - grid.translation.cast<double>()) / unitlength).cast<int>();
+	Eigen::Vector3i w = maxcorner - mincorner;
+	Eigen::Vector3i W (grid.gridsize-1, grid.gridsize-1, grid.gridsize-1);
+
+	Eigen::Vector3i delta;
+	for(int i = 0; i < 3; i++) delta[i] = std::floor(double(W[i] - w[i]) / 2.0);
+	delta[2] = 0; // "on the ground, now!"
+	std::swap(delta[0], delta[2]);
+
+	// Clear computed attributes
+	mortonToParticleID.clear();
+	grid.occupied.clear();
+	grid.data.clear();
+
+	if( isNormalizeAndCenter )
+	{
+		grid.translation = Vector3(-0.5,-0.5,0).cast<float>();
+		grid.unitlength = 1.0 / grid.gridsize;
+	}
+
+	// Shift particles
+	for(auto & p : particles)
+	{
+		unsigned int x,y,z;
+		mortonDecode(p.morton, x, y, z);
+
+		x += delta.x(); y += delta.y(); z += delta.z();
+
+		p.morton = mortonEncode_LUT(x,y,z);
+		p.pos = grid.voxelPos(p.morton).cast<double>();
+
+		grid.data.push_back( VoxelData<Eigen::Vector3f>(p.morton,false) );
+
+		mortonToParticleID[p.morton] = p.id;
+	}
+
+	grid.findOccupied();
 }

@@ -29,9 +29,9 @@ struct Particle : public Serializable
 
 	size_t id, correspondence;
 	uint64_t morton;
+	Vector3 pos, direction, axis, relativePos;
 	ParticleFlags flag;
 	int segment, neighbour;
-    Vector3 pos, direction, axis, relativePos;
     Scalar measure, weight, alpha;
 	Scalar avgDiameter, flat;
 
