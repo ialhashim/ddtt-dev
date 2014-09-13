@@ -21,43 +21,119 @@ ParticleMesh::ParticleMesh(SurfaceMeshModel * mesh, int gridsize) : surface_mesh
 	// Voxelization
 	grid = ComputeVoxelization<VoxelVector>(mesh, gridsize, true, true);
 
-	// Build voxelization mesh
-	/*QString objectName = mesh->name;
-	surface_mesh = new SurfaceMeshModel(objectName + ".obj", objectName);
+	init();
+}
+
+ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(NULL)
+{
+	QFile file( mesh_filename );
+	file.open(QFile::ReadOnly | QFile::Text);
+	QTextStream in(&file);
+
+	struct TempMesh{
+		QString name;
+		QVector< Vector3 > verts;
+		QVector< QVector<int> > faces;
+		void addVertex( QStringList l ){
+			verts << Vector3(l[1].toFloat(), l[2].toFloat(), l[3].toFloat()); 
+		}
+		void addFace( QStringList l, int voffset ){
+			for(auto & s : l) s = s.replace("/"," ").split(" ").front();
+			faces << (QVector<int>() << (l[1].toInt()-1-voffset) << (l[2].toInt()-1-voffset) << (l[3].toInt()-1-voffset));
+		}
+	};
+
+	// Read OBJ file
+	std::vector<TempMesh> parts;
+	parts.push_back( TempMesh() ); 
+	bool isReadFaces = false;
+	int voffset = 0;
+
+	while( !in.atEnd() )
 	{
-		int voffset = 0;
-		for(auto q : grid.quads){
-			std::vector<Vertex> quad_verts;
-			for(int i = 0; i < 4; i++){
-				surface_mesh->add_vertex( q[i].cast<double>() );
-				quad_verts.push_back( Vertex(voffset + i) );
-			}
-			surface_mesh->add_face( quad_verts );
-			voffset += 4;
+		// Decide on line type
+		QStringList line = in.readLine().split(" ", QString::SkipEmptyParts);
+		if(line.isEmpty()) continue;
+		QString lineType = line[0];
+		
+		// Start next group of faces
+		if( isReadFaces && lineType != "f" ){
+			voffset += parts.back().verts.size();
+			parts.push_back(TempMesh());
+			isReadFaces = false;
 		}
 
-		surface_mesh->garbage_collection();
-		surface_mesh->triangulate();
-		meregeVertices( surface_mesh );
-	}*/
+		// Add data based on line type
+		if(lineType == "v") { parts.back().addVertex( line ); }
+		if(lineType == "f") { parts.back().addFace( line, voffset ); isReadFaces = true; }
+		if(lineType == "g") { parts.back().name = line.size() > 1 ? line[1] : QString::number(parts.size()); }
+	}
 
-	// Remove outer most voxel
-	//container.data.erase(std::remove_if(container.data.begin(), container.data.end(), 
-	//	[](const VoxelData<Eigen::Vector3f> & vd) { return !vd.isOuter; }), container.data.end());
+	if(parts.back().verts.empty()) parts.resize(parts.size()-1);
+	if(parts.empty()) return;
 
+	// Place parts within positive unite cube
+	Eigen::AlignedBox3d allbox;
+	for(auto & part : parts) for(auto & v : part.verts) allbox.extend(v);
+	double s = allbox.diagonal().maxCoeff();
+	for(auto & part : parts) for(auto & v : part.verts) v = (v - allbox.min()) / s;
+
+	// Default values for the unit grid
+	grid.gridsize = gridsize;
+	grid.unitlength = 1.0 / grid.gridsize;
+	grid.translation = Eigen::Vector3f(0,0,0);
+	grid.occupied.clear();
+	grid.occupied.resize( pow(gridsize,3), EMPTY_VOXEL );
+
+	// Go over the parts
+	for(size_t i = 0; i < parts.size(); i++)
+	{
+		auto & part = parts[i];
+
+		SurfaceMeshModel mesh;
+		for(auto & v : part.verts) mesh.add_vertex(v);
+		for(auto & f : part.faces){
+			std::vector<Vertex> verts;
+			for(auto & vf : f) verts.push_back(Vertex(vf));
+			mesh.add_face(verts);
+		}
+
+		// Voxelize this part
+		auto part_grid = ComputeVoxelization<VoxelVector>(&mesh, gridsize, true, true, true);
+
+		// Append to our global grid, and assign part ID
+		for(auto & voxel : part_grid.data)
+		{
+			//if(grid.occupied[voxel.morton] == FULL_VOXEL) continue;
+			// let's allow overlaps for now..
+
+			grid.data.push_back(voxel);
+			grid.data.back().color[0] = i; // hijacking color to record segment ID
+
+			grid.occupied[voxel.morton] = FULL_VOXEL;
+		}
+	}
+
+	init( true );
+}
+
+void ParticleMesh::init( bool isAssignedSegment )
+{
 	// Insert particles
-    for( auto voxel : grid.data )
-    {
+	for( auto & voxel : grid.data )
+	{
 		Eigen::Vector3f point = grid.voxelPos(voxel.morton);
 
-        Particle<Vector3> particle( point.cast<double>() );
+		Particle<Vector3> particle( point.cast<double>() );
 
-        particle.id = particles.size();
+		particle.id = particles.size();
 		particle.morton = voxel.morton;
 		mortonToParticleID[voxel.morton] = particle.id;
 
-        particles.push_back( particle );
-    }
+		if( isAssignedSegment ) particle.segment = voxel.color[0];
+
+		particles.push_back( particle );
+	}
 
 	grid.findOccupied();
 

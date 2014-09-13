@@ -24,6 +24,7 @@ class ParticleMesh : public Serializable
 public:
 
 	ParticleMesh(SurfaceMeshModel * mesh = NULL, int gridsize = 64);
+	ParticleMesh(QString mesh_filename, int gridsize = 64);
 	~ParticleMesh();
 	PropertyMap property;
 
@@ -41,8 +42,7 @@ public:
 	std::map<uint64_t,size_t> mortonToParticleID;
 
 public:
-	Vector3 mainDirection( size_t particleID );
-
+	void init( bool isAssignedSegment = false );
 	void process();
 	void computeDistanceToFloor();
 	std::vector<size_t> pathFromFloor;
@@ -67,7 +67,7 @@ public:
 	std::vector< Vector3 > particlesPositions(const std::set<unsigned int> & P);
 
 	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );
-
+	Vector3 mainDirection( size_t particleID );
 	Vector3 relativePos( size_t particleID );
 	Vector3 realPos( Vector3 relative_pos );
 

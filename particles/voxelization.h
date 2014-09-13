@@ -96,6 +96,7 @@ struct VoxelContainer{
 	bool isSolid;
 	std::vector<char> occupied;
 	std::vector< std::vector<Vector3> > quads;
+	VoxelContainer() : translation(Vector3(0,0,0)), unitlength(-1), gridsize(-1){}
 	std::vector< Vector3 > voxelCenters(){
 		std::vector< Vector3 > result;
 		for(auto voxel : data) result.push_back( voxelPos(voxel.morton) );
@@ -406,20 +407,30 @@ inline AABox<Vector3> createMeshBBCube( SurfaceMeshModel * mesh )
 }
 
 template<typename Vector3>
-inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize, bool isMakeSolid, bool isManifoldReady )
+inline VoxelContainer<Vector3> ComputeVoxelization( SurfaceMeshModel * mesh, size_t gridsize, 
+												   bool isMakeSolid, bool isManifoldReady, bool isInsideUniteCube = false )
 {
 	VoxelContainer<Vector3> container;
 
 	// Move mesh to positive world
 	Vector3VertexProperty points = mesh->vertex_coordinates();
 	mesh->updateBoundingBox();
-	Vector3 corner = mesh->bbox().min().cast<Vector3::Scalar>();
-	Vector3 delta = mesh->bbox().center().cast<Vector3::Scalar>() - corner;
-	for(auto v : mesh->vertices()) points[v] -= corner.cast<double>();
-	
-	AABox<Vector3> mesh_bbox = createMeshBBCube<Vector3>( mesh );
+	Vector3 corner(0,0,0), delta(0,0,0);
 
-	container.unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
+	if( !isInsideUniteCube )
+	{
+		corner = mesh->bbox().min().cast<Vector3::Scalar>();
+		delta = mesh->bbox().center().cast<Vector3::Scalar>() - corner;
+		for(auto v : mesh->vertices()) points[v] -= corner.cast<double>();
+
+		AABox<Vector3> mesh_bbox = createMeshBBCube<Vector3>( mesh );
+		container.unitlength = (mesh_bbox.max[0] - mesh_bbox.min[0]) / (float)gridsize;
+	}
+	else
+	{
+		container.unitlength = 1.0 / gridsize;
+	}
+
 	container.gridsize = gridsize;
 	uint64_t morton_part = (gridsize * gridsize * gridsize);
 

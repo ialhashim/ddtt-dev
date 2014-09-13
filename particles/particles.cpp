@@ -526,6 +526,16 @@ void particles::processShapes()
 		//showTable(s->desc, std::min(size_t(100),s->particles.size()));
 	}
 	
+	// Pre-segmented shapes case
+	if( pw->ui->isSegmentedMesh->isChecked() ) 
+	{
+		pw->isReady = true;
+		drawArea()->update();
+		emit( shapesProcessed() );
+		mainWindow()->setStatusBarMessage( QString("All time (%1 ms)").arg( allTimer.elapsed() ) );
+		return;
+	}
+
 	QElapsedTimer curTimer; curTimer.start();
 
 	// k-means clustering
@@ -743,20 +753,27 @@ void particles::create()
 
 		for(auto filename : files)
 		{
-			SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
-			fromMesh.read( filename.toStdString() );
-
-			// Rotate if requested
-			double angleDeg = pw->ui->rotateAngle->value();
-			if( angleDeg ){
-				Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
-				for(auto v : fromMesh.vertices()){
-					auto & p = fromMesh.vertex_coordinates()[v];
-					p = rot * p;
-				}
+			if(pw->ui->isSegmentedMesh->isChecked())
+			{
+				pw->pmeshes.push_back( new ParticleMesh( filename, pw->ui->gridsize->value() ) );
 			}
+			else
+			{
+				SurfaceMeshModel fromMesh( filename, QFileInfo(filename).baseName() );
+				fromMesh.read( filename.toStdString() );
 
-			pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+				// Rotate if requested
+				double angleDeg = pw->ui->rotateAngle->value();
+				if( angleDeg ){
+					Eigen::AngleAxisd rot( deg_to_rad(angleDeg), Vector3(0,0,1));
+					for(auto v : fromMesh.vertices()){
+						auto & p = fromMesh.vertex_coordinates()[v];
+						p = rot * p;
+					}
+				}
+
+				pw->pmeshes.push_back( new ParticleMesh( &fromMesh, pw->ui->gridsize->value() ) );
+			}
 		}
 
 		mainWindow()->setStatusBarMessage(QString("Shapes loaded and voxelized (%1 ms)").arg(timer.elapsed()));
