@@ -20,7 +20,8 @@ HEADERS += \
     SplitOperation.h \
     Segmentation.h \
     ParticleCorresponder.h \
-    ParticleDeformer.h
+    ParticleDeformer.h \
+    PartCorresponder.h
 
 SOURCES += \
     particles.cpp \
@@ -31,7 +32,8 @@ SOURCES += \
     SplitOperation.cpp \
     Segmentation.cpp \
     ParticleCorresponder.cpp \
-    ParticleDeformer.cpp
+    ParticleDeformer.cpp \
+    PartCorresponder.cpp
 
 # SVG viewer
 HEADERS += svgview.h

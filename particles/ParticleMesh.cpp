@@ -43,7 +43,7 @@ ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(N
 		}
 	};
 
-	// Read OBJ file
+	/// Read OBJ file:
 	std::vector<TempMesh> parts;
 	parts.push_back( TempMesh() ); 
 	bool isReadFaces = false;
@@ -72,11 +72,17 @@ ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(N
 	if(parts.back().verts.empty()) parts.resize(parts.size()-1);
 	if(parts.empty()) return;
 
-	// Place parts within positive unite cube
+	/// Place parts within positive unite cube
 	Eigen::AlignedBox3d allbox;
 	for(auto & part : parts) for(auto & v : part.verts) allbox.extend(v);
 	double s = allbox.diagonal().maxCoeff();
-	for(auto & part : parts) for(auto & v : part.verts) v = (v - allbox.min()) / s;
+	for(auto & part : parts){
+		for(auto & v : part.verts) 
+		{
+			double eps = 1e-6;
+			v = (v - allbox.min() + (Vector3(1,1,1)*eps)) / (s + eps);
+		}
+	}
 
 	// Default values for the unit grid
 	grid.gridsize = gridsize;
@@ -85,7 +91,7 @@ ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(N
 	grid.occupied.clear();
 	grid.occupied.resize( pow(gridsize,3), EMPTY_VOXEL );
 
-	// Go over the parts
+	/// Go over voxelization of all parts
 	for(size_t i = 0; i < parts.size(); i++)
 	{
 		auto & part = parts[i];
@@ -114,7 +120,15 @@ ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(N
 		}
 	}
 
+	/// Post-processing
 	init( true );
+
+	/// Segment once to obtain connectivity
+	SegmentGraph neiGraph;
+	auto segments = this->segmentToComponents(toGraph(), neiGraph);
+
+	/// Compute particle distance from floor
+	computeDistanceToFloor();
 }
 
 void ParticleMesh::init( bool isAssignedSegment )
@@ -327,14 +341,24 @@ std::vector< std::vector< std::vector<float> > > ParticleMesh::toGrid()
 
 void ParticleMesh::distort()
 {
-	Eigen::AlignedBox3d box = bbox();
-
+	/*Eigen::AlignedBox3d box = bbox();
 	for(auto & particle : particles)
 	{
 		double t = (particle.pos.x() - bbox().min().x()) / box.sizes().x();
 		double d = sin( t * 10 );
 		Vector3 delta( 0, 0, d );
 		particle.pos += delta;
+	}*/
+
+	SegmentGraph neiGraph;
+	auto segments = this->segmentToComponents(toGraph(), neiGraph);
+
+	for(auto & seg : segments)
+	{
+		Vector3 delta = Vector3::Random().normalized() * 0.1;
+
+		for(auto & v : seg.vertices)
+			particles[v].pos += delta;
 	}
 }
 
@@ -343,7 +367,7 @@ ParticleMesh::~ParticleMesh()
 	if(surface_mesh) delete surface_mesh;
 }
 
-SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected )
+SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected ) const
 {
 	SegmentGraph graph = SegmentGraph();
 
@@ -365,7 +389,7 @@ SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected )
 	}
 	tree.build();
 
-	for (auto & pid : pindices)
+	for(auto & pid : pindices)
 	{
 		auto & p = particles[pid];
 
@@ -385,11 +409,14 @@ SegmentGraph ParticleMesh::toGraph( SegmentGraph::vertices_set selected )
 	return graph;
 }
 
-std::vector< double > ParticleMesh::agd( int numStartPoints )
+std::vector< double > ParticleMesh::agd( int numStartPoints, SegmentGraph graph ) const
 {
-	auto graph = toGraph();
+	if( graph.vertices.empty() ) graph = toGraph();
 
-	std::vector<double> sum_distances( particles.size(), 0.0 );
+	std::vector<size_t> vertex_pool;
+	for(auto v : graph.vertices) vertex_pool.push_back(v);
+
+	std::vector<double> sum_distances( vertex_pool.size(), 0.0 );
 
 	// Random staring points
 	std::vector<int> v;
@@ -398,9 +425,9 @@ std::vector< double > ParticleMesh::agd( int numStartPoints )
 	{
 		std::random_device rd;
 		std::mt19937 gen(rd());
-		std::uniform_int_distribution<> dis(0, int(particles.size()-1));
+		std::uniform_int_distribution<> dis(0, int(vertex_pool.size()-1));
 		for(int i = 0; i < numStartPoints; i++)
-			v.push_back( dis(gen) );
+			v.push_back( vertex_pool[dis(gen)] );
 
 		// Avoid duplicates
 		std::sort(v.begin(), v.end());
@@ -408,20 +435,27 @@ std::vector< double > ParticleMesh::agd( int numStartPoints )
 		v.erase(last, v.end());
 	}
 	else
-		for(size_t i = 0; i < particles.size(); i++) v.push_back(int(i));
+		for(size_t i = 0; i < vertex_pool.size(); i++) v.push_back( vertex_pool[i] );
 
 	// Sum distances to other
 	#pragma omp parallel for
-	for(int pi = 0; pi < (int)v.size(); pi++){
-		auto curGraph = graph;
-		curGraph.DijkstraComputePaths(v[pi]);
-		for(size_t pj = 0; pj < particles.size(); pj++)
-			sum_distances[pj] += curGraph.min_distance[pj];
+	for(int pi = 0; pi < (int)v.size(); pi++)
+	{
+		SegmentGraph curGraph;
+		std::map<size_t,size_t> vmap;
+		for(auto v : graph.vertices) vmap[v] = vmap.size();
+		for(auto e : graph.GetEdgesSet()) curGraph.AddEdge( vmap[e.index], vmap[e.target], 1 );
+
+		curGraph.DijkstraComputePaths( vmap[v[pi]] );
+
+		for(size_t pj = 0; pj < vertex_pool.size(); pj++)
+			sum_distances[pj] += curGraph.min_distance[ pj ];
 	}
 
 	// Average
 	auto avg_distances = sum_distances;
-	for(auto & p : particles) avg_distances[p.id] = sum_distances[p.id] / particles.size();
+	for(size_t i = 0; i < vertex_pool.size(); i++) 
+		avg_distances[i] = sum_distances[i] / vertex_pool.size();
 
 	// Bounds
 	double minDist = *std::min_element(avg_distances.begin(),avg_distances.end());
@@ -515,6 +549,12 @@ void ParticleMesh::computeDistanceToFloor()
 	auto path = g.DijkstraGetShortestPathsTo( tipPoint - g.min_distance.begin() );
 
 	for(auto p : path) if(p < particles.size()) pathFromFloor.push_back(p);
+
+	// Visualize 
+	/* for(auto & p : particles){
+		p.flag = VIZ_WEIGHT;
+		p.weight = p.measure;
+	}*/
 }
 
 QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
@@ -618,6 +658,33 @@ QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGra
 		result[part.uid] = part;
 
 	return result;
+}
+
+std::vector< SegmentGraph > ParticleMesh::getEdgeParticlesOfSegment( const SegmentGraph & segment ) const
+{
+	auto graph = segment;
+
+	// Remove edges between a regular particle and an edge particle
+	for( auto e : graph.GetEdgesSet() )
+	{
+		bool isEdge1 = particles[e.index].neighbour == -1;
+		bool isEdge2 = particles[e.target].neighbour == -1;
+
+		if(isEdge1 != isEdge2)
+			graph.removeEdge( e.index, e.target );
+	}
+
+	auto allparts = graph.toConnectedParts();
+
+	std::vector< SegmentGraph > edgeparts;
+	for(auto & part : allparts)
+	{
+		if(!part.vertices.size()) continue;
+		if(particles[*part.vertices.begin()].neighbour == -1) continue;
+		edgeparts.push_back( part );		
+	}
+
+	return edgeparts;
 }
 
 std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )

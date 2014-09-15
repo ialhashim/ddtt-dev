@@ -34,6 +34,7 @@ struct Particle : public Serializable
 	int segment, neighbour;
     Scalar measure, weight, alpha;
 	Scalar avgDiameter, flat;
+	QVector<float> data;
 
 	size_t medialID;
 	bool isMedial;

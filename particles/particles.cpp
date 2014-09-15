@@ -817,11 +817,10 @@ void particles::create()
 		if(pw->pmeshes.size() > 1) 
 		{
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
-			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+			for(auto d : pc.debug) drawArea()->addRenderObject(d);
 
-			// DEBUG:
-			//pw->pmeshes.front()->property["debug"].setValue(true);
-			//for(auto d : pc.debug + pd.debug) drawArea()->addRenderObject(d);
+			//ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+			//for(auto d : pd.debug) drawArea()->addRenderObject(d);
 		}
 
 		pw->isReady = true;
@@ -861,7 +860,7 @@ void particles::decorate()
 			s->drawParticles( drawArea()->camera() );
 			s->drawDebug( *drawArea() );
 
-			//glTranslated(1, 0, 0);
+			glTranslated(1, 0, 0);
 		}
 
 		glPopMatrix();
@@ -1080,6 +1079,13 @@ bool particles::keyPressEvent(QKeyEvent*e)
 	if(e->key() == Qt::Key_Space)
 	{
 		spheres.clear();
+
+		ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+		if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+
+		auto & pmesh = pwidget->pmeshes.front();
+
+		pmesh->distort();
 	}
 
 	if(e->key() == Qt::Key_S)

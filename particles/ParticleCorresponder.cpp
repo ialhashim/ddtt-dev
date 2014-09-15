@@ -1,4 +1,5 @@
 #include "ParticleCorresponder.h"
+#include "PartCorresponder.h"
 #include "Bounds.h"
 
 #pragma warning( disable : 4005 4100 4267 4616 4700 4291 4189 4267 4996 4267 ) // its not my code..
@@ -12,13 +13,32 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 	for(auto & p : sA->particles) p.correspondence = 0;
 	for(auto & p : sB->particles) p.correspondence = 0;
 
-	basicCorrespondence();
-
+	//basicCorrespondence();
 	//descriptorCorrespondence();
+	partToPartCorrespondence();
 
 	// Compute relative positions
 	for( auto & particle : sA->particles )	particle.relativePos = sA->relativePos( particle.id );
 	for( auto & particle : sB->particles )	particle.relativePos = sB->relativePos( particle.id );
+}
+
+void ParticleCorresponder::partToPartCorrespondence()
+{
+	SegmentGraph neiGraphA, neiGraphB;
+
+	auto segmentsA = sA->segmentToComponents(sA->toGraph(), neiGraphA);
+	auto segmentsB = sB->segmentToComponents(sB->toGraph(), neiGraphB);
+
+	int count = std::min(segmentsA.keys().size(), segmentsB.keys().size());
+
+	for(int i = 0; i < count ; i++)
+	{
+		int segA = segmentsA.keys()[i];
+		int segB = segmentsB.keys()[i];
+
+		PartCorresponder pc( sA, segmentsA[segA], sB, segmentsB[segB] );
+		for(auto d : pc.debug) debug << d;
+	}
 }
 
 void ParticleCorresponder::descriptorCorrespondence()

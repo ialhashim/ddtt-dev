@@ -54,13 +54,14 @@ public:
 	enum SeedType{ RANDOM, PLUS_PLUS, GROUND, DESCRIPTOR };
 	std::vector<size_t> specialSeeding( SeedType seedType, int K, SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
 
-	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
+	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() ) const;
 
-	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );
+	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );	
+	std::vector< SegmentGraph > getEdgeParticlesOfSegment( const SegmentGraph & segment ) const;
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
-	std::vector< double > agd( int numStartPoints );
+	std::vector< double > agd( int numStartPoints, SegmentGraph graph = SegmentGraph() ) const;
 	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step = 2);
 	Particle<Vector3> pointToParticle( const Vector3 & point );
 	std::vector< Vector3 > particlesCorners( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );

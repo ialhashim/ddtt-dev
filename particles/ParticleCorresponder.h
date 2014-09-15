@@ -8,6 +8,7 @@ public:
 
     ParticleMesh *sA, *sB;
 
+	void partToPartCorrespondence();
 	void descriptorCorrespondence();
 	void basicCorrespondence();
 
