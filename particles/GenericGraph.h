@@ -578,22 +578,20 @@ namespace GenericGraphs{
 			return connectedComponents[max_i];
 		}
 
-		void subGraph(Graph & g, const std::set<vertex_t> & explored)
+		template<typename Container>
+		void subGraph(Graph & g, const Container & explored)
 		{
-			for(typename std::set<vertex_t>::const_iterator vi = explored.begin(); vi != explored.end(); vi++)
+			for(auto vi : explored)
 			{
-				std::list<Edge> adj = g.adjacency_map[*vi];
+				std::list<Edge> adj = g.adjacency_map[vi];
 
 				for(typename std::list<Edge>::iterator e = adj.begin(); e != adj.end(); e++)
-					this->AddEdge(*vi, e->target, e->weight);
+					this->AddEdge(vi, e->target, e->weight);
 			}
 
 			// Isolated nodes
-			if(this->vertices.empty())
-			{
-				for(typename std::set<vertex_t>::const_iterator vi = explored.begin(); vi != explored.end(); vi++)
-					this->AddVertex( *vi );
-			}
+			for(auto vi : explored)
+				this->AddVertex( vi );
 		}
 
 		std::vector< Graph <vertex_t,weight_t> > toConnectedParts()
