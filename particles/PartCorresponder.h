@@ -11,4 +11,6 @@ public:
     SegmentGraph segA, segB;
 
     QVector<RenderObject::Base*> debug;
+
+	QVector< QPair<int,int> > distributeVectors(int x, int y);
 };

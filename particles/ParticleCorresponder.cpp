@@ -31,10 +31,10 @@ void ParticleCorresponder::partToPartCorrespondence()
 
 	int count = std::min(segmentsA.keys().size(), segmentsB.keys().size());
 
-	for(int i = 0; i < count ; i++)
+	//for(int i = 0; i < count ; i++)
 	{
-		int segA = segmentsA.keys()[i];
-		int segB = segmentsB.keys()[i];
+		int segA = segmentsA.keys()[1];
+		int segB = segmentsB.keys()[1];
 
 		PartCorresponder pc( sA, segmentsA[segA], sB, segmentsB[segB] );
 		for(auto d : pc.debug) debug << d;
