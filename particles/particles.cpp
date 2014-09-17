@@ -846,7 +846,7 @@ void particles::decorate()
 		sphere->draw();
 	}
 
-	bool isDebugVisualization = false;
+	bool isDebugVisualization = !pwidget->ui->isShowBlend->isChecked();
 	if(pwidget->pmeshes.size() > 1 && pwidget->pmeshes.front()->property["debug"].toBool())
 		isDebugVisualization = true;
 
@@ -867,7 +867,6 @@ void particles::decorate()
 
 		return;
 	}
-
 
 	// Experimental
 	static bool isForward = true;
@@ -905,7 +904,7 @@ void particles::decorate()
 		mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
 	}
 
-	if( !pwidget->ui->isOneSided->isChecked() )
+	/*if( !pwidget->ui->isOneSided->isChecked() )
 	{
 		for(auto & particle : jmesh->particles){
 			//mixedPoints.push_back( imesh->realPos( AlphaBlend((1.0 - alpha), particle.relativePos, 
@@ -913,7 +912,7 @@ void particles::decorate()
 
 			mixedPoints.push_back(AlphaBlend((1.0 - alpha), particle.pos, imesh->particles[particle.correspondence].pos).cast<float>());
 		}
-	}
+	}*/
 
 	// Test meshing
 	/*if( false )

@@ -6,6 +6,8 @@
 #include "flann/flann.hpp"
 using namespace flann;
 
+#include "munkres.h"
+
 ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
     sA(pmeshA), sB(pmeshB)
 {
@@ -29,14 +31,53 @@ void ParticleCorresponder::partToPartCorrespondence()
 	auto segmentsA = sA->segmentToComponents(sA->toGraph(), neiGraphA);
 	auto segmentsB = sB->segmentToComponents(sB->toGraph(), neiGraphB);
 
-	int count = std::min(segmentsA.keys().size(), segmentsB.keys().size());
+	auto keysA = segmentsA.keys().toVector();
+	auto keysB = segmentsB.keys().toVector();
 
-	for(int i = 0; i < count ; i++)
+	Eigen::MatrixXd similarity(keysA.size(), keysB.size());
+
+	for(int i = 0; i < keysA.size(); i++)
 	{
-		int segA = segmentsA.keys()[i];
-		int segB = segmentsB.keys()[i];
+		auto & segA = segmentsA[keysA[i]];
+		auto boxA = sA->computeSegmentBoundingBox(segA);
 
-		PartCorresponder pc( sA, segmentsA[segA], sB, segmentsB[segB] );
+		for(int j = i + 1; j < keysB.size(); j++)
+		{
+			auto & segB = segmentsB[keysB[j]];
+			auto boxB = sB->computeSegmentBoundingBox(segB);
+
+			double s = (boxA.center() - boxB.center()).norm();
+
+			similarity(i,j) = similarity(j,i) = s;
+		}
+	}
+
+	munkres::Matrix<double> mat(keysA.size(), keysB.size());
+	for(size_t i = 0; i < similarity.rows(); i++)
+		for(size_t j = 0; j < similarity.cols(); j++)
+			mat(i,j) = similarity(i,j);
+	munkres::Munkres hung;
+	hung.solve( mat );
+
+	for(int i = 0; i < keysA.size(); i++)
+	{
+		unsigned int si, sj;
+		si = keysA[i];
+
+		auto sidx = hung.solution(i);
+		if(sidx > keysB.size())
+		{
+			std::vector<double> row;
+			for(int j = 0; j < keysB.size(); j++) row.push_back( similarity(i,j) );
+			sj = std::min_element(row.begin(),row.end()) - row.begin();
+		}
+		else
+			sj = keysB[sidx];
+
+		auto & segA = segmentsA[si];
+		auto & segB = segmentsB[sj];
+
+		PartCorresponder pc( sA, segA, sB, segB );
 		for(auto d : pc.debug) debug << d;
 	}
 }

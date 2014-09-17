@@ -58,13 +58,14 @@ public:
 
 	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );	
 	std::vector< SegmentGraph > getEdgeParticlesOfSegment( const SegmentGraph & segment ) const;
+	Eigen::AlignedBox3d computeSegmentBoundingBox( const SegmentGraph & segment ) const;
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
 	std::vector< double > agd( int numStartPoints, SegmentGraph graph = SegmentGraph() ) const;
 	std::vector<size_t> neighbourhood( Particle<Vector3> & p, int step = 2);
 	Particle<Vector3> pointToParticle( const Vector3 & point );
-	std::vector< Vector3 > particlesCorners( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() );
+	std::vector< Vector3 > particlesCorners( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() ) const;
 	std::vector< Vector3 > particlesPositions(const std::set<unsigned int> & P);
 
 	std::vector< std::pair< double, size_t > > closestParticles( const Vector3 & point, double threshold = 1e12 );

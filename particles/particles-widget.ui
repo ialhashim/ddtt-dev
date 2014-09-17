@@ -245,9 +245,9 @@
     </widget>
    </item>
    <item row="35" column="0">
-    <widget class="QCheckBox" name="isOneSided">
+    <widget class="QCheckBox" name="isShowBlend">
      <property name="text">
-      <string>One sided blend</string>
+      <string>Show blend</string>
      </property>
     </widget>
    </item>

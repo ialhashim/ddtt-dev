@@ -687,6 +687,13 @@ std::vector< SegmentGraph > ParticleMesh::getEdgeParticlesOfSegment( const Segme
 	return edgeparts;
 }
 
+Eigen::AlignedBox3d ParticleMesh::computeSegmentBoundingBox(const SegmentGraph & segment) const
+{
+	Eigen::AlignedBox3d box;
+	for(auto p : particlesCorners(segment.vertices)) box.extend(p);
+	return box;
+}
+
 std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )
 {
 	if(!cachedAdj[p.id][step].empty())
@@ -868,7 +875,7 @@ Particle<Vector3> ParticleMesh::pointToParticle( const Vector3 & point )
 	return particles[ mortonToParticleID[m] ];
 }
 
-std::vector< Vector3 > ParticleMesh::particlesCorners( SegmentGraph::vertices_set selected )
+std::vector< Vector3 > ParticleMesh::particlesCorners( SegmentGraph::vertices_set selected ) const
 {
 	double gridunit = grid.unitlength;
 	double halfgridunit = 0.5 * gridunit;

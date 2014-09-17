@@ -14,7 +14,7 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 	QVector<SegmentGraph*> segment; segment << &segA << &segB;
 	QVector<Slices> slices( input.size() ) ;
 
-	int MAX_SLICE_COUNT = 10;
+	int MAX_SLICE_COUNT = 15;
 
 	/// Compute slices for each input shape:
 	for(size_t s = 0; s < input.size(); s++)
