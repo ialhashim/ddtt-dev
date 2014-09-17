@@ -129,6 +129,8 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 				sortedChunks << sortedIndices;
 			}
 
+			if(sortedChunks.front().empty() || sortedChunks.back().empty()) continue;
+
 			// Now divide and assign
 			auto assignments = distributeVectors( sortedChunks.front().size(), sortedChunks.back().size() );
 
