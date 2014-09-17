@@ -872,7 +872,7 @@ void particles::decorate()
 	// Experimental
 	static bool isForward = true;
 	static double alpha = 0;
-	if(isForward) alpha += 0.005; else alpha -= 0.005;
+	if(isForward) alpha += 0.01; else alpha -= 0.01;
 	if(alpha > 1.0){alpha = 1.0;isForward = false;}
 	if(alpha < 0.0){alpha = 0.0;isForward = true;}
 

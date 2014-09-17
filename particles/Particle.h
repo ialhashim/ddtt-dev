@@ -25,6 +25,7 @@ struct Particle : public Serializable
 	{
 		id = -1; // an invalid ID
 		correspondence = -1;
+		isMatched = false;
 	}
 
 	size_t id, correspondence;
@@ -34,11 +35,12 @@ struct Particle : public Serializable
 	int segment, neighbour;
     Scalar measure, weight, alpha;
 	Scalar avgDiameter, flat;
-	QVector<float> data;
 
 	size_t medialID;
 	bool isMedial;
 	Vector3 medialPos;
+
+	bool isMatched;
 
 	// Serialization:
 	void serialize(QDataStream& os) const {

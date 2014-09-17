@@ -1,26 +1,7 @@
 #include "PartCorresponder.h"
 #include "Bounds.h"
 
-#include <NanoKdTree.h>
-
-struct SliceChunk{
-	Eigen::AlignedBox3d box;
-	SegmentGraph g;
-	NanoKdTree * tree;
-	std::vector<size_t> vmap;
-	SliceChunk(const SegmentGraph & graph) : g(graph), tree(NULL) {}
-	~SliceChunk(){ if(tree) delete tree; }
-};
-
-struct Slice{
-	std::vector<SliceChunk> chunks;
-	void chunksFromGraphs(const std::vector<SegmentGraph> & graphs){
-		for(auto & graph : graphs)
-			chunks.push_back( SliceChunk(graph) );
-	}
-};
-
-typedef QVector<Slice> Slices;
+int slice_uid = 0;
 
 PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
                                    ParticleMesh *pmeshB, SegmentGraph segB)
@@ -99,6 +80,8 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 					chunk.vmap.push_back( v );
 				}
 				chunk.tree->build();
+
+				//auto bs = new starlab::BoxSoup;bs->addBox( chunk.box );debug<<bs;
 			}
 		}
 	}
@@ -155,57 +138,64 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 				auto & chunk_i = slice_i.chunks[assignment.first];
 				auto & chunk_j = slice_j.chunks[assignment.second];
 
-				for( auto vi : chunk_i.g.vertices )
-				{
-					Vector3 p = input[si]->particles[vi].relativePos;
-					auto vj = chunk_j.vmap[ chunk_j.tree->closest( p ) ];
-
-					input[si]->particles[ vi ].correspondence = vj;
-				}
+				correspondChunks( chunk_i, input[si], chunk_j, input[sj] );
 			}
 		}
 	}
+}
 
-	/// Correspond particles:
-	/*
-	for(size_t s = 0; s < input.size(); s++)
+void PartCorresponder::correspondChunks( SliceChunk & chunk_i, ParticleMesh* mesh_i, 
+										SliceChunk & chunk_j, ParticleMesh* mesh_j )
+{
+	QVector<ParticleMesh*> input; input << mesh_i << mesh_j;
+	QVector<SliceChunk*> chunk; chunk << &chunk_i << &chunk_j;
+
+	for(size_t si = 0; si < input.size(); si++)
 	{
-		auto si = s, sj = (si+1) % input.size();
+		auto sj = (si+1) % input.size();
 
-		for(size_t l = 0; l < slices[si].size(); l++)
+		std::vector<size_t> closestMap( chunk[si]->vmap.size(), -1 );
+
+		// Find closest particle
+		//#pragma omp parallel for
+		for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
 		{
-			auto & slice_i = slices[si][l];
-			double t = double(l) / std::max(1, (slices[si].size()-1));
-			auto & slice_j = slices[sj][t * (slices[sj].size()-1)];
+			auto vi = chunk[si]->vmap[i];
+			auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( input[si]->particles[vi].relativePos )];
 
-
+			closestMap[i] = vj;
 		}
 
-		for(size_t l = 0; l < layer[si].size(); l++)
+		// Match particles one-to-one
+		for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
 		{
+			auto vi = chunk[si]->vmap[i];
+			auto vj = closestMap[i];
 
-			int idxj = t * (layer[sj].size()-1);
-			auto & targetLayer = layer[sj][idxj].front();
-			auto & targetTree = tree[sj][idxj].front();
+			auto pi = &input[si]->particles[vi];
+			auto pj = &input[sj]->particles[vj];
 
-			std::vector<size_t> vjmap;
-			for(auto v : targetLayer.vertices) vjmap.push_back( v );
-
-			for(size_t k = 0; k < layer[si][l].size(); k++)
+			if( pi->isMatched )
 			{
-				auto & curLayer = layer[si][l][k];
-				auto & curBox = lbox[si][l][k];
-
-				for( auto vi : curLayer.vertices )
-				{
-					Vector3 p = (input[si]->particles[vi].pos - curBox.min()).array() / curBox.sizes().array();
-					auto vj = vjmap[targetTree->closest( p )];
-
-					input[si]->particles[vi].correspondence = vj;
-				}
+				input[si]->particles.push_back( *pi );
+				pi = &input[si]->particles.back();
+				pi->id = input[si]->particles.size()-1;
 			}
+
+			if( pj->isMatched )
+			{
+				input[sj]->particles.push_back( *pj );
+				pj = &input[sj]->particles.back();
+				pj->id = input[sj]->particles.size()-1;
+			}
+
+			pi->correspondence = pj->id;
+			pj->correspondence = pi->id;
+
+			pj->isMatched = true;
+			pi->isMatched = true;
 		}
-	}*/
+	}
 }
 
 QVector< QPair<int,int> > PartCorresponder::distributeVectors(int x, int y)
