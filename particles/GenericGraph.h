@@ -6,6 +6,7 @@
 #include <list>
 #include <queue>
 #include <set>
+#include <unordered_set>
 #include <functional>
 
 #undef min
@@ -60,7 +61,22 @@ namespace GenericGraphs{
 			}
 		};
 
-		typedef std::set<Edge,CompareEdge> EdgesSet;
+		template<typename T>
+		static inline std::size_t make_hash(const T& v){
+			return std::hash<T>()(v);
+		}
+		static inline void hash_combine(std::size_t& h, const std::size_t& v){
+			h ^= v + 0x9e3779b9 + (h << 6) + (h >> 2);
+		}
+		struct hashEdge{
+			size_t operator()(const Edge& e) const{
+				size_t h = make_hash(e.index);
+				hash_combine(h, make_hash(e.target));
+				return h;
+			}
+		};
+
+		typedef std::unordered_set<Edge,hashEdge> EdgesSet;
 		typedef std::set<vertex_t> vertices_set;
 
 	private:
@@ -441,14 +457,21 @@ namespace GenericGraphs{
 			return result;
 		}
 
-		EdgesSet GetEdgesSet()
+		EdgesSet GetEdgesSet() const
 		{
-			std::vector<Edge> allEdges = GetEdges();
-
 			EdgesSet result;
 
-			for(typename std::vector<Edge>::iterator it = allEdges.begin(); it != allEdges.end(); it++)
-				result.insert(*it);
+			for(auto & edgeList : adjacency_map)
+			{
+				auto v1 = edgeList.first;
+				for(auto & e : edgeList.second)
+				{
+					auto ej = Edge(Min(e.target, v1), e.weight, Max(e.target, v1));
+
+					ej.property = e.property;
+					result.insert(ej);
+				}
+			}
 
 			return result;
 		}
@@ -471,7 +494,7 @@ namespace GenericGraphs{
 			return leaves;
 		}
 
-		std::vector<vertex_t> BFS( vertex_t start )
+		std::vector<vertex_t> BFS( vertex_t start, int limit = -1 )
 		{
 			std::vector<vertex_t> visitOrder;
 
@@ -496,6 +519,9 @@ namespace GenericGraphs{
 					explored[w] = true;
 					toVisit.push(w);
 				}
+
+				if(limit > 0 && visitOrder.size() > limit)
+					break;
 			}
 
 			return visitOrder;

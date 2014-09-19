@@ -88,4 +88,15 @@ public:
 			Rank[jrep]++;
 		}
 	}
+
+	std::vector< std::vector<int> > Groups()
+	{
+		std::map< int, std::vector<int> > groups;
+		for(size_t i = 0; i < Parent.size(); i++)
+			groups[ Parent[i] ].push_back(i);
+
+		std::vector< std::vector<int> > groupsVector;
+		for(auto g : groups) groupsVector.push_back(g.second);
+		return groupsVector;
+	}
 };

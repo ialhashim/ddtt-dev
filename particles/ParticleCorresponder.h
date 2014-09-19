@@ -1,16 +1,13 @@
 #pragma once
 #include "ParticleMesh.h"
+#include "PartCorresponder.h"
 
 class ParticleCorresponder
 {
 public:
     ParticleCorresponder( ParticleMesh * pmeshA, ParticleMesh * pmeshB );
-
+	Particles partToPartCorrespondence( const QVector< std::pair< size_t,size_t> > & partToPartAssignments );
     ParticleMesh *sA, *sB;
-
-	void partToPartCorrespondence();
-	void descriptorCorrespondence();
-	void basicCorrespondence();
 
     QVector<RenderObject::Base*> debug;
 };

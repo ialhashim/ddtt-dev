@@ -1,15 +1,16 @@
 #pragma once
+#include <QSharedPointer>
 #include "ParticleMesh.h"
 
 #include <NanoKdTree.h>
+
 extern int slice_uid;
 struct SliceChunk{
 	Eigen::AlignedBox3d box;
 	SegmentGraph g;
-	NanoKdTree * tree;
+	QSharedPointer<NanoKdTree> tree;
 	std::vector<size_t> vmap;
-	SliceChunk(const SegmentGraph & graph) : g(graph), tree(NULL), uid(slice_uid++) {}
-	~SliceChunk(){ if(tree) delete tree; }
+	SliceChunk(const SegmentGraph & graph) : g(graph), uid(slice_uid++) {}
 	int uid;
 	QMap<QString,QVariant> property;
 };
@@ -21,20 +22,18 @@ struct Slice{
 			chunks.push_back( SliceChunk(graph) );
 	}
 };
-
 typedef QVector<Slice> Slices;
+
+Q_DECLARE_METATYPE( Segments );
+Q_DECLARE_METATYPE( Slices );
 
 class PartCorresponder
 {
 public:
-    PartCorresponder( ParticleMesh * pmeshA, SegmentGraph segA,
-                      ParticleMesh * pmeshB, SegmentGraph segB );
+	static Slices computeSlices( ParticleMesh * input, const SegmentGraph & seg );
 
-    ParticleMesh *sA, *sB;
-    SegmentGraph segA, segB;
+	static void correspondSegments( const QPair<size_t,size_t> & segmentsPair, 
+		const QVector<ParticleMesh *> & input, QVector<Particles> & particles );
 
-    QVector<RenderObject::Base*> debug;
-
-	QVector< QPair<int,int> > distributeVectors(int x, int y);
-	void correspondChunks( SliceChunk & chunk_i, ParticleMesh* mesh_i, SliceChunk & chunk_j, ParticleMesh* mesh_j );
+	static QVector< QPair<int,int> > distributeVectors(int x, int y);
 };

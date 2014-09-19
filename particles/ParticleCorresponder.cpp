@@ -1,169 +1,93 @@
 #include "ParticleCorresponder.h"
 #include "PartCorresponder.h"
 #include "Bounds.h"
+#include "disjointset.h"
+#include "myglobals.h"
 
-#pragma warning( disable : 4005 4100 4267 4616 4700 4291 4189 4267 4996 4267 ) // its not my code..
-#include "flann/flann.hpp"
-using namespace flann;
-
-ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
-    sA(pmeshA), sB(pmeshB)
+ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *pmeshB) : sA(pmeshA), sB(pmeshB)
 {
-	// Clear correspondences
-	for(auto & p : sA->particles) p.correspondence = 0;
-	for(auto & p : sB->particles) p.correspondence = 0;
+	QVector<ParticleMesh*> input;
+	input << sA << sB;
 
-	//basicCorrespondence();
-	//descriptorCorrespondence();
-	partToPartCorrespondence();
-
-	// Compute relative positions
-	for( auto & particle : sA->particles )	particle.relativePos = sA->relativePos( particle.id );
-	for( auto & particle : sB->particles )	particle.relativePos = sB->relativePos( particle.id );
-}
-
-void ParticleCorresponder::partToPartCorrespondence()
-{
-	SegmentGraph neiGraphA, neiGraphB;
-
-	auto segmentsA = sA->segmentToComponents(sA->toGraph(), neiGraphA);
-	auto segmentsB = sB->segmentToComponents(sB->toGraph(), neiGraphB);
-
-	auto keysA = segmentsA.keys().toVector();
-	auto keysB = segmentsB.keys().toVector();
-
-	Eigen::MatrixXd similarity(keysA.size(), keysB.size());
-
-	for(int i = 0; i < keysA.size(); i++)
+	/// Compute slices for each segment of shape:
+	#pragma omp parallel for
+	for(int i = 0; i < input.size(); i++)
 	{
-		auto & segA = segmentsA[keysA[i]];
-		auto boxA = sA->computeSegmentBoundingBox(segA);
+		SegmentGraph neiGraph;
+		auto & segments = input[i]->segmentToComponents( input[i]->toGraph(), neiGraph );
 
-		for(int j = 0; j < keysB.size(); j++)
+		for(auto & seg : segments)
+			seg.property["slices"].setValue( PartCorresponder::computeSlices( input[i], seg ) );
+		
+		input[i]->property["segments"].setValue( segments );
+	}
+
+	// Grouping Experiment
+	{
+		for(int i = 0; i < input.size(); i++)
 		{
-			auto & segB = segmentsB[keysB[j]];
-			auto boxB = sB->computeSegmentBoundingBox(segB);
+			double box_z = input[i]->bbox().sizes().z();
+			auto & segments = input[i]->property["segments"].value<Segments>();
 
-			double s = (boxA.center() - boxB.center()).norm();
+			auto segIDs = segments.keys();
+			std::map<size_t,size_t> segMap;
+			for(auto id : segIDs) segMap[id] = segMap.size();
 
-			similarity(i,j) = s;
-		}
-	}
+			NanoKdTree alongZ;
+			for( auto & s : segments ){
+				Vector3 p(0,0,input[i]->segmentBoundingBox(s).center().z() / box_z);
+				alongZ.addPoint( p );
+			}
+			alongZ.build();
 
-	for(int i = 0; i < keysA.size(); i++)
-	{
-		auto & segA = segmentsA[keysA[i]];
-
-		int j = 0;
-		std::vector<double> row;
-		for(int c = 0, r = i; c < similarity.cols(); c++) row.push_back(similarity(r,c));
-		j = std::min_element(row.begin(),row.end()) - row.begin();
-
-		auto & segB = segmentsB[keysB[j]];
-
-		PartCorresponder pc( sA, segA, sB, segB );
-		for(auto d : pc.debug) debug << d;
-	}
-}
-
-void ParticleCorresponder::descriptorCorrespondence()
-{
-	typedef Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor> MatrixXf;
-	typedef Index< L2<float> > FlannIndex;
-
-	int knn = 12;	
-	flann::SearchParams params;
-	params.cores = omp_get_num_procs();
-
-	QVector<ParticleMesh*> inputs;
-	inputs << sA << sB;
-
-	QVector<MatrixXf*> matrices;
-	QVector<FlannIndex*> trees;
-
-	for(auto & pmesh : inputs)
-	{
-		// Fill dataset
-		auto m = new MatrixXf( pmesh->particles.size(), pmesh->desc.front().size() );
-		for(auto & p : pmesh->particles) 
-			m->row(p.id) = Eigen::Map<Eigen::VectorXf>(&pmesh->desc[p.id][0], pmesh->desc[p.id].size());
-		Matrix<float> dataset( m->data(), m->rows(), m->cols() );
-
-		// construct index using 4 kd-trees
-		auto index = new FlannIndex(dataset, flann::KDTreeIndexParams());
-		index->buildIndex();
-
-		trees << index;
-		matrices << m;
-	}
-
-	for(size_t i = 0; i < inputs.size(); i++)
-	{
-		auto j = (i+1) % inputs.size();
-		auto pi = inputs[i], pj = inputs[j];
-
-		std::vector< std::vector<int> > indices;
-		std::vector< std::vector<float> > dists;
-
-		// Query the 'j's in the 'i's
-		MatrixXf q( pj->particles.size(), pj->desc.front().size() );
-		for(auto & p : pj->particles) q.row(p.id) = Eigen::Map<Eigen::VectorXf>(&pj->desc[p.id][0], pj->desc[p.id].size());
-		trees[i]->knnSearch( Matrix<float>( q.data(), q.rows(), q.cols() ), indices, dists, knn, params );
-
-		for(auto & p : pi->particles) p.weight = DBL_MAX;
-
-		for(auto & p : pj->particles)
-		{
-			for(size_t w = 0; w < indices[p.id].size(); w++)
+			// Group similar segments
+			DisjointSet disjoint( segments.size() );
+			
+			for(int sid = 0; sid < segIDs.size(); sid++)
 			{
-				int idx = indices[p.id][w];
-				double dist = dists[p.id][w];
+				auto box = input[i]->segmentBoundingBox( segments[ segIDs[sid] ] );
+				Vector3 p(0,0,box.center().z() / box_z);
 
-				if( dist < pi->particles[idx].weight )
+				KDResults matches;
+				alongZ.ball_search(p, 0.1, matches);
+
+				double threshold = (box.sizes().norm() * 0.1);
+
+				for(auto match : matches)
 				{
-					pi->particles[idx].correspondence = p.id;
-					pi->particles[idx].weight = dist;
+					if(match.first == sid) continue;
+					auto boxOther = input[i]->segmentBoundingBox( segments[ segIDs[match.first] ] );
+
+					// Join if very similar
+					double diff = (box.sizes() - boxOther.sizes()).norm();
+					if(diff > threshold) continue;
+
+					disjoint.Union(sid, match.first);
 				}
 			}
+			
+			for(auto group : disjoint.Groups())
+			{
+				std::vector<size_t> groupIDs;
+				for(auto memeber : group) groupIDs.push_back( segIDs[memeber] );
+
+				auto bs = new starlab::BoxSoup;
+				Eigen::AlignedBox3d groupBox;
+				for(auto segID : groupIDs) groupBox.extend( input[i]->segmentBoundingBox( segments[segID] ) );
+				bs->addBox(groupBox);
+				debug << bs;
+			}
+
+			break;
 		}
 	}
 }
 
-void ParticleCorresponder::basicCorrespondence()
+Particles ParticleCorresponder::partToPartCorrespondence( const QVector< std::pair< size_t,size_t> > & partToPartAssignments )
 {
-	QVector<ParticleMesh*> inputs;
-	inputs << sA << sB;
+	Particles result;
 
-	// KD-tree	
-	QVector<NanoKdTree*> trees;
-	for(auto & pmesh : inputs)
-	{
-		auto relativeKdtree = new NanoKdTree;
 
-		Eigen::AlignedBox3d box = pmesh->bbox();
-		Vector3 sizes = box.sizes();
 
-		for( auto & particle : pmesh->particles )
-		{
-			particle.relativePos = pmesh->relativePos( particle.id );
-			relativeKdtree->addPoint( particle.relativePos );
-		}
-
-		relativeKdtree->build();
-
-		trees << relativeKdtree;
-	}
-
-	for(auto & pmesh : inputs)
-	{
-		// Select the kd-tree of the other
-		auto otherTree = trees.back();
-		if(pmesh == inputs.back()) otherTree = trees.front();
-
-		// Match with closest based on euclidean distance
-		for(auto & iparticle : pmesh->particles)
-		{
-			iparticle.correspondence = otherTree->closest( iparticle.relativePos );
-		}
-	}
+	return result;
 }

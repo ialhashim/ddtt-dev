@@ -3,91 +3,87 @@
 
 int slice_uid = 0;
 
-PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
-                                   ParticleMesh *pmeshB, SegmentGraph segB)
-    : sA(pmeshA), sB(pmeshB), segA(segA), segB(segB)
+Slices PartCorresponder::computeSlices( ParticleMesh * input, const SegmentGraph & seg )
 {
-	// Enable debugging mode
-	//sA->property["debug"].setValue( true );
+	static int MAX_SLICE_COUNT = 20;
 
-	QVector<ParticleMesh*> input; input << sA << sB;
-	QVector<SegmentGraph*> segment; segment << &segA << &segB;
-	QVector<Slices> slices( input.size() ) ;
+	Slices curSlices;
+	if(seg.vertices.empty()) return curSlices;
 
-	int MAX_SLICE_COUNT = 15;
-
-	/// Compute slices for each input shape:
-	for(size_t s = 0; s < input.size(); s++)
+	// Compute range of 'z' grid values
+	Bounds<int> zcoords;
+	for(auto v : seg.vertices)
 	{
-		auto & curSlices = slices[s];
+		Vector3 pg = (input->particles[v].pos - input->grid.translation.cast<double>()) / input->grid.unitlength;
+		zcoords.extend( (int)pg.z() );
+	}
 
-		// Compute range of 'z' grid values
-		Bounds<int> zcoords;
-		for(auto v : segment[s]->vertices)
+	int total_range = 1 + zcoords.range();
+	int fixedNumLayers = std::min(total_range, MAX_SLICE_COUNT);
+	int perLayer = std::floor((double)total_range / fixedNumLayers);
+	int numLayers = std::ceil((double)total_range / perLayer);
+
+	curSlices.resize( numLayers );
+
+	// Divide segment into layers
+	for(int i = 0; i < numLayers; i++)
+	{
+		int bottom = zcoords.minimum + (i * perLayer);
+		int top = bottom + perLayer;
+
+		SegmentGraph layerGraph;
+
+		for(auto & edge : seg.GetEdgesSet())
 		{
-			Vector3 pg = (input[s]->particles[v].pos - input[s]->grid.translation.cast<double>()) / input[s]->grid.unitlength;
-			zcoords.extend( (int)pg.z() );
+			Vector3 pgi = (input->particles[edge.index].pos - input->grid.translation.cast<double>()) / input->grid.unitlength;
+			Vector3 pgj = (input->particles[edge.target].pos - input->grid.translation.cast<double>()) / input->grid.unitlength;
+
+			int zi = (int)pgi.z(), zj = (int)pgj.z();
+
+			if((zi < bottom || zj < bottom) || (zi >= top || zj >= top)) continue;
+
+			if(zi >= bottom && zi < top) layerGraph.AddVertex(edge.index);
+			if(zj >= bottom && zj < top) layerGraph.AddVertex(edge.target);
+
+			layerGraph.AddEdge( edge.index, edge.target, 1 );
 		}
 
-		int total_range = 1 + zcoords.range();
-		int fixedNumLayers = std::min(total_range, MAX_SLICE_COUNT);
-		int perLayer = std::floor((double)total_range / fixedNumLayers);
-		int numLayers = std::ceil((double)total_range / perLayer);
+		auto & slice = curSlices[i];
+		slice.chunksFromGraphs( layerGraph.toConnectedParts() );
 
-		curSlices.resize( numLayers );
-
-		// Divide segment into layers
-		for(int i = 0; i < numLayers; i++)
+		// Compute chunks parameters
+		for(size_t c = 0; c < slice.chunks.size(); c++)
 		{
-			int bottom = zcoords.minimum + (i * perLayer);
-			int top = bottom + perLayer;
+			auto & chunk = slice.chunks[c];
 
-			SegmentGraph layerGraph;
+			// Compute bounding box enclosing chunk
+			for(auto p : input->particlesCorners(chunk.g.vertices)) 
+				chunk.box.extend(p);
 
-			for(auto edge : segment[s]->GetEdgesSet())
+			// Compute index of relative particle positions inside box
+			chunk.tree = QSharedPointer<NanoKdTree>(new NanoKdTree);
+			for(auto v : chunk.g.vertices)
 			{
-				Vector3 pgi = (input[s]->particles[edge.index].pos - input[s]->grid.translation.cast<double>()) / input[s]->grid.unitlength;
-				Vector3 pgj = (input[s]->particles[edge.target].pos - input[s]->grid.translation.cast<double>()) / input[s]->grid.unitlength;
-
-				int zi = (int)pgi.z(), zj = (int)pgj.z();
-
-				if(zi >= bottom && zi < top) layerGraph.AddVertex(edge.index);
-				if(zj >= bottom && zj < top) layerGraph.AddVertex(edge.target);
-
-				if((zi < bottom || zj < bottom) || (zi >= top || zj >= top)) continue;
-
-				layerGraph.AddEdge( edge.index, edge.target, 1 );
+				input->particles[v].relativePos = (input->particles[v].pos - chunk.box.min()).array() / chunk.box.sizes().array();
+				chunk.tree->addPoint( input->particles[v].relativePos );
+				chunk.vmap.push_back( v );
 			}
-
-			auto & slice = curSlices[i];
-			slice.chunksFromGraphs( layerGraph.toConnectedParts() );
-
-			// Compute chunks parameters
-			for(size_t c = 0; c < slice.chunks.size(); c++)
-			{
-				auto & chunk = slice.chunks[c];
-
-				// Compute bounding box enclosing chunk
-				for(auto p : input[s]->particlesCorners(chunk.g.vertices)) 
-					chunk.box.extend(p);
-
-				// Compute index of relative particle positions inside box
-				chunk.tree = new NanoKdTree;
-				for(auto v : chunk.g.vertices)
-				{
-					input[s]->particles[v].relativePos = (input[s]->particles[v].pos - chunk.box.min()).array() / chunk.box.sizes().array();
-					chunk.tree->addPoint( input[s]->particles[v].relativePos );
-					chunk.vmap.push_back( v );
-				}
-				chunk.tree->build();
-
-				//auto bs = new starlab::BoxSoup;bs->addBox( chunk.box );debug<<bs;
-			}
+			chunk.tree->build();
 		}
 	}
 
-	/// Correspond chunks:	
-	std::vector< std::pair< int, std::pair<size_t,size_t> > > assignments;
+	return curSlices;
+}
+
+void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsPair, 
+										  const QVector<ParticleMesh *> & input, 
+										  QVector<Particles> & particles)
+{
+	QVector<Slices> slices;
+	slices << input[0]->property["segments"].value<Segments>()[segmentsPair.first].property["slices"].value<Slices>();
+	slices << input[1]->property["segments"].value<Segments>()[segmentsPair.second].property["slices"].value<Slices>();
+
+	/// Correspond chunks:
 	{
 		auto si = 0, sj = 1;
 
@@ -98,7 +94,8 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 		{
 			auto & slice_i = slices[si][sliceID];
 			double a = double(sliceID) / std::max(1, (slices[si].size()-1));
-			auto & slice_j = slices[sj][a * (slices[sj].size()-1)];
+			int j_idx =  std::ceil(a * (slices[sj].size()-1));
+			auto & slice_j = slices[sj][j_idx];
 
 			/// First project chunks onto diagonal of their slice
 			QVector< QVector< size_t > > sortedChunks;
@@ -132,7 +129,7 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 			if(sortedChunks.front().empty() || sortedChunks.back().empty()) continue;
 
 			// Now divide and assign
-			auto assignments = distributeVectors( sortedChunks.front().size(), sortedChunks.back().size() );
+			auto assignments = PartCorresponder::distributeVectors( sortedChunks.front().size(), sortedChunks.back().size() );
 
 			/// Match chunks:
 			for(auto assignment : assignments)
@@ -140,62 +137,58 @@ PartCorresponder::PartCorresponder(ParticleMesh *pmeshA, SegmentGraph segA,
 				auto & chunk_i = slice_i.chunks[assignment.first];
 				auto & chunk_j = slice_j.chunks[assignment.second];
 
-				correspondChunks( chunk_i, input[si], chunk_j, input[sj] );
+				/// Correspond chunks:
+				{
+					QVector<SliceChunk*> chunk; chunk << &chunk_i << &chunk_j;
+
+					for(size_t si = 0; si < input.size(); si++)
+					{
+						auto sj = (si+1) % input.size();
+
+						std::vector<size_t> closestMap( chunk[si]->vmap.size(), -1 );
+
+						// Find closest particle
+						//#pragma omp parallel for
+						for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
+						{
+							auto vi = chunk[si]->vmap[i];
+							auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( input[si]->particles[vi].relativePos )];
+
+							closestMap[i] = vj;
+						}
+
+						// Match particles one-to-one
+						for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
+						{
+							auto vi = chunk[si]->vmap[i];
+							auto vj = closestMap[i];
+
+							auto pi = &particles[si][vi];
+							auto pj = &particles[sj][vj];
+
+							if( pi->isMatched )
+							{
+								particles[si].push_back( *pi );
+								pi = &particles[si].back();
+								pi->id = particles[si].size()-1;
+							}
+
+							if( pj->isMatched )
+							{
+								particles[sj].push_back( *pj );
+								pj = &particles[sj].back();
+								pj->id = particles[sj].size()-1;
+							}
+
+							pi->correspondence = pj->id;
+							pj->correspondence = pi->id;
+
+							pj->isMatched = true;
+							pi->isMatched = true;
+						}
+					}
+				}
 			}
-		}
-	}
-}
-
-void PartCorresponder::correspondChunks( SliceChunk & chunk_i, ParticleMesh* mesh_i, 
-										SliceChunk & chunk_j, ParticleMesh* mesh_j )
-{
-	QVector<ParticleMesh*> input; input << mesh_i << mesh_j;
-	QVector<SliceChunk*> chunk; chunk << &chunk_i << &chunk_j;
-
-	for(size_t si = 0; si < input.size(); si++)
-	{
-		auto sj = (si+1) % input.size();
-
-		std::vector<size_t> closestMap( chunk[si]->vmap.size(), -1 );
-
-		// Find closest particle
-		//#pragma omp parallel for
-		for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
-		{
-			auto vi = chunk[si]->vmap[i];
-			auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( input[si]->particles[vi].relativePos )];
-
-			closestMap[i] = vj;
-		}
-
-		// Match particles one-to-one
-		for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
-		{
-			auto vi = chunk[si]->vmap[i];
-			auto vj = closestMap[i];
-
-			auto pi = &input[si]->particles[vi];
-			auto pj = &input[sj]->particles[vj];
-
-			if( pi->isMatched )
-			{
-				input[si]->particles.push_back( *pi );
-				pi = &input[si]->particles.back();
-				pi->id = input[si]->particles.size()-1;
-			}
-
-			if( pj->isMatched )
-			{
-				input[sj]->particles.push_back( *pj );
-				pj = &input[sj]->particles.back();
-				pj->id = input[sj]->particles.size()-1;
-			}
-
-			pi->correspondence = pj->id;
-			pj->correspondence = pi->id;
-
-			pj->isMatched = true;
-			pi->isMatched = true;
 		}
 	}
 }

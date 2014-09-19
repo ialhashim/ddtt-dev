@@ -17,7 +17,11 @@
 
 #include "GenericGraph.h"
 typedef GenericGraphs::Graph<uint,double> SegmentGraph;
+typedef QMap< unsigned int, SegmentGraph > Segments;
 typedef std::vector<float> VectorFloat;
+typedef std::vector< Particle<Vector3> > Particles;
+
+#include "Planes.h"
 
 class ParticleMesh : public Serializable
 {
@@ -28,7 +32,7 @@ public:
 	~ParticleMesh();
 	PropertyMap property;
 
-	std::vector< Particle<Vector3> > particles;
+	Particles particles;
 	std::vector< std::vector<float> > desc, sig;
 
 	SurfaceMeshModel * surface_mesh;
@@ -56,9 +60,9 @@ public:
 
 	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() ) const;
 
-	QMap< unsigned int, SegmentGraph > segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );	
+	Segments segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );	
 	std::vector< SegmentGraph > getEdgeParticlesOfSegment( const SegmentGraph & segment ) const;
-	Eigen::AlignedBox3d computeSegmentBoundingBox( const SegmentGraph & segment ) const;
+	Eigen::AlignedBox3d segmentBoundingBox( const SegmentGraph & segment ) const;
 	std::vector< std::vector< std::vector<float> > > toGrid();
 	SpatialHash< Vector3, Vector3::Scalar > spatialHash();
 	std::vector<size_t> randomSamples( int numSamples, bool isSpread );
@@ -81,6 +85,9 @@ public:
 	void centerInsideGrid( bool isNormalizeAndCenter = true );
 
 	void distort();
+
+	void basicFindReflectiveSymmetry();
+	std::vector<Plane> reflectionPlanes;
 
 	std::vector< std::map< int, std::vector<size_t> > > cachedAdj;
 	SegmentGraph cachedGraph;

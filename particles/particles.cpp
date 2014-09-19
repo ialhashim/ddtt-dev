@@ -816,11 +816,15 @@ void particles::create()
 
 		if(pw->pmeshes.size() > 1) 
 		{
+			QElapsedTimer processingTimer; processingTimer.start();
+
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
 			for(auto d : pc.debug) drawArea()->addRenderObject(d);
 
 			//ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
 			//for(auto d : pd.debug) drawArea()->addRenderObject(d);
+
+			mainWindow()->setStatusBarMessage(QString("Processed (%1 ms)").arg(processingTimer.elapsed()));
 		}
 
 		pw->isReady = true;
@@ -901,7 +905,7 @@ void particles::decorate()
 		//mixedPoints.push_back( imesh->realPos( AlphaBlend(alpha, particle.relativePos, 
 		//	jmesh->particles[particle.correspondence].relativePos) ).cast<float>() );
 
-		mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
+		//mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
 	}
 
 	/*if( !pwidget->ui->isOneSided->isChecked() )

@@ -155,9 +155,9 @@ void ParticleMesh::init( bool isAssignedSegment )
 	cachedAdj.clear();
 	cachedAdj.resize(particles.size());
 
-	process();
-
 	centerInsideGrid();
+
+	process();
 
 	// Bounds
 	auto curbox = bbox();
@@ -183,6 +183,9 @@ void ParticleMesh::process()
 	
 	/// Normalized distance to floor:
 	computeDistanceToFloor();
+
+	/// Compute global symmetry
+	basicFindReflectiveSymmetry();
 }
 
 void ParticleMesh::drawParticles( qglviewer::Camera * camera )
@@ -215,6 +218,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	Vector3 center(revolve[0],revolve[1],revolve[2]);
 
 	// Sort particles
+	/*
 	std::map<size_t,double> distances;
 	double minDist = DBL_MAX, maxDist = -DBL_MAX;
 
@@ -226,8 +230,8 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	}
 
 	// Sort
-	std::vector<std::pair<size_t,double> > myVec(distances.begin(), distances.end());
-	//std::sort( myVec.begin(), myVec.end(), [](std::pair<size_t,double> a, std::pair<size_t,double> b){ return a.second < b.second; } );
+	std::sort( myVec.begin(), myVec.end(), [](std::pair<size_t,double> a, std::pair<size_t,double> b){ return a.second < b.second; } );
+	*/
 
 	glDisable( GL_LIGHTING );
 	//glEnable(GL_LIGHTING);
@@ -244,19 +248,19 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 
 	glBegin(GL_POINTS);
 
-	for(auto pi : myVec)
+	for(auto & particle : particles)
 	{
-		auto & particle = particles[pi.first];
+		//auto & particle = particles[pi.first];
 		//QColor c = starlab::qtJetColor(particle.measure);
 		//Eigen::Vector4d color( c.redF(), c.greenF(), c.blueF(), particle.alpha );
 		//Eigen::Vector4d color(abs(particle.direction[0]), abs(particle.direction[1]), abs(particle.direction[2]), particle.alpha);
 		//color[0] *= color[0];color[1] *= color[1];color[2] *= color[2];
 		//glColor4dv( color.data() );
 
-		if(camDist > 0.5)
+		//if(camDist > 0.5)
 			particle.alpha = 1.0;
-		else
-			particle.alpha = std::max(0.3, 1.0 - ((pi.second - minDist) / (maxDist-minDist)));
+		//else
+		//	particle.alpha = std::max(0.3, 1.0 - ((pi.second - minDist) / (maxDist-minDist)));
 		
 		// Fake normals
 		//Vector3 d = (particle.pos - eye).normalized();
@@ -300,14 +304,23 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	}
 
 	// Draw grid bounds
-	glLineWidth(3);
-	glColor3d(0,0,1);
-	Vector3 gridBottomCorner = grid.translation.cast<double>();
-	Vector3 gridTopCorner = gridBottomCorner + Vector3(grid.unitlength, grid.unitlength, grid.unitlength) * grid.gridsize;
-	Eigen::AlignedBox3d grid_bbox(gridBottomCorner, gridTopCorner);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	starlab::BoxSoup::drawBox( grid_bbox );
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	{
+		glLineWidth(3);
+		glColor3d(0,0,1);
+		Vector3 gridBottomCorner = grid.translation.cast<double>();
+		Vector3 gridTopCorner = gridBottomCorner + Vector3(grid.unitlength, grid.unitlength, grid.unitlength) * grid.gridsize;
+		Eigen::AlignedBox3d grid_bbox(gridBottomCorner, gridTopCorner);
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		starlab::BoxSoup::drawBox( grid_bbox );
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	}
+
+	// Draw reflectional planes
+	{
+		starlab::PlaneSoup ps(0.05, true, Qt::gray);
+		for(auto p : reflectionPlanes) ps.addPlane( p.pos, p.n );
+		ps.draw();
+	}
 
 	//glDepthMask(GL_TRUE);
 	glEnable(GL_LIGHTING);
@@ -557,9 +570,9 @@ void ParticleMesh::computeDistanceToFloor()
 	}*/
 }
 
-QMap< unsigned int, SegmentGraph > ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
+Segments ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
 {
-	QMap< unsigned int, SegmentGraph > result;
+	Segments result;
 	
 	// Make a copy of the graph we will modify
 	if(fromGraph.IsEmpty()) return result;
@@ -687,7 +700,7 @@ std::vector< SegmentGraph > ParticleMesh::getEdgeParticlesOfSegment( const Segme
 	return edgeparts;
 }
 
-Eigen::AlignedBox3d ParticleMesh::computeSegmentBoundingBox(const SegmentGraph & segment) const
+Eigen::AlignedBox3d ParticleMesh::segmentBoundingBox(const SegmentGraph & segment) const
 {
 	Eigen::AlignedBox3d box;
 	for(auto p : particlesCorners(segment.vertices)) box.extend(p);
@@ -696,7 +709,7 @@ Eigen::AlignedBox3d ParticleMesh::computeSegmentBoundingBox(const SegmentGraph &
 
 std::vector<size_t> ParticleMesh::neighbourhood( Particle<Vector3> & p, int step )
 {
-	if(!cachedAdj[p.id][step].empty())
+	if(cachedAdj.size() && cachedAdj[p.id].size() && cachedAdj[p.id][step].size())
 		return cachedAdj[p.id][step];
 
 	std::vector<size_t> result;
@@ -880,29 +893,37 @@ std::vector< Vector3 > ParticleMesh::particlesCorners( SegmentGraph::vertices_se
 	double gridunit = grid.unitlength;
 	double halfgridunit = 0.5 * gridunit;
 
+	std::vector<size_t> selectedIndices;
+
+	if(!selected.empty()){
+		for(auto s : selected) 
+			selectedIndices.push_back(s);
+	}
+	else{
+		for(size_t i = 0; i < particles.size(); i++)
+			selectedIndices.push_back(i);
+	}
+
 	std::vector< Vector3 > points;
-	for(auto & particle : particles) 
+	for(auto & pid : selectedIndices) 
 	{
-		bool isInclude = true;
-		if(!selected.empty() && selected.find(particle.id) == selected.end()) isInclude = false;
-		if( isInclude ) 
-		{
-			Vector3 corner = particle.pos - Vector3(halfgridunit,halfgridunit,halfgridunit);
-			QVector<Vector3> cornersBottom, cornersTop;
+		auto & particle = particles[pid];
 
-			// Bottom row
-			cornersBottom.push_back(corner);
-			cornersBottom.push_back(corner + Vector3(gridunit,0,0));
-			cornersBottom.push_back(corner + Vector3(gridunit,gridunit,0));
-			cornersBottom.push_back(corner + Vector3(0,gridunit,0));
+		Vector3 corner = particle.pos - Vector3(halfgridunit,halfgridunit,halfgridunit);
+		QVector<Vector3> cornersBottom, cornersTop;
 
-			// Top row
-			for(auto & p : cornersBottom) cornersTop << (p + Vector3(0,0,gridunit));
+		// Bottom row
+		cornersBottom.push_back(corner);
+		cornersBottom.push_back(corner + Vector3(gridunit,0,0));
+		cornersBottom.push_back(corner + Vector3(gridunit,gridunit,0));
+		cornersBottom.push_back(corner + Vector3(0,gridunit,0));
 
-			// Combined
-			for(auto & p : (cornersBottom + cornersTop))
-				points.push_back( p );
-		}
+		// Top row
+		for(auto & p : cornersBottom) cornersTop << (p + Vector3(0,0,gridunit));
+
+		// Combined
+		for(auto & p : (cornersBottom + cornersTop))
+			points.push_back( p );
 	}
 	return points;
 }
@@ -1108,6 +1129,10 @@ void ParticleMesh::serialize(QDataStream& os) const
 	
 	// Sampling
 	os << sphereResolutionUsed;
+
+	// Reflectional symmetry
+	os << reflectionPlanes.size();
+	for(auto p : reflectionPlanes) os << p.pos << p.n;
 }
 
 void ParticleMesh::deserialize(QDataStream& is)
@@ -1125,10 +1150,21 @@ void ParticleMesh::deserialize(QDataStream& is)
 	usedDirections = sphere.rays();
 	antiRays = sphere.antiRays();
 
+	size_t reflectionPlaneCount;
+	is >> reflectionPlaneCount;
+	for(size_t i = 0; i < reflectionPlaneCount; i++){
+		Vector3 pos,n;
+		is >> pos >> n;
+		reflectionPlanes.push_back( Plane(pos, n, 1) );
+	}
+
 	// Bounds
 	auto box = bbox();
 	bbox_min = box.min();
 	bbox_max = box.max();
+
+	cachedAdj.clear();
+	cachedAdj.resize(particles.size());
 }
 
 SurfaceMesh::Vector3 ParticleMesh::relativePos( size_t particleID )
@@ -1195,4 +1231,115 @@ void ParticleMesh::centerInsideGrid( bool isNormalizeAndCenter )
 	}
 
 	grid.findOccupied();
+}
+
+void ParticleMesh::basicFindReflectiveSymmetry()
+{
+	// Find global reflection planes from a fixed set
+	Eigen::AlignedBox3d box;
+	for(auto p : this->particlesCorners()) box.extend(p);
+
+	Plane plane( box.center(), Vector3(1,0,0), 0 );
+	std::vector<Plane> planes;
+
+	int numTests = 16;
+
+	double angle = (M_PI * 2) / numTests;
+
+	for(int i = 0; i < numTests / 2; i++)
+	{
+		Plane curPlane = plane;
+		Eigen::AngleAxisd rot( i * angle, Vector3(0,0,1) );
+		curPlane.n = rot * curPlane.n;
+
+		planes.push_back(curPlane);
+	}
+
+	// Sample some special points
+	std::vector<Vector3> specialPoints;
+	NanoKdTree tree;
+	{
+		auto g = toGraph();
+		auto vals = agd(50, g);
+
+		for(auto & p : particles)
+		{
+			std::vector<size_t> neighbours;
+			for(auto & vj : g.GetNeighbours(p.id)){
+				for(auto & vk : g.GetNeighbours(vj))
+					neighbours.push_back(vk);
+				neighbours.push_back(vj);
+			}
+
+			bool isMaxima = true;
+			for(auto vj : neighbours){
+				if(vals[vj] > vals[p.id]){
+					isMaxima = false;
+					break;
+				}
+			}
+
+			if( !isMaxima ) continue;
+
+			if(false)debug << starlab::PointSoup::drawPoint( p.pos, 20, Qt::red );
+
+			specialPoints.push_back( p.pos );
+		}
+
+		for(auto & p : specialPoints) tree.addPoint(p);
+		tree.build();
+	}
+
+	std::vector< std::pair<double,size_t> > scoredPlanes;
+
+	for(size_t i = 0; i < planes.size(); i++)
+	{
+		auto & plane = planes[i];
+
+		// Evaluate plane:
+		double pointsScore = 0;
+		int count = 1;
+
+		for(auto & p : specialPoints)
+		{
+			double dist = plane.n.dot( p-plane.pos );
+			if(dist <= 0) continue;
+
+			Vector3 reflected = p - (2 * (dist*plane.n));
+
+			auto closest = tree.closest( reflected );
+			pointsScore += (reflected - specialPoints[closest]).norm();
+			count++;
+		}
+
+		pointsScore /= count;
+
+		scoredPlanes.push_back( std::make_pair(pointsScore, i) );
+	}
+
+	std::sort(scoredPlanes.begin(), scoredPlanes.end());
+
+	// DEBUG:
+	if( false )
+	{
+		double min_val = scoredPlanes.front().first;
+		double max_val = scoredPlanes.back().first;
+		double range = max_val - min_val;
+		for( auto scorePlane : scoredPlanes )
+		{
+			auto & plane = planes[scorePlane.second];
+			double score = (scorePlane.first - min_val) / range;
+			auto pp = new starlab::PlaneSoup(1, true, starlab::qtJetColor(score));
+			pp->addPlane(Vector3(plane.pos), plane.n);debug << pp;
+		}
+	}
+
+	// Best reflectional plane
+	auto firstBest = planes[scoredPlanes[0].second];
+	reflectionPlanes.push_back( firstBest );
+
+	// Add second best (if very orthogonal to first), good for table shapes
+	auto secondBest = planes[scoredPlanes[1].second];
+	if( abs( firstBest.n.dot(secondBest.n) ) < 0.1 )
+		reflectionPlanes.push_back( secondBest );
 }
