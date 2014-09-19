@@ -45,24 +45,90 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 			
 			for(int sid = 0; sid < segIDs.size(); sid++)
 			{
-				auto box = input[i]->segmentBoundingBox( segments[ segIDs[sid] ] );
+				auto & si = segments[ segIDs[sid] ];
+				auto box = input[i]->segmentBoundingBox( si );
 				Vector3 p(0,0,box.center().z() / box_z);
 
 				KDResults matches;
-				alongZ.ball_search(p, 0.1, matches);
+				alongZ.ball_search(p, 0.01, matches);
 
-				double threshold = (box.sizes().norm() * 0.1);
-
-				for(auto match : matches)
+				// Check for possible rotational symmetries
 				{
-					if(match.first == sid) continue;
-					auto boxOther = input[i]->segmentBoundingBox( segments[ segIDs[match.first] ] );
+					std::vector<size_t> group;
 
-					// Join if very similar
-					double diff = (box.sizes() - boxOther.sizes()).norm();
-					if(diff > threshold) continue;
+					// Check ground-based similarity
+					Boundsd si_measure;
+					for(auto v : si.vertices) si_measure.extend( input[i]->particles[v].measure );
 
-					disjoint.Union(sid, match.first);
+					for(auto match : matches)
+					{
+						if(match.first == sid) continue;
+						auto & sj = segments[ segIDs[match.first] ];
+
+						Boundsd sj_measure;
+						for(auto v : sj.vertices) sj_measure.extend( input[i]->particles[v].measure );
+						double max_range = std::max(si_measure.range(), sj_measure.range());
+						double intersection = si_measure.intersection(sj_measure);
+
+						if( intersection / max_range > 0.75 )
+							group.push_back( segIDs[match.first] );
+					}
+
+					group.push_back( segIDs[sid] );
+
+					if( group.size() > 2 )
+					{
+						std::vector<Vector3> centroids;
+						for(auto sid : group)
+						{
+							Vector3 center(0,0,0);
+							for(auto v : segments[ sid ].vertices) center += input[i]->particles[v].pos;
+							center /= segments[ sid ].vertices.size();
+							centroids.push_back( center );
+						}
+
+						Vector3 center(0,0,0);
+						for(auto c : centroids) center += c;
+						center /= centroids.size();
+
+						// Check angle between closest two instances
+						double smallestAngle = DBL_MAX;
+						Vector3 v1 = (centroids[0] - center).normalized();
+						for(size_t b = 1; b < centroids.size(); b++)
+						{
+							Vector3 v2 = (centroids[b] - center).normalized();
+							smallestAngle = std::min(smallestAngle, acos( v1.dot(v2) ) );
+						}
+
+						double angle = rad_to_deg( smallestAngle );
+						double expectedAngle = 360.0 / group.size();
+
+						if(abs(angle - expectedAngle) < 10)
+						{
+							for(auto match : matches)
+								disjoint.Union(sid, match.first);
+							continue;
+						}
+					}
+				}
+
+				// Check for possible reflectional symmetries
+				{
+					double bbox_threshold = (box.sizes().norm() * 0.1);
+
+					for(auto match : matches)
+					{
+						if(match.first == sid) continue;
+						auto & sj = segments[ segIDs[match.first] ];
+
+						auto boxOther = input[i]->segmentBoundingBox( sj );
+
+						// Join if very similar bounding box-wise
+						double diff = (box.sizes() - boxOther.sizes()).norm();
+						if(diff > bbox_threshold) continue;
+
+						disjoint.Union(sid, match.first);
+					}
 				}
 			}
 			
@@ -74,7 +140,7 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 				auto bs = new starlab::BoxSoup;
 				Eigen::AlignedBox3d groupBox;
 				for(auto segID : groupIDs) groupBox.extend( input[i]->segmentBoundingBox( segments[segID] ) );
-				bs->addBox(groupBox);
+				bs->addBox(groupBox, Qt::black);
 				debug << bs;
 			}
 

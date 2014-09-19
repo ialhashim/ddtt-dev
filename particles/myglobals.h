@@ -76,6 +76,11 @@ static inline double deg_to_rad(double deg) {
 	return rad;
 }
 
+static inline double rad_to_deg(double rad) {
+	double deg = 180.0 / M_PI * rad;
+	return deg;
+}
+
 static inline QVector<QColor> rndColors(int count){
 	QVector<QColor> c;
 	for(int i = 0; i < count; i++) c << starlab::qRandomColor3();
