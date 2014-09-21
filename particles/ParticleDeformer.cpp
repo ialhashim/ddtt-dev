@@ -5,23 +5,123 @@
 #include "BasicTable.h"
 
 ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB): sA(pmeshA), sB(pmeshB)
-{
-	generateAssignments();
+{	
+	auto groupAssignments = generateGroupAssignments();
+	
+	auto segmentAssignments = segmentAssignFromGroupAssign( groupAssignments );
+	
+	auto & segsA = sA->property["segments"].value<Segments>();
+	auto & segsB = sB->property["segments"].value<Segments>();
+
+	for(auto assignment : segmentAssignments)
+	{
+		for(auto pair : assignment)
+		{
+			auto ba = segsA[pair.first].property["bbox"].value<Eigen::AlignedBox3d>();
+			auto bb = segsB[pair.second].property["bbox"].value<Eigen::AlignedBox3d>();
+
+			auto ls = new starlab::LineSegments(3);
+			ls->addLine(Vector3(ba.center()), Vector3(bb.center() + Vector3(1,0,0)), Qt::black);
+			debug << ls;
+		}
+		
+		break;
+	}
 }
 
-void ParticleDeformer::generateAssignments()
+QVector<Pairings> ParticleDeformer::segmentAssignFromGroupAssign( Assignments groupAssignments )
 {
-	auto segsA = sA->property["segments"].value<Segments>();
-	auto segsB = sB->property["segments"].value<Segments>();
+	QVector<Pairings> segmentAssignments;
 
-	//auto idA = segsA.keys(), idB = segsB.keys();
+	auto & groupsA = sA->property["groups"].value< std::vector< std::vector<size_t> > >();
+	auto & groupsB = sB->property["groups"].value< std::vector< std::vector<size_t> > >();
+
+	auto & segsA = sA->property["segments"].value<Segments>();
+	auto & segsB = sB->property["segments"].value<Segments>();
+
+	// Pre-compute bounding boxes for groups
+	QVector<Eigen::AlignedBox3d> groupBoxA(groupsA.size()), groupBoxB(groupsB.size());
+	for(size_t i = 0; i < groupsA.size(); i++ ) 
+		for(auto sid : groupsA[i]) groupBoxA[i].extend( segsA[sid].property["bbox"].value<Eigen::AlignedBox3d>() );
+	for(size_t j = 0; j < groupsB.size(); j++ ) 
+		for(auto sid : groupsB[j]) groupBoxB[j].extend( segsB[sid].property["bbox"].value<Eigen::AlignedBox3d>() );
+
+	// Transfer group assignments into member assignments
+	for( auto groupAssign : groupAssignments )
+	{
+		Pairings segAssign;
+
+		for(size_t i = 0; i < groupAssign.size(); i++)
+		{
+			size_t j = groupAssign[i];
+			if(j > groupsB.size()-1) continue;
+
+			auto & gA = groupsA[i];
+			auto & gB = groupsB[j];
+
+			QSet<size_t> seenB;
+
+			// Forward:
+			for(auto sid : gA){
+				auto & boxI = segsA[sid].property["bbox"].value<Eigen::AlignedBox3d>();
+				Vector3 centerI = (boxI.center() - groupBoxA[i].min()).array() / groupBoxA[i].sizes().array();
+
+				QMap<double, size_t> dists;
+
+				for(auto sjd : gB){
+					auto & boxJ = segsB[sjd].property["bbox"].value<Eigen::AlignedBox3d>();
+					Vector3 centerJ = (boxJ.center() - groupBoxB[j].min()).array() / groupBoxB[j].sizes().array();
+					double d = (centerI - centerJ).norm();
+					dists[d] = sjd;
+				}
+
+				auto sjd = dists.values().front();
+				seenB << sjd;
+
+				segAssign << qMakePair(sid, sjd);
+			}
+
+			// Backward:
+			for(auto sjd : gB){
+				if(seenB.contains(sjd)) continue;
+
+				auto & boxJ = segsB[sjd].property["bbox"].value<Eigen::AlignedBox3d>();
+				Vector3 centerJ = (boxJ.center() - groupBoxB[j].min()).array() / groupBoxB[j].sizes().array();
+
+				QMap<double, size_t> dists;
+
+				for(auto sid : gA){
+					auto & boxI = segsA[sid].property["bbox"].value<Eigen::AlignedBox3d>();
+					Vector3 centerI = (boxI.center() - groupBoxA[i].min()).array() / groupBoxA[i].sizes().array();
+					double d = (centerI - centerJ).norm();
+					dists[d] = sid;
+				}
+
+				auto sid = dists.values().front();
+				segAssign << qMakePair(sid, sjd);
+			}
+		}
+
+		segmentAssignments << segAssign;
+	}
+
+	return segmentAssignments;
+}
+
+Assignments ParticleDeformer::generateGroupAssignments()
+{		
+	Assignments generatedAssignments;
+
+	auto & segsA = sA->property["segments"].value<Segments>();
+	auto & segsB = sB->property["segments"].value<Segments>();
+
 	auto boxA = sA->bbox(), boxB = sB->bbox();
 
-	auto groupsA = sA->property["groups"].value< std::vector< std::vector<size_t> > >();
-	auto groupsB = sB->property["groups"].value< std::vector< std::vector<size_t> > >();
+	auto & groupsA = sA->property["groups"].value< std::vector< std::vector<size_t> > >();
+	auto & groupsB = sB->property["groups"].value< std::vector< std::vector<size_t> > >();
 
 	/// Build similarity matrix of groups:
-	Eigen::MatrixXd similiarity = Eigen::MatrixXd::Ones( groupsA.size(), std::max(groupsA.size() + 1, groupsB.size() + 1) );
+	Eigen::MatrixXd similiarity = Eigen::MatrixXd::Ones( groupsA.size(), groupsB.size() + 1 );
 
 	for(size_t i = 0; i < similiarity.rows(); i++){
 		double minVal = DBL_MAX;
@@ -52,8 +152,6 @@ void ParticleDeformer::generateAssignments()
 			similiarity(i,j) = (similiarity(i,j) - minVal) / maxVal;
 	}
 
-	similiarity.array() /= similiarity.maxCoeff();
-
 	std::vector< std::vector<float> > data;
 	for(int i = 0; i < similiarity.rows(); i++){
 		std::vector<float> dataRow;
@@ -63,36 +161,45 @@ void ParticleDeformer::generateAssignments()
 	}
 	showTableColorMap(data, true);
 
-	// Find Acceptable Permutations
+	// Find Acceptable Assignments
 	{
-		double threshold = 0.5;
+		double threshold = 0.25;
 
-		bool isTranspose = false;
-		if( similiarity.rows() > similiarity.cols() ) isTranspose = true;
-		if( isTranspose ) similiarity = similiarity.transpose();
+		// Collect good candidates
 
-		std::vector< std::vector<size_t> > possibleSets;
+		Assignments candidates;
+		for(size_t i = 0; i < similiarity.rows(); i++){
+			QVector<size_t> candidate;
+			for(size_t j = 0; j < similiarity.cols(); j++){
+				if(similiarity(i,j) < threshold)
+					candidate << j;
+			}
+			candidates << candidate;
+		}
 
-		// Fill set
-		std::vector< size_t > idxSet;
-		for(size_t i = 0; i < similiarity.cols(); i++) idxSet.push_back(i);
+		Assignments assignments;
+		cart_product(assignments, candidates);
 
-		// Go over permutations
-		while ( std::next_permutation(idxSet.begin(), idxSet.begin() + similiarity.rows()) )
+		// Filter assignments
+		Assignments filtered;
+		for(auto & a : assignments)
 		{
-			// Evaluate set
+			QMap<size_t,size_t> counts;
 			bool accept = true;
-			for(size_t i = 0; i < idxSet.size(); i++){
-				if( similiarity(i, idxSet[i]) > threshold ){
+
+			for(auto i : a) counts[i]++;
+			for(auto k : counts.keys()){
+				if(k != similiarity.cols()-1 && counts[k] > 1){
 					accept = false;
 					break;
 				}
 			}
 
-			if( accept ) possibleSets.push_back( idxSet );
+			if( accept ) filtered << a;
 		}
 
-		debugBox(possibleSets.size());
-		debugBoxVec2( possibleSets, 20 );
+		generatedAssignments = filtered;
 	}
+
+	return generatedAssignments;
 }

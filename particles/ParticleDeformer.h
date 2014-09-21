@@ -1,6 +1,9 @@
 #pragma once
 #include "ParticleMesh.h"
 
+typedef QVector< QPair<size_t, size_t> >  Pairings;
+typedef QVector< QVector<size_t> > Assignments;
+
 class ParticleDeformer
 {
 public:
@@ -10,5 +13,6 @@ public:
 
     QVector<RenderObject::Base*> debug;
 
-	void generateAssignments();
+	Assignments generateGroupAssignments();
+	QVector<Pairings> segmentAssignFromGroupAssign( Assignments groupAssignments );
 };
