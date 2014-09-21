@@ -89,13 +89,13 @@ public:
 		}
 	}
 
-	std::vector< std::vector<int> > Groups()
+	std::vector< std::vector<size_t> > Groups()
 	{
-		std::map< int, std::vector<int> > groups;
+		std::map< size_t, std::vector<size_t> > groups;
 		for(size_t i = 0; i < Parent.size(); i++)
 			groups[ Parent[i] ].push_back(i);
 
-		std::vector< std::vector<int> > groupsVector;
+		std::vector< std::vector<size_t> > groupsVector;
 		for(auto g : groups) groupsVector.push_back(g.second);
 		return groupsVector;
 	}

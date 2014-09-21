@@ -1,120 +1,98 @@
 #include "ParticleDeformer.h"
+#include "ParticleCorresponder.h"
 #include "myglobals.h"
 
-#include "Raytracing.h"
+#include "BasicTable.h"
 
-ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB):
-    sA(pmeshA), sB(pmeshB)
+ParticleDeformer::ParticleDeformer(ParticleMesh *pmeshA, ParticleMesh *pmeshB): sA(pmeshA), sB(pmeshB)
 {
-	// Compute sum of errors
-	int numSteps = 10;
-	std::vector<double> errorVector;
+	generateAssignments();
+}
 
-	/*Eigen::AlignedBox3d boxA( sA->bbox_min, sA->bbox_max );
-	Eigen::AlignedBox3d boxB( sB->bbox_min, sB->bbox_max );
-	Vector3 bbox_ratios(0,0,0);
-	for(int i = 0; i < 3; i++){
-		bbox_ratios[i] = boxA.sizes()[i] / boxB.sizes()[i];
-		if(bbox_ratios[i] <= 1.49) bbox_ratios[i] = 0;
-	}*/
-	Eigen::Vector3d bbox_ratios(0,0,0);
+void ParticleDeformer::generateAssignments()
+{
+	auto segsA = sA->property["segments"].value<Segments>();
+	auto segsB = sB->property["segments"].value<Segments>();
 
-	// Compute original descriptors
-	{
-		std::vector<Vector3> originalPoints;
-		for(auto & particle : sA->particles)
-			originalPoints.push_back( particle.pos );
-		auto originalMesh = sA->meshPoints( originalPoints, Eigen::Vector3i(0,0,0) );
-		raytracing::Raytracing<Eigen::Vector3d> rtOriginal( originalMesh );
-		#pragma omp parallel for
-		for(int pi = 0; pi < (int)sA->particles.size(); pi++)
-		{
-			auto & p = sA->particles[pi];
-			int r = 0;
-			for(auto d : sA->usedDirections)
+	//auto idA = segsA.keys(), idB = segsB.keys();
+	auto boxA = sA->bbox(), boxB = sB->bbox();
+
+	auto groupsA = sA->property["groups"].value< std::vector< std::vector<size_t> > >();
+	auto groupsB = sB->property["groups"].value< std::vector< std::vector<size_t> > >();
+
+	/// Build similarity matrix of groups:
+	Eigen::MatrixXd similiarity = Eigen::MatrixXd::Ones( groupsA.size(), std::max(groupsA.size() + 1, groupsB.size() + 1) );
+
+	for(size_t i = 0; i < similiarity.rows(); i++){
+		double minVal = DBL_MAX;
+		for(size_t j = 0; j < similiarity.cols(); j++){
+			double val = 0;
+
+			if( j < groupsB.size() )
 			{
-				raytracing::RayHit hit = rtOriginal.hit( p.pos, d );
-				sA->desc[pi][r++] = hit.distance;
-			}
-		}
+				Eigen::AlignedBox3d groupBoxA, groupBoxB;
 
-		// Clean up
-		delete originalMesh;
+				for(auto sid : groupsA[i]) groupBoxA.extend( segsA[sid].property["bbox"].value<Eigen::AlignedBox3d>() );
+				for(auto sid : groupsB[j]) groupBoxB.extend( segsB[sid].property["bbox"].value<Eigen::AlignedBox3d>() );
+
+				Vector3 relativeCenterA = (groupBoxA.center()-boxA.min()).array() / boxA.sizes().array();
+				Vector3 relativeCenterB = (groupBoxB.center()-boxB.min()).array() / boxB.sizes().array();
+
+				val = ( relativeCenterA - relativeCenterB ).norm();
+
+				minVal = std::min(minVal, val);
+			}
+
+			similiarity(i,j) = val;
+		}
+		double maxVal = similiarity.row(i).maxCoeff();
+		if(maxVal == 0) maxVal = 1.0;
+
+		for(size_t j = 0; j < groupsB.size(); j++)
+			similiarity(i,j) = (similiarity(i,j) - minVal) / maxVal;
 	}
 
-	for(int i = 0; i < numSteps; i++)
+	similiarity.array() /= similiarity.maxCoeff();
+
+	std::vector< std::vector<float> > data;
+	for(int i = 0; i < similiarity.rows(); i++){
+		std::vector<float> dataRow;
+		for(int j = 0; j < similiarity.cols(); j++) 
+			dataRow.push_back( similiarity(i,j) );
+		data.push_back(dataRow);
+	}
+	showTableColorMap(data, true);
+
+	// Find Acceptable Permutations
 	{
-		double t = double(i) / (numSteps-1);
+		double threshold = 0.5;
 
-		// Mesh at time 't'
-		std::vector<Eigen::Vector3d> movedPoints;
+		bool isTranspose = false;
+		if( similiarity.rows() > similiarity.cols() ) isTranspose = true;
+		if( isTranspose ) similiarity = similiarity.transpose();
 
-		for(auto & particle : sA->particles){
-			movedPoints.push_back( AlphaBlend(t, particle.pos, sB->particles[particle.correspondence].pos) );
-		}
+		std::vector< std::vector<size_t> > possibleSets;
 
-		auto curMesh = sA->meshPoints( movedPoints, bbox_ratios.cast<int>() );
+		// Fill set
+		std::vector< size_t > idxSet;
+		for(size_t i = 0; i < similiarity.cols(); i++) idxSet.push_back(i);
 
-		// Accelerated raytracing
-		raytracing::Raytracing<Eigen::Vector3d> rt( curMesh );
-
-		std::vector<double> errors( sA->particles.size(), 0 );
-		int misses = 0;
-
-		double unitlength = sA->grid.unitlength;
-		Vector3 center_delta = sA->grid.translation.cast<double>() + ( 0.5 * Vector3(unitlength,unitlength,unitlength) );
-
-		// Shoot rays around all particles
-		#pragma omp parallel for
-		for(int pi = 0; pi < (int)sA->particles.size(); pi++)
+		// Go over permutations
+		while ( std::next_permutation(idxSet.begin(), idxSet.begin() + similiarity.rows()) )
 		{
-			auto & p = sA->particles[pi];
-
-			std::vector<float> oldDescriptor = sA->desc[pi];
-			std::vector<float> newDescriptor = sA->desc[pi];
-
-			int r = 0;
-			for(auto d : sA->usedDirections)
-			{
-				// Snap point to its location on the grid
-				Vector3 pg = (movedPoints[pi] - sA->grid.translation.cast<double>()) / unitlength;
-				Eigen::Vector3i v( pg.x(), pg.y(), pg.z() );
-				Vector3 gridpnt_pos = Vector3(v[0] * unitlength, v[1] * unitlength, v[2] * unitlength) + center_delta;
-			
-				raytracing::RayHit hit = rt.hit( gridpnt_pos, d );
-				newDescriptor[r++] = hit.distance;
-
-				if( !hit.isHit ) 
-				{
-					#pragma omp critical
-					{
-						misses++;
-						auto vs = new starlab::VectorSoup;
-						vs->addVector(movedPoints[pi].cast<double>(), d);
-						debug << vs;
-						//curMesh->write("missMesh.off");
-					}
+			// Evaluate set
+			bool accept = true;
+			for(size_t i = 0; i < idxSet.size(); i++){
+				if( similiarity(i, idxSet[i]) > threshold ){
+					accept = false;
+					break;
 				}
 			}
 
-			// Compute error
-			auto di = Eigen::Map<Eigen::VectorXf>(&sA->desc[pi][0], sA->desc[pi].size());
-			auto dj = Eigen::Map<Eigen::VectorXf>(&newDescriptor[0], newDescriptor.size());
-
-			errors[pi] = (di-dj).norm();
+			if( accept ) possibleSets.push_back( idxSet );
 		}
 
-		if( misses ){
-			debugBox(QString("Missed rays = %1").arg(misses));
-			curMesh->write((QString("%1_").arg(i) + "step.off").toStdString());
-		}
-
-		double errorSum = 0;
-		for(auto e : errors) errorSum += e;
-		errorVector.push_back( errorSum );
-		
-		delete curMesh;
+		debugBox(possibleSets.size());
+		debugBoxVec2( possibleSets, 20 );
 	}
-
-	debugBoxVec(errorVector);
 }

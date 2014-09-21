@@ -9,4 +9,6 @@ public:
     ParticleMesh *sA, *sB;
 
     QVector<RenderObject::Base*> debug;
+
+	void generateAssignments();
 };

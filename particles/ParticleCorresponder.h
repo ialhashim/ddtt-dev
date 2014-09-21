@@ -6,8 +6,12 @@ class ParticleCorresponder
 {
 public:
     ParticleCorresponder( ParticleMesh * pmeshA, ParticleMesh * pmeshB );
-	Particles partToPartCorrespondence( const QVector< std::pair< size_t,size_t> > & partToPartAssignments );
-    ParticleMesh *sA, *sB;
 
-    QVector<RenderObject::Base*> debug;
+	ParticleMesh *sA, *sB;
+
+	QVector<RenderObject::Base*> debug;
+
+	std::vector< std::vector<size_t> > computeGroups( ParticleMesh * input );
+
+	Particles segmentToSegmentCorrespondence( const QVector< std::pair< size_t,size_t> > & segToSegAssignments );
 };

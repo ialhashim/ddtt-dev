@@ -233,12 +233,24 @@ static inline void debugBox( DataType message ){
 	msgBox.exec();
 }
 static inline void debugBoxList( QStringList messages ){
-	debugBox( messages.join("\n") );
+	debugBox( messages.join("<br>") );
 }
 template<typename Container>
 static inline void debugBoxVec( Container data ){
 	QStringList l;
 	for(auto d : data) l << QString("%1").arg(d);
+	debugBoxList(l);
+}
+template<typename Container2D>
+static inline void debugBoxVec2( Container2D data, int limit = -1 ){
+	QStringList l;
+	for(auto row : data){
+		QStringList line;
+		for(auto d : row) line << QString("%1").arg( d );
+		l << QString("%1").arg( line.join(", ") );
+		if(limit > 0 && l.size() == limit) break;
+	}
+	if(limit > 0 && limit < l.size()) l << QString("... (%1) more").arg(data.size() - l.size());
 	debugBoxList(l);
 }
 

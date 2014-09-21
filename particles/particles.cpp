@@ -821,8 +821,8 @@ void particles::create()
 			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
 			for(auto d : pc.debug) drawArea()->addRenderObject(d);
 
-			//ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
-			//for(auto d : pd.debug) drawArea()->addRenderObject(d);
+			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+			for(auto d : pd.debug) drawArea()->addRenderObject(d);
 
 			mainWindow()->setStatusBarMessage(QString("Processed (%1 ms)").arg(processingTimer.elapsed()));
 		}

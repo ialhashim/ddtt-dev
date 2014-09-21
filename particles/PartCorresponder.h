@@ -26,6 +26,7 @@ typedef QVector<Slice> Slices;
 
 Q_DECLARE_METATYPE( Segments );
 Q_DECLARE_METATYPE( Slices );
+Q_DECLARE_METATYPE( Eigen::AlignedBox3d );
 
 class PartCorresponder
 {

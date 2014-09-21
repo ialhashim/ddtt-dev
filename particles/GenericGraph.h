@@ -244,6 +244,7 @@ namespace GenericGraphs{
 
 			// Attributes
 			this->vertices_prop = from.vertices_prop;
+			this->property = from.property;
 		}
 
 		void AddEdge(vertex_t p1, vertex_t p2, weight_t weight, int index = -1)
