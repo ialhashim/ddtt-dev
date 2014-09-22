@@ -19,9 +19,10 @@ HEADERS += \
     convexhull.h \
     SplitOperation.h \
     Segmentation.h \
-    ParticleCorresponder.h \
-    ParticleDeformer.h \
-    PartCorresponder.h
+    PartCorresponder.h \
+    CorrespondencePrepare.h \
+    CorrespondenceGenerator.h \
+    CorrespondenceSearch.h
 
 SOURCES += \
     particles.cpp \
@@ -31,9 +32,10 @@ SOURCES += \
     StructureAnalysis.cpp \
     SplitOperation.cpp \
     Segmentation.cpp \
-    ParticleCorresponder.cpp \
-    ParticleDeformer.cpp \
-    PartCorresponder.cpp
+    PartCorresponder.cpp \
+    CorrespondencePrepare.cpp \
+    CorrespondenceGenerator.cpp \
+    CorrespondenceSearch.cpp
 
 # SVG viewer
 HEADERS += svgview.h

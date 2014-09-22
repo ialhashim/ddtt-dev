@@ -1,10 +1,10 @@
-#include "ParticleCorresponder.h"
+#include "CorrespondencePrepare.h"
 #include "PartCorresponder.h"
 #include "Bounds.h"
 #include "disjointset.h"
 #include "myglobals.h"
 
-ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *pmeshB) : sA(pmeshA), sB(pmeshB)
+CorrespondencePrepare::CorrespondencePrepare(ParticleMesh *pmeshA, ParticleMesh *pmeshB) : sA(pmeshA), sB(pmeshB)
 {
 	QVector<ParticleMesh*> input;
 	input << sA << sB;
@@ -31,10 +31,9 @@ ParticleCorresponder::ParticleCorresponder(ParticleMesh *pmeshA, ParticleMesh *p
 			input[i]->property["groups"].setValue( computeGroups(input[i]) );
 		}
 	}
-
 }
 
-std::vector< std::vector<size_t> > ParticleCorresponder::computeGroups( ParticleMesh * input )
+std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( ParticleMesh * input )
 {
 	double box_z = input->bbox().sizes().z();
 	auto & segments = input->property["segments"].value<Segments>();
@@ -173,7 +172,7 @@ std::vector< std::vector<size_t> > ParticleCorresponder::computeGroups( Particle
 	return foundGroups;
 }
 
-Particles ParticleCorresponder::segmentToSegmentCorrespondence( const QVector< std::pair< size_t,size_t> > & segToSegAssignments )
+Particles CorrespondencePrepare::segmentToSegmentCorrespondence( const QVector< QPair< size_t,size_t> > & segToSegAssignments )
 {
 	Particles result;
 

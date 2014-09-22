@@ -27,10 +27,13 @@ public:
     // Always usable
     bool isApplicable() { return true; }
 
+	bool isBlendingReady;
+
 public slots:
 	void processShapes();
-	void blending();
+    void prepareBlending();
 	void reVoxelize();
+	void postCorrespond();
 
 signals:
 	void shapesProcessed();

@@ -10,6 +10,7 @@
 using namespace SurfaceMesh;
 
 QTimer * timer = NULL;
+QWidget * experimentViewer = NULL;
 
 QStringList files;
 
@@ -29,8 +30,13 @@ std::vector<Spherelib::Sphere*> spheres;
 
 #include "kmeans.h"
 
-#include "ParticleCorresponder.h"
-#include "ParticleDeformer.h"
+#include "CorrespondencePrepare.h"
+#include "CorrespondenceGenerator.h"
+#include "CorrespondenceSearch.h"
+
+CorrespondencePrepare * cp = NULL;
+CorrespondenceGenerator * cg = NULL;
+CorrespondenceSearch * cs = NULL;
 
 void particles::processShapes()
 {
@@ -49,14 +55,6 @@ void particles::processShapes()
 
 	// Show voxelized meshes
 	//for(auto & s : pw->pmeshes) document()->addModel(s->surface_mesh->clone());
-
-	if(pw->pmeshes.size() > 1)
-	{
-		// Experiment
-		blending();
-		pw->isReady = true;
-		return;
-	}
 
 	QElapsedTimer allTimer; allTimer.start();
 
@@ -599,15 +597,19 @@ void particles::processShapes()
 	emit( shapesProcessed() );
 }
 
-void particles::blending()
+void particles::prepareBlending()
 {
 	if(!widget) return;
 	ParticlesWidget * pw = (ParticlesWidget *) widget;
 	pw->isReady = false;
 
 	if(pw->pmeshes.size() < 2) return;
-	ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
-	ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
+
+	cp = new CorrespondencePrepare(pw->pmeshes.front(), pw->pmeshes.back());
+    for(auto d : cp->debug) drawArea()->addRenderObject(d);
+
+    cg = new CorrespondenceGenerator(pw->pmeshes.front(), pw->pmeshes.back());
+    for(auto d : cg->debug) drawArea()->addRenderObject(d);
 }
 
 void particles::reVoxelize()
@@ -634,6 +636,8 @@ void particles::reVoxelize()
 
 void particles::create()
 {
+	isBlendingReady = false;
+
 	if( widget ) return;
 
 	// Viewer
@@ -658,7 +662,7 @@ void particles::create()
 
 	// Collect experiment figures
 	{
-		QWidget * experimentViewer = new QWidget;
+		experimentViewer = new QWidget;
 		QVBoxLayout * expViewerLayout = new QVBoxLayout;
 
 		QWidget * thumbsWidget = new QWidget;
@@ -692,7 +696,6 @@ void particles::create()
 		experimentViewer->setLayout(expViewerLayout);
 		experimentViewer->setMinimumSize(thumbWidth,thumbWidth);
 		experimentViewer->move( mainWindow()->geometry().topLeft() - QPoint(thumbWidth,0) );
-		experimentViewer->show();
 	}
 
 	// General Tests
@@ -778,11 +781,14 @@ void particles::create()
 
 		mainWindow()->setStatusBarMessage(QString("Shapes loaded and voxelized (%1 ms)").arg(timer.elapsed()));
 
+		if(experimentViewer && !experimentViewer->isVisible()) experimentViewer->show();
+
 		emit( pw->shapesLoaded() );
 	});
 
 	connect(pw->ui->clearMeshes, &QPushButton::released, [=]{
 		pw->pmeshes.clear();
+		drawArea()->clear();
 		drawArea()->update();
 	});
 
@@ -798,6 +804,9 @@ void particles::create()
 	});
 
 	connect(pw->ui->loadMeshes, &QPushButton::released, [=]{
+		isBlendingReady = false;
+		pw->ui->isShowBlend->setChecked( false );
+
 		pw->pmeshes.clear();
 		drawArea()->clear();
 
@@ -818,17 +827,21 @@ void particles::create()
 		{
 			QElapsedTimer processingTimer; processingTimer.start();
 
-			ParticleCorresponder pc(pw->pmeshes.front(), pw->pmeshes.back());
-			for(auto d : pc.debug) drawArea()->addRenderObject(d);
+            prepareBlending();
 
-			ParticleDeformer pd(pw->pmeshes.front(), pw->pmeshes.back());
-			for(auto d : pd.debug) drawArea()->addRenderObject(d);
-
-			mainWindow()->setStatusBarMessage(QString("Processed (%1 ms)").arg(processingTimer.elapsed()));
+			mainWindow()->setStatusBarMessage(QString("Ready (%1 ms)").arg(processingTimer.elapsed()));
 		}
 
 		pw->isReady = true;
 		drawArea()->update();
+	});
+
+
+	connect(pw->ui->runCorrespondence, &QPushButton::released, [=]{
+		cs = new CorrespondenceSearch( cg );
+		connect(cs, SIGNAL(done()), SLOT(postCorrespond()));
+
+		cs->start();
 	});
 
 	// Post-processing
@@ -838,6 +851,27 @@ void particles::create()
 #ifdef QT_DEBUG
 	pw->ui->gridsize->setValue(16);
 #endif
+}
+
+void particles::postCorrespond()
+{
+	isBlendingReady = false;
+
+	// Apply best correspondence
+	cs->applyCorrespondence( cs->bestCorrespondence );	
+
+	for(auto d : cs->debug) drawArea()->addRenderObject(d);
+
+	QStringList message;
+	message << QString("Number of paths ( %1 ).").arg( cs->property["pathsCount"].toInt() );
+	message << QString("Entire search time ( %1 ms ).").arg( cs->property["allSearchTime"].toInt() );
+	mainWindow()->setStatusBarMessage( message.join("\n") );
+
+	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+	//pwidget->ui->isShowBlend->setChecked( true );
+	isBlendingReady = true;
+
+	drawArea()->update();
 }
 
 void particles::decorate()
@@ -872,6 +906,8 @@ void particles::decorate()
 		return;
 	}
 
+	if(!isBlendingReady) return;
+
 	// Experimental
 	static bool isForward = true;
 	static double alpha = 0;
@@ -902,10 +938,10 @@ void particles::decorate()
 	ParticleMesh * jmesh = pwidget->pmeshes.back();
 
 	for(auto & particle : imesh->particles){
-		//mixedPoints.push_back( imesh->realPos( AlphaBlend(alpha, particle.relativePos, 
-		//	jmesh->particles[particle.correspondence].relativePos) ).cast<float>() );
+		auto correspondingParticle = particle.correspondence;
+		if(correspondingParticle > jmesh->particles.size() - 1) continue;
 
-		//mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
+		mixedPoints.push_back(AlphaBlend(alpha, particle.pos, jmesh->particles[particle.correspondence].pos).cast<float>());
 	}
 
 	/*if( !pwidget->ui->isOneSided->isChecked() )

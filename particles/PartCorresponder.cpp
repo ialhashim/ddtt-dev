@@ -83,19 +83,21 @@ void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsP
 	slices << input[0]->property["segments"].value<Segments>()[segmentsPair.first].property["slices"].value<Slices>();
 	slices << input[1]->property["segments"].value<Segments>()[segmentsPair.second].property["slices"].value<Slices>();
 
+	auto ii = 0, ij = 1;
+
+	// i has more slices than j
+	bool isSwap = slices[ii].size() < slices[ij].size();
+
 	/// Correspond chunks:
 	{
-		auto si = 0, sj = 1;
+		if( isSwap ) std::swap(ii, ij);
 
-		// i has more slices than j
-		if( slices[si].size() < slices[sj].size() ) std::swap(si, sj);
-
-		for(size_t sliceID = 0; sliceID < slices[si].size(); sliceID++)
+		for(size_t sliceID = 0; sliceID < slices[ii].size(); sliceID++)
 		{
-			auto & slice_i = slices[si][sliceID];
-			double a = double(sliceID) / std::max(1, (slices[si].size()-1));
-			int j_idx =  std::ceil(a * (slices[sj].size()-1));
-			auto & slice_j = slices[sj][j_idx];
+			auto & slice_i = slices[ii][sliceID];
+			double a = double(sliceID) / std::max(1, (slices[ii].size()-1));
+			int j_idx =  std::ceil(a * (slices[ij].size()-1));
+			auto & slice_j = slices[ij][j_idx];
 
 			/// First project chunks onto diagonal of their slice
 			QVector< QVector< size_t > > sortedChunks;
@@ -141,6 +143,8 @@ void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsP
 				{
 					QVector<SliceChunk*> chunk; chunk << &chunk_i << &chunk_j;
 
+					if( isSwap ) std::reverse(chunk.begin(), chunk.end());
+
 					for(size_t si = 0; si < input.size(); si++)
 					{
 						auto sj = (si+1) % input.size();
@@ -148,11 +152,10 @@ void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsP
 						std::vector<size_t> closestMap( chunk[si]->vmap.size(), -1 );
 
 						// Find closest particle
-						//#pragma omp parallel for
 						for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
 						{
 							auto vi = chunk[si]->vmap[i];
-							auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( input[si]->particles[vi].relativePos )];
+							auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( particles[si][vi].relativePos )];
 
 							closestMap[i] = vj;
 						}

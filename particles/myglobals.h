@@ -223,6 +223,18 @@ static inline void saveToTextFile( QString filename, QStringList items ){
 	}
 }
 
+template<typename T>
+static inline QStringList vecToString2( T data, int limit = -1 ){
+	QStringList l;
+	for(auto row : data){
+		QStringList line;
+		for(auto d : row) line << QString("%1").arg( d );
+		l << QString("%1").arg( line.join(", ") );
+		if(limit > 0 && l.size() == limit) break;
+	}
+	return l;
+}
+
 // Simplify runtime debugging
 #include <QMessageBox>
 template<typename DataType>
