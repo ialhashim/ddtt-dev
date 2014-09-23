@@ -62,17 +62,16 @@ Assignments CorrespondenceGenerator::generateGroupAssignments()
 	}
 	if(false) showTableColorMap(data, true); // DEBUG
 
-	// Find Acceptable Assignments
-	
-	double threshold = 0.25;
+	// Parameters:
+	double similarity_threshold = 0.25;
+	int count_threshold = 1;
 
 	// Collect good candidates
-
 	Assignments candidates;
 	for(size_t i = 0; i < similiarity.rows(); i++){
 		QVector<size_t> candidate;
 		for(size_t j = 0; j < similiarity.cols(); j++){
-			if(similiarity(i,j) < threshold)
+			if(similiarity(i,j) < similarity_threshold)
 				candidate << j;
 		}
 		candidates << candidate;
@@ -88,11 +87,10 @@ Assignments CorrespondenceGenerator::generateGroupAssignments()
 		QMap<size_t,size_t> counts;
 		bool accept = true;
 		auto NOTHING_SEGMENT = similiarity.cols()-1;
-		int THRESHOLD_COUNT = 1;
 
 		for(auto i : a) counts[i]++;
 		for(auto k : counts.keys()){
-			if(k != NOTHING_SEGMENT && counts[k] > THRESHOLD_COUNT){
+			if(k != NOTHING_SEGMENT && counts[k] > count_threshold){
 				accept = false;
 				break;
 			}
@@ -102,7 +100,7 @@ Assignments CorrespondenceGenerator::generateGroupAssignments()
 	}
 
 	// DEBUG:
-	if(false) saveToTextFile("assignments.txt", vecToString2(filtered));
+	if(true) saveToTextFile("assignments.txt", vecToString2(filtered));
 
 	generatedAssignments = filtered;
 	

@@ -20,6 +20,7 @@ public:
     void decorate();
 
 	bool keyPressEvent(QKeyEvent*);
+	bool mouseMoveEvent(QMouseEvent*);
 
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;

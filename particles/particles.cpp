@@ -605,7 +605,7 @@ void particles::prepareBlending()
 
 	if(pw->pmeshes.size() < 2) return;
 
-	cp = new CorrespondencePrepare(pw->pmeshes.front(), pw->pmeshes.back());
+	cp = new CorrespondencePrepare( pw->pmeshes );
     for(auto d : cp->debug) drawArea()->addRenderObject(d);
 
     cg = new CorrespondenceGenerator(pw->pmeshes.front(), pw->pmeshes.back());
@@ -842,6 +842,17 @@ void particles::create()
 		connect(cs, SIGNAL(done()), SLOT(postCorrespond()));
 
 		cs->start();
+	});
+
+	connect(pw->ui->vizCorrespondence, &QPushButton::released, [=]{
+		drawArea()->clear();
+
+		for( auto pmesh : pw->pmeshes ){
+			auto tree = new NanoKdTree;
+			for( auto & p : pmesh->particles ) tree->addPoint(p.pos);
+			tree->build();
+			pmesh->property["tree"].setValue( (void*)tree );
+		}
 	});
 
 	// Post-processing
@@ -1170,6 +1181,85 @@ bool particles::keyPressEvent(QKeyEvent*e)
 		spheres.push_back( sphere );
 	}
 
+	// Merge and show groups
+	if(e->key() == Qt::Key_G)
+	{		
+		ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+		if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+
+		for(auto input : pwidget->pmeshes)
+		{
+			auto segs = input->property["segments"].value< Segments >();
+			auto groups = input->property["groups"].value< std::vector< std::vector<size_t> > >();
+
+			int gid = 0;
+
+			for(auto g : groups){
+				for(auto sid : g)
+					for(auto v : segs[sid].vertices)
+						input->particles[v].segment = gid;
+				gid++;
+			}
+		}
+	}
+
 	drawArea()->update();
 	return true;
+}
+
+bool particles::mouseMoveEvent(QMouseEvent* event)
+{
+	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
+	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+
+	drawArea()->setMouseTracking(true);
+	mainWindow()->setStatusBarMessage( QString("%1,%2").arg(event->x()).arg(event->y()) );
+	
+	qglviewer::Vec _orig, _dir;
+	drawArea()->camera()->convertClickToLine(event->pos(), _orig, _dir);
+	Vector3 orig (_orig), dir(_dir);
+
+	bool found = false;
+	qglviewer::Vec p = drawArea()->camera()->pointUnderPixel(event->pos(), found);
+	Vector3 point(p);
+
+	if( found )
+	{
+		auto meshA = pwidget->pmeshes.front();
+		auto meshB = pwidget->pmeshes.back();
+		NanoKdTree * tree = (NanoKdTree *)meshA->property["tree"].value<void*>();
+
+		if(tree)
+		{
+			KDResults matches;
+			tree->ball_search( point, meshA->grid.unitlength * 0.5, matches );
+
+			auto ss = new starlab::SphereSoup;
+			auto ls = new starlab::LineSegments(4);
+
+			for(auto match : matches)
+			{
+				size_t pi = match.first;
+				size_t pj = meshA->particles[pi].correspondence;
+
+				if(pj > meshA->particles.size()) continue;
+
+				ss->addSphere( Vector3(meshA->particles[pi].pos), meshA->grid.unitlength * 2 );
+				ss->addSphere( Vector3(meshB->particles[pj].pos + Vector3(1,0,0)), meshA->grid.unitlength * 2 );
+
+				ls->addLine(meshA->particles[pi].pos, Vector3(meshB->particles[pj].pos + Vector3(1,0,0)), Qt::black);
+			}
+
+			if(matches.size())
+			{
+				meshA->debug.clear();
+
+				meshA->debug << ss << ls;
+
+				drawArea()->update();
+			}
+		}
+	}
+
+	return false;
 }

@@ -28,7 +28,7 @@ void CorrespondenceSearch::run()
 	QVector<Particles> inputParticles; inputParticles << sA->particles << sB->particles;
 	auto boxA = sA->bbox();
 
-	std::vector<double> pathScores( paths.size(), 0 );
+	std::vector<double> pathScores( paths.size(), DBL_MAX );
   
 	bool abort = false;
 
@@ -43,43 +43,43 @@ void CorrespondenceSearch::run()
                 abort = true;
                 #pragma omp flush (abort)
             }
-        }
 
-		double score = 0;
-		auto & path = paths[pi];
+			double score = 0;
+			auto & path = paths[pi];
 
-		// Compute dense correspondence
-		QVector<Particles> particles = inputParticles;
-		for(auto & pairing : path) PartCorresponder::correspondSegments( pairing, input, particles );
+			// Compute dense correspondence
+			QVector<Particles> particles = inputParticles;
+			for(auto & pairing : path) PartCorresponder::correspondSegments( pairing, input, particles );
 
-		// Evaluate correspondence:
-		{
-			int numSamples = 4;
-			int start = 1; // Skipping initial configuration
-
-			for(int sample = start; sample < numSamples; sample++) 
+			// Evaluate correspondence:
 			{
-				double t = double(sample) / (numSamples-1);
+				int numSamples = 4;
+				int start = 1; // Skipping initial configuration
 
-				for(auto & p : particles[0])
+				for(int sample = start; sample < numSamples; sample++) 
 				{
-					// one-to-none
-					if( p.correspondence > particles[1].size() ) 
+					double t = double(sample) / (numSamples-1);
+
+					for(auto & p : particles[0])
 					{
-						score += (p.pos - boxA.center()).norm();
-						continue;
+						// one-to-none
+						if( p.correspondence > particles[1].size() ) 
+						{
+							score += (p.pos /*- boxA.center()*/).norm() * 100;
+							continue;
+						}
+
+						auto blended = AlphaBlend(t, p.pos, particles[1][p.correspondence].pos);
+
+						score += (blended - p.pos).norm();
 					}
-
-					auto blended = AlphaBlend(t, p.pos, particles[1][p.correspondence].pos);
-
-					score += (blended - p.pos).norm();
 				}
 			}
-		}
 
-		pathScores[pi] = score;
+			pathScores[pi] = score;
 
-		emit( pathComputed() );
+			emit( pathComputed() );
+        }
     }
 
 	/// Assign best correspondence:

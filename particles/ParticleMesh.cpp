@@ -243,7 +243,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	double ratio = 1.0 / camDist;
 
 	//double curPointSize = std::max(2, std::min(10, int(8.0 * ratio)));
-	double curPointSize = 5;
+	double curPointSize = 6;
 	glPointSize( curPointSize );
 
 	glBegin(GL_POINTS);
@@ -304,6 +304,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	}
 
 	// Draw grid bounds
+	if( false )
 	{
 		glLineWidth(3);
 		glColor3d(0,0,1);
@@ -316,6 +317,7 @@ void ParticleMesh::drawParticles( qglviewer::Camera * camera )
 	}
 
 	// Draw reflectional planes
+	if( false )
 	{
 		starlab::PlaneSoup ps(0.05, true, Qt::gray);
 		for(auto p : reflectionPlanes) ps.addPlane( p.pos, p.n );
