@@ -307,7 +307,7 @@ void PartCorresponder::match1DGridChunk( QVector< QVector<SliceChunk> > sortedCh
 	else
 	{
 		// Same number of elements, simply match them up
-		for(size_t i = 0; i < sortedChunk.size(); i++)
+		for(size_t i = 0; i < sortedChunk.front().size(); i++)
 		{
 			readyChunkPairs.push_back( QVector<SliceChunk>() << sortedChunkFront.at(i) << sortedChunkBack.at(i) );
 		}
