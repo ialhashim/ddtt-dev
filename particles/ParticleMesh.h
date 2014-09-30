@@ -60,7 +60,8 @@ public:
 
 	SegmentGraph toGraph( SegmentGraph::vertices_set selected = SegmentGraph::vertices_set() ) const;
 
-	Segments segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph );	
+	Segments segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph, bool isCombineSameSegmentID = false );
+
 	std::vector< SegmentGraph > getEdgeParticlesOfSegment( const SegmentGraph & segment ) const;
 	Eigen::AlignedBox3d segmentBoundingBox( const SegmentGraph & segment ) const;
 	std::vector< std::vector< std::vector<float> > > toGrid();

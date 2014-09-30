@@ -8,5 +8,5 @@ public:
 
 	QVector<RenderObject::Base*> debug;
 
-	std::vector< std::vector<size_t> > computeGroups( ParticleMesh * input );
+	static std::vector< std::vector<size_t> > computeGroups( ParticleMesh * input, const Segments & segments );
 };

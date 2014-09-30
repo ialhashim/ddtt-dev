@@ -12,10 +12,27 @@ CorrespondencePrepare::CorrespondencePrepare( std::vector<ParticleMesh*> meshes 
 	#pragma omp parallel for
 	for(int i = 0; i < input.size(); i++)
 	{
+		/// Combine segments from discovered groups:
+		{			
+			SegmentGraph neiGraph;
+			auto & segments = input[i]->segmentToComponents( input[i]->toGraph(), neiGraph, true );
+
+			auto groups = computeGroups(input[i], segments);
+
+			// Combine:
+			int gid = 0;
+			for(auto g : groups){
+				for(auto sid : g)
+					for(auto v : segments[sid].vertices)
+						input[i]->particles[v].segment = gid;
+				gid++;
+			}
+		}
+
 		/// Compute slices for each segment of shape:
 		{
 			SegmentGraph neiGraph;
-			auto & segments = input[i]->segmentToComponents( input[i]->toGraph(), neiGraph );
+			auto & segments = input[i]->segmentToComponents( input[i]->toGraph(), neiGraph, true );
 
 			for(auto & seg : segments)
 				seg.property["slices"].setValue( PartCorresponder::computeSlices( input[i], seg ) );
@@ -24,20 +41,19 @@ CorrespondencePrepare::CorrespondencePrepare( std::vector<ParticleMesh*> meshes 
 				seg.property["bbox"].setValue( input[i]->segmentBoundingBox(seg) );
 
 			input[i]->property["segments"].setValue( segments );
-		}
 
-		/// Compute groups of each shape:
-		{
-			input[i]->property["groups"].setValue( computeGroups(input[i]) );
+			// Convert segments into groups since we've combined them, see top of the loop:
+			std::vector< std::vector<size_t> > groups;
+			for(auto & seg : segments)
+				groups.push_back( std::vector<size_t>(1, seg.uid) );
+			input[i]->property["groups"].setValue( groups );
 		}
 	}
 }
 
-std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( ParticleMesh * input )
+std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( ParticleMesh * input, const Segments & segments )
 {
 	auto inputbox = input->bbox().sizes();
-
-	auto & segments = input->property["segments"].value<Segments>();
 
 	auto segIDs = segments.keys();
 	std::map<size_t,size_t> segMap;
@@ -51,7 +67,7 @@ std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( Particl
 	{
 		NanoKdTree alongAxis;
 		for( auto & seg : segments ){
-			Vector3 p(0,0,seg.property["bbox"].value<Eigen::AlignedBox3d>().center()[coord] / inputbox[coord]);
+			Vector3 p(0, 0, input->segmentBoundingBox( seg ).center()[coord] / inputbox[coord]);
 			alongAxis.addPoint( p );
 		}
 		alongAxis.build();
@@ -61,7 +77,7 @@ std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( Particl
 			if( seen[sid] ) continue;
 
 			auto & si = segments[ segIDs[sid] ];
-			auto box = si.property["bbox"].value<Eigen::AlignedBox3d>();
+			auto box = input->segmentBoundingBox( si );
 			Vector3 p(0,0,box.center()[coord] / inputbox[coord]);
 
 			KDResults matches;
@@ -172,7 +188,7 @@ std::vector< std::vector<size_t> > CorrespondencePrepare::computeGroups( Particl
 			Eigen::AlignedBox3d groupBox;
 			for(auto segID : group) groupBox.extend( input->segmentBoundingBox( segments[segID] ) );
 			bs->addBox(groupBox, Qt::black);
-			debug << bs;
+			input->debug << bs;
 		}
 	}
 

@@ -1,7 +1,16 @@
 #include "PartCorresponder.h"
 #include "Bounds.h"
+#include "myglobals.h"
 
 int slice_uid = 0;
+
+QVector<Eigen::AlignedBox3d> splitBox( const Eigen::AlignedBox3d & box, Vector3 axis )
+{
+	Eigen::AlignedBox3d b1 = box, b2 = box;
+	Vector3 delta = axis.array() * ((box.sizes() * 0.5).array());
+	return QVector<Eigen::AlignedBox3d>() << box.intersection(b1.translate(-delta)) <<
+		box.intersection(b2.translate(delta));
+}
 
 Slices PartCorresponder::computeSlices( ParticleMesh * input, const SegmentGraph & seg )
 {
@@ -48,6 +57,8 @@ Slices PartCorresponder::computeSlices( ParticleMesh * input, const SegmentGraph
 			layerGraph.AddEdge( edge.index, edge.target, 1 );
 		}
 
+		if( layerGraph.vertices.empty() ) continue;
+
 		auto & slice = curSlices[i];
 		slice.chunksFromGraphs( layerGraph.toConnectedParts() );
 
@@ -72,7 +83,11 @@ Slices PartCorresponder::computeSlices( ParticleMesh * input, const SegmentGraph
 		}
 	}
 
-	return curSlices;
+	Slices goodSlices;
+	for(auto slice : curSlices) 
+		if(!slice.chunks.empty()) 
+			goodSlices.push_back(slice);
+	return goodSlices;
 }
 
 void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsPair, 
@@ -104,96 +119,317 @@ void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsP
 
 			QVector<Slice*> bothSlices;
 			bothSlices << &slice_i << &slice_j;
+			if( isSwap ) std::reverse(bothSlices.begin(), bothSlices.end());
 
-			for( auto slice : bothSlices )
+			// Most basic case, a single chunk matches with another
+			if( slice_i.chunks.size() == 1 && slice_j.chunks.size() == 1 )
 			{
-				Eigen::AlignedBox3d slice_box;
-				for(auto & chunk : slice->chunks) slice_box.extend( chunk.box );
-
-				std::vector< std::pair<double,size_t> > projected;
-
-				for(size_t idx = 0; idx < slice->chunks.size(); idx++)
-				{
-					Vector3 vec1 = slice->chunks[idx].box.center() - slice_box.min();
-					Vector3 vec2 = (slice_box.diagonal()).normalized();
-					double t = (vec1).dot(vec2);
-
-					projected.push_back( std::make_pair(t, idx) );
-				}
-
-				std::sort(projected.begin(), projected.end());
-
-				QVector< size_t > sortedIndices;
-				for(auto proj : projected) sortedIndices << proj.second;
-				sortedChunks << sortedIndices;
+				QVector<SliceChunk> chunks;
+				chunks << slice_i.chunks.front() << slice_j.chunks.front();
+				matchChunk( chunks, input, particles );
+				continue;
 			}
 
-			if(sortedChunks.front().empty() || sortedChunks.back().empty()) continue;
+			// Find out if we have chunks on a 2D grid in either slice
+			bool isGrid2D = false;
+			double grid_spread_threshold = 0.5;
 
-			// Now divide and assign
-			auto assignments = PartCorresponder::distributeVectors( sortedChunks.front().size(), sortedChunks.back().size() );
-
-			/// Match chunks:
-			for(auto assignment : assignments)
+			for(size_t shapei = 0; shapei < input.size(); shapei++)
 			{
-				auto & chunk_i = slice_i.chunks[assignment.first];
-				auto & chunk_j = slice_j.chunks[assignment.second];
+				auto & slice = bothSlices[shapei];
+				if(slice->chunks.size() < 3) continue;
 
-				/// Correspond chunks:
+				Eigen::MatrixXd points( slice->chunks.size(), 3 ); size_t r = 0;
+				for(auto & chunk : slice->chunks) points.row(r++) = chunk.box.center();
+				Vector3 b_center (points.colwise().mean());
+				points = points.rowwise() - b_center.transpose();
+				Eigen::JacobiSVD<Eigen::MatrixXd> svd(points, Eigen::ComputeThinU | Eigen::ComputeThinV);
+				Eigen::Vector3d values = svd.singularValues().normalized();
+				double ratio = (values[1] / values[0]);
+
+				if(ratio > grid_spread_threshold)
 				{
-					QVector<SliceChunk*> chunk; chunk << &chunk_i << &chunk_j;
+					isGrid2D = true;
+					slice->isGrid2D = true;
+				}
+			}
 
-					if( isSwap ) std::reverse(chunk.begin(), chunk.end());
+			// Split 1D grids along the 'y' axis when matching against 2D grids
+			if( isGrid2D )
+			{
+				for(size_t i = 0; i < bothSlices.size(); i++)
+				{
+					auto & slice = bothSlices[i];
+					if(slice->isGrid2D) continue; // no splits needed
 
-					for(size_t si = 0; si < input.size(); si++)
+					QVector<SliceChunk> splitChunks;
+					
+					for(auto & oldChunk : slice->chunks)
 					{
-						auto sj = (si+1) % input.size();
+						auto halves = splitBox( oldChunk.box, Vector3::UnitY() );
 
-						std::vector<size_t> closestMap( chunk[si]->vmap.size(), -1 );
-
-						// Find closest particle
-						for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
+						for(size_t h = 0; h < halves.size(); h++)
 						{
-							auto vi = chunk[si]->vmap[i];
-							auto vj = chunk[sj]->vmap[chunk[sj]->tree->closest( particles[si][vi].relativePos )];
+							SliceChunk chunk;
 
-							closestMap[i] = vj;
-						}
+							// Migrate vertex to its designated half
+							for(auto v : oldChunk.g.vertices)
+								if(halves[h].contains( input[i]->particles[v].pos ))
+									chunk.g.AddVertex(v);
 
-						// Match particles one-to-one
-						for(int i = 0; i < (int)chunk[si]->vmap.size(); i++)
-						{
-							auto vi = chunk[si]->vmap[i];
-							auto vj = closestMap[i];
+							// Compute bounding box enclosing chunk
+							for(auto p : input[i]->particlesCorners(chunk.g.vertices)) 
+								chunk.box.extend(p);
 
-							auto pi = &particles[si][vi];
-							auto pj = &particles[sj][vj];
-
-							if( pi->isMatched )
+							// Compute index of relative particle positions inside box
+							chunk.tree = QSharedPointer<NanoKdTree>(new NanoKdTree);
+							for(auto v : chunk.g.vertices)
 							{
-								particles[si].push_back( *pi );
-								pi = &particles[si].back();
-								pi->id = particles[si].size()-1;
+								particles[i][v].relativePos = (particles[i][v].pos - chunk.box.min()).array() / chunk.box.sizes().array();
+								chunk.tree->addPoint( particles[i][v].relativePos );
+								chunk.vmap.push_back( v );
 							}
+							chunk.tree->build();
 
-							if( pj->isMatched )
-							{
-								particles[sj].push_back( *pj );
-								pj = &particles[sj].back();
-								pj->id = particles[sj].size()-1;
-							}
-
-							pi->correspondence = pj->id;
-							pj->correspondence = pi->id;
-
-							pj->isMatched = true;
-							pi->isMatched = true;
+							splitChunks.push_back(chunk);
 						}
 					}
+
+					// Replace slice's chunks with newly split ones
+					slice->chunks = splitChunks;
 				}
+			}
+
+			QVector< QVector<SliceChunk> > gridChunks;
+			gridChunks << bothSlices.front()->chunks << bothSlices.back()->chunks;
+
+			matchGridChunk(gridChunks, isGrid2D, input, particles);
+		}
+	}
+}
+
+void PartCorresponder::matchGridChunk(const QVector< QVector<SliceChunk> > & chunk, bool isGrid2D,
+									  const QVector<ParticleMesh *> & input, QVector<Particles> & particles)
+{
+	if( !isGrid2D )
+	{
+		// Sort chunks along 1D grid
+		QVector< QVector<SliceChunk> > sorted;
+		for(auto gridChunk : chunk)
+		{
+			// Sort based on coordinates of chunk center
+			std::sort(gridChunk.begin(), gridChunk.end(), [&]( const SliceChunk& a, const SliceChunk& b ){ 
+				double ma = (a.box.center().x() * 1e6) + a.box.center().y();
+				double mb = (b.box.center().x() * 1e6) + b.box.center().y();
+				return ma < mb; 
+			});
+
+			sorted.push_back( gridChunk );
+		}
+
+		// match 1D grid chunks
+		match1DGridChunk( sorted, input, particles );
+	}
+	else
+	{		
+		// Compute slice bounding box
+		QVector< Eigen::AlignedBox3d > sliceChunk(2);
+		for(size_t i = 0; i < input.size(); i++){
+			auto & inputchunks = chunk[i];
+			for(auto & chunk : inputchunks) 
+				sliceChunk[i].extend(chunk.box);
+		}
+
+		// Split on 'y' into two rows of 1D grids
+		QVector< QVector< QVector<SliceChunk> > > splitRows(input.size());
+
+		for(size_t i = 0; i < input.size(); i++)
+		{
+			splitRows[i].resize(2);
+
+			auto & inputchunks = chunk[i];
+			for(size_t ci = 0; ci < inputchunks.size(); ci++)
+			{
+				if( inputchunks[ci].box.center().y() < sliceChunk[i].center().y() )
+					splitRows[i].front().push_back( inputchunks[ci] );
+				else
+					splitRows[i].back().push_back( inputchunks[ci] );
+			}
+		}
+
+		// For each row
+		for(int r = 0; r < splitRows.front().size(); r++)
+		{
+			QVector< QVector<SliceChunk> > row;
+
+			for(int i = 0; i < input.size(); i++)
+				row.push_back( splitRows[i][r] );
+
+			matchGridChunk(row, false, input, particles);
+		}
+	}
+}
+
+void PartCorresponder::match1DGridChunk( QVector< QVector<SliceChunk> > sortedChunk, const QVector<ParticleMesh *> & input, QVector<Particles> & particles )
+{
+	QVector< QVector<SliceChunk> > readyChunkPairs;
+
+	auto & sortedChunkFront = sortedChunk.front();
+	auto & sortedChunkBack = sortedChunk.back();
+
+	// Different number of chunks
+	if( sortedChunkFront.size() != sortedChunkBack.size() )
+	{
+		int targetSize = std::min( sortedChunkFront.size(), sortedChunkBack.size() );
+
+		if(targetSize == 1)
+		{
+			QVector<SliceChunk> chunkPairs;
+			if( sortedChunkFront.size() == 1 ) chunkPairs.push_back( sortedChunkFront.front() );
+			else chunkPairs.push_back( mergeChunks( sortedChunkFront, input.front(), particles.front() ) );
+
+			if( sortedChunkBack.size() == 1) chunkPairs.push_back( sortedChunkBack.front() );
+			else chunkPairs.push_back( mergeChunks( sortedChunkBack, input.back(), particles.back() ) );
+
+			readyChunkPairs.push_back( chunkPairs );
+		}
+		else
+		{
+			// For now we use basic matching.. later we should either split / merge
+			for(auto v : distributeVectors(sortedChunkFront.size(), sortedChunkBack.size()))
+			{
+				QVector<SliceChunk> p;
+				p << sortedChunkFront[v.first] << sortedChunkBack[v.second];
+				readyChunkPairs.push_back( p );
 			}
 		}
 	}
+	else
+	{
+		// Same number of elements, simply match them up
+		for(size_t i = 0; i < sortedChunk.size(); i++)
+		{
+			readyChunkPairs.push_back( QVector<SliceChunk>() << sortedChunkFront.at(i) << sortedChunkBack.at(i) );
+		}
+	}
+
+	// Match each pair of chunks
+	for(auto & pairChunk : readyChunkPairs)
+		matchChunk(pairChunk, input, particles);
+}
+
+void PartCorresponder::matchChunk( QVector<SliceChunk> chunk, const QVector<ParticleMesh *> & input, QVector<Particles> & particles )
+{
+	for(size_t si = 0; si < input.size(); si++)
+	{
+		auto sj = (si+1) % input.size();
+
+		if(chunk[si].vmap.empty() || chunk[sj].vmap.empty()) continue;
+
+		std::vector<size_t> closestMap( chunk[si].vmap.size(), -1 );
+
+		// Find closest particle
+		for(int i = 0; i < (int)chunk[si].vmap.size(); i++)
+		{
+			auto vi = chunk[si].vmap[i];
+			auto vj = chunk[sj].vmap[chunk[sj].tree->closest( particles[si][vi].relativePos )];
+
+			closestMap[i] = vj;
+		}
+
+		// Match particles one-to-one
+		for(int i = 0; i < (int)chunk[si].vmap.size(); i++)
+		{
+			auto vi = chunk[si].vmap[i];
+			auto vj = closestMap[i];
+
+			auto pi = &particles[si][vi];
+			auto pj = &particles[sj][vj];
+
+			if( pi->isMatched )
+			{
+				particles[si].push_back( *pi );
+				pi = &particles[si].back();
+				pi->id = particles[si].size()-1;
+			}
+
+			if( pj->isMatched )
+			{
+				particles[sj].push_back( *pj );
+				pj = &particles[sj].back();
+				pj->id = particles[sj].size()-1;
+			}
+
+			pi->correspondence = pj->id;
+			pj->correspondence = pi->id;
+
+			pj->isMatched = true;
+			pi->isMatched = true;
+		}
+	}
+}
+
+SliceChunk PartCorresponder::mergeChunks(const QVector<SliceChunk> & chunks, ParticleMesh * input, Particles & particles)
+{
+	SliceChunk chunk;
+	if(chunks.empty()) return chunk;
+	if(chunks.size() == 1) return chunks.front();
+
+	// Combine graphs - is it needed?
+	if( false ){
+		for(auto & c : chunks){
+			for(auto v : c.g.vertices) chunk.g.AddVertex(v);
+			for(auto e : c.g.GetEdgesSet()) chunk.g.AddEdge(e.index, e.target, 1);
+		}
+	}
+
+	// Remove gaps between chunks
+	QVector<Vector3> packedPoints;
+
+	// Decide if we will allow moves along 'x' or 'y'
+	Vector3 diagonal = chunks.back().box.center() - chunks.front().box.center();
+	diagonal = diagonal.cwiseAbs().normalized();
+	if(diagonal[0] > diagonal[1]) diagonal = Vector3(1,0,0);
+	else diagonal = Vector3(0,1,0);
+
+	Vector3 halfVoxel(input->grid.unitlength,input->grid.unitlength,input->grid.unitlength);
+	halfVoxel *= 0.5;
+
+	// Initial start
+	Vector3 delta = chunks.front().box.min();
+
+	// Snap chunks to each other
+	for(size_t ci = 0; ci < chunks.size(); ci++)
+	{
+		for(auto v : chunks[ci].g.vertices)
+		{
+			auto p = particles[v].pos - delta;
+			packedPoints.push_back( p );
+
+			chunk.box.extend( p + halfVoxel );
+			chunk.box.extend( p - halfVoxel );
+
+			// Save mapped index
+			chunk.vmap.push_back( v );
+		}
+
+		if(ci+1 == chunks.size()) continue;
+
+		Vector3 d = chunk.box.diagonal().array() * diagonal.array();
+		delta = chunks[ci+1].box.min() - d;
+	}
+
+	// Compute index of relative particle positions inside box
+	chunk.tree = QSharedPointer<NanoKdTree>(new NanoKdTree);
+	for(size_t i = 0; i < packedPoints.size(); i++)
+	{
+		Vector3 relativePos = (packedPoints[i] - chunk.box.min()).array() / chunk.box.sizes().array();
+		chunk.tree->addPoint( relativePos );
+		particles[chunk.vmap[i]].relativePos = relativePos;
+	}
+	chunk.tree->build();
+
+	return chunk;
 }
 
 QVector< QPair<int,int> > PartCorresponder::distributeVectors(int x, int y)

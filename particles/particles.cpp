@@ -1211,13 +1211,9 @@ bool particles::mouseMoveEvent(QMouseEvent* event)
 {
 	ParticlesWidget * pwidget = (ParticlesWidget*) widget;
 	if(!pwidget || !pwidget->isReady || pwidget->pmeshes.size() < 1) return false;
+	if(!isBlendingReady) return false;
 
-	drawArea()->setMouseTracking(true);
-	mainWindow()->setStatusBarMessage( QString("%1,%2").arg(event->x()).arg(event->y()) );
-	
-	qglviewer::Vec _orig, _dir;
-	drawArea()->camera()->convertClickToLine(event->pos(), _orig, _dir);
-	Vector3 orig (_orig), dir(_dir);
+	if(!drawArea()->hasMouseTracking()) drawArea()->setMouseTracking(true);
 
 	bool found = false;
 	qglviewer::Vec p = drawArea()->camera()->pointUnderPixel(event->pos(), found);
@@ -1229,7 +1225,7 @@ bool particles::mouseMoveEvent(QMouseEvent* event)
 		auto meshB = pwidget->pmeshes.back();
 		NanoKdTree * tree = (NanoKdTree *)meshA->property["tree"].value<void*>();
 
-		if(tree)
+		if( tree )
 		{
 			KDResults matches;
 			tree->ball_search( point, meshA->grid.unitlength * 0.5, matches );

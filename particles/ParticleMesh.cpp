@@ -5,10 +5,9 @@
 #include <QGLWidget>
 
 #include "bluenoise.h"
-
 #include "kmeans.h"
-
 #include "spherelib.h"
+#include "disjointset.h"
 
 Q_DECLARE_METATYPE(Eigen::Vector3d)
 
@@ -366,7 +365,7 @@ void ParticleMesh::distort()
 	}*/
 
 	SegmentGraph neiGraph;
-	auto segments = this->segmentToComponents(toGraph(), neiGraph);
+	auto segments = this->segmentToComponents(toGraph(), neiGraph, true);
 
 	for(auto & seg : segments)
 	{
@@ -572,7 +571,8 @@ void ParticleMesh::computeDistanceToFloor()
 	}*/
 }
 
-Segments ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph )
+Segments ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph & neiGraph, 
+										   bool isCombineSameSegmentID )
 {
 	Segments result;
 	
@@ -671,6 +671,43 @@ Segments ParticleMesh::segmentToComponents( SegmentGraph fromGraph, SegmentGraph
 	// Collect resulting parts indexed by their unique identifier
 	for(auto & part : all_parts)
 		result[part.uid] = part;
+
+	// Recombine disconnected parts based on the segment ID if requested
+	if( isCombineSameSegmentID )
+	{
+		auto ids = result.keys();
+		Segments combinedResult;
+
+		// Find parts with same segment ID
+		DisjointSet disjoint( ids.size() );
+		for(size_t i = 0; i < ids.size(); i++){
+			int si = particles[result[ids[i]].FirstVertex()].segment;
+			for(size_t j = i + 1; j < ids.size(); j++){
+				int sj = particles[result[ids[j]].FirstVertex()].segment;
+				if(si == sj) disjoint.Union(i,j);
+			}
+		}
+
+		auto groups = disjoint.Groups();
+
+		for( auto group : groups )
+		{
+			auto i = group.front();
+			auto & seg = result[ids[i]];
+
+			// Combine parts having the same segment ID
+			for(auto j : group)	{
+				if(i == j) continue;
+				for(auto v : result[ids[j]].vertices) seg.AddVertex(v);
+				for(auto e : result[ids[j]].GetEdgesSet()) seg.AddEdge(e.index, e.target, 1);
+			}
+
+			combinedResult[seg.uid] = seg;
+		}
+
+		// Copy results
+		result = combinedResult;
+	}
 
 	return result;
 }
