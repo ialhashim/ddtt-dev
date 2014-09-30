@@ -33,7 +33,7 @@ void CorrespondenceSearch::run()
 	bool abort = false;
 
     // Evaluate correspondences
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for(int pi = 0; pi < (int)paths.size(); pi++)
     {
         #pragma omp flush (abort)
