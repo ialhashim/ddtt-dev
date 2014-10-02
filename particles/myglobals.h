@@ -5,18 +5,6 @@
 
 #define AlphaBlend(alpha, start, end) ( ((1-alpha) * start) + (alpha * end) )
 
-// Fix Visual Studio
-#ifdef WIN32
-namespace std{  
-	template<typename T> bool isnan(T x){ return _isnan(x); } 
-	template<typename T> bool isfinite(T arg){
-		return arg == arg && 
-			arg != std::numeric_limits<T>::infinity() &&
-			arg != -std::numeric_limits<T>::infinity();
-	}
-}
-#endif
-
 #include <Eigen/Core>
 typedef Eigen::Vector3d Vector3Type;
 
