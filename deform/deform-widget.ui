@@ -14,6 +14,16 @@
    <string>Particles</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="1">
+    <widget class="QSpinBox" name="vertexID"/>
+   </item>
+   <item row="1" column="1">
+    <widget class="QPushButton" name="createHandle">
+     <property name="text">
+      <string>Create Handle</string>
+     </property>
+    </widget>
+   </item>
    <item row="0" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
@@ -21,13 +31,10 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
-    <widget class="QSpinBox" name="vertexID"/>
-   </item>
-   <item row="1" column="1">
-    <widget class="QPushButton" name="createAnchor">
+   <item row="2" column="1">
+    <widget class="QPushButton" name="deformButton">
      <property name="text">
-      <string>Create</string>
+      <string>Deform</string>
      </property>
     </widget>
    </item>

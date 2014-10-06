@@ -33,14 +33,14 @@ void deform::create()
     mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
     // UI
-    connect(dw->ui->createAnchor, &QPushButton::released, [&]{
+    connect(dw->ui->createHandle, &QPushButton::released, [&]{
 		DeformWidget * dw = (DeformWidget *)widget;
         auto vid = Vertex( dw->ui->vertexID->value() );
         Vector3 p = mesh()->vertex_coordinates()[vid];
 
         auto handleRadius = worldRadius * 0.2;
 
-        QSharedPointer<DeformHandle> handle( new DeformHandle(p, handleRadius) );
+        QSharedPointer<DeformHandle> handle( new DeformHandle(p, vid.idx(), handleRadius) );
 
 		this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
 
@@ -49,6 +49,14 @@ void deform::create()
 		handles << handle;
         drawArea()->update();
     });
+
+	connect(dw->ui->deformButton, &QPushButton::released, [&]{
+		if (!solver)
+		{
+            solver = new ShapeOp::Solver();
+
+		}
+	});
 }
 
 void deform::apply_deformation()

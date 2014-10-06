@@ -30,7 +30,7 @@ class SHAPEOP_API Constraint {
   /** \brief Add the constraint to the linear system.*/
   virtual void addConstraint(std::vector<Triplet> &triplets, int &idO) const = 0;
   /** \brief Compute the constraint violation for the given input positions.*/
-  Scalar error(const Matrix3X &positions) const { return 0; }
+  Scalar error(const Matrix3X &) const { return 0; }
  protected:
   /** \brief ids of the vertices involved in this constraint.*/
   std::vector<int> idI_;

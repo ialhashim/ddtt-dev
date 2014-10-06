@@ -21,6 +21,6 @@ CONFIG(debug, debug|release) {CFG = debug} else {CFG = release}
 
 ## Libraries:
 # ShapeOp
-INCLUDEDIR += libShapeOp
-DEFINES += SHAPEOP_HEADER_ONLY
-
+LIBS += -L$$PWD/libShapeOp/$$CFG/lib -llibShapeOp
+INCLUDEPATH += ./libShapeOp
+DEFINES += SHAPEOP_EXPORT

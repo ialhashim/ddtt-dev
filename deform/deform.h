@@ -6,6 +6,9 @@
 
 #include "deform-handle.h"
 
+// ShapeOp
+#include "Solver.h"
+
 class deform: public SurfaceMeshModePlugin{
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "deform.plugin.starlab")
@@ -14,7 +17,7 @@ class deform: public SurfaceMeshModePlugin{
     QIcon icon(){ return QIcon(":/images/deform.png"); }
 
 public:
-    deform() : widget(NULL), dockwidget(NULL) {}
+	deform() : widget(NULL), dockwidget(NULL), isDeformReady(false), solver(NULL) {}
 
     // Main functionality
     void create();
@@ -37,6 +40,8 @@ public:
 
     // Deformation
     QVector< QSharedPointer<DeformHandle> > handles;
+	bool isDeformReady;
+	ShapeOp::Solver * solver;
 
 public slots:
 	void apply_deformation();

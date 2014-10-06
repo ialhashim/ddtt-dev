@@ -353,7 +353,7 @@ SHAPEOP_INLINE void ClosenessConstraint::setPosition(const Vector3 &position) {
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE LineConstraint::LineConstraint(const std::vector<int> &idI,
                                               Scalar weight,
-                                              const Matrix3X &positions) :
+                                              const Matrix3X &) :
   Constraint(idI, weight) {
   assert(idI.size() >= 2);
   input = Matrix3X::Zero(3, idI.size());
@@ -387,7 +387,7 @@ SHAPEOP_INLINE void LineConstraint::addConstraint(std::vector<Triplet> &triplets
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE PlaneConstraint::PlaneConstraint(const std::vector<int> &idI,
                                                 Scalar weight,
-                                                const Matrix3X &positions) :
+                                                const Matrix3X &) :
   Constraint(idI, weight) {
   assert(idI.size() >= 3);
   input = Matrix3X::Zero(3, idI.size());
@@ -420,7 +420,7 @@ SHAPEOP_INLINE void PlaneConstraint::addConstraint(std::vector<Triplet> &triplet
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE CircleConstraint::CircleConstraint(const std::vector<int> &idI,
                                                   Scalar weight,
-                                                  const Matrix3X &positions) :
+                                                  const Matrix3X &) :
   Constraint(idI, weight) {
   assert(idI.size() >= 3);
   input = Matrix3X::Zero(3, idI.size());
@@ -484,7 +484,7 @@ SHAPEOP_INLINE void CircleConstraint::addConstraint(std::vector<Triplet> &triple
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE SphereConstraint::SphereConstraint(const std::vector<int> &idI,
                                                   Scalar weight,
-                                                  const Matrix3X &positions) :
+                                                  const Matrix3X &) :
   Constraint(idI, weight) {
   assert(idI.size() >= 4);
   input = Matrix3X::Zero(3, idI.size());
