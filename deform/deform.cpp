@@ -8,9 +8,8 @@ void deform::create()
     if(widget) return;
 
     // Viewer
+    double worldRadius = mesh()->bbox().diagonal().norm();
     {
-        double worldRadius = mesh()->bbox().diagonal().norm();
-
         drawArea()->setAxisIsDrawn(true);
         drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
 
@@ -34,17 +33,48 @@ void deform::create()
     mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
     // UI
-    connect(dw->ui->createAnchor, &QPushButton::released, [=]{
+    connect(dw->ui->createAnchor, &QPushButton::released, [&]{
+		DeformWidget * dw = (DeformWidget *)widget;
         auto vid = Vertex( dw->ui->vertexID->value() );
         Vector3 p = mesh()->vertex_coordinates()[vid];
-        drawArea()->addRenderObject( starlab::PointSoup::drawPoint(p,12) );
+
+        auto handleRadius = worldRadius * 0.2;
+
+        QSharedPointer<DeformHandle> handle( new DeformHandle(p, handleRadius) );
+
+		this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
+
+		drawArea()->setManipulatedFrame( handle.data() );
+
+		handles << handle;
         drawArea()->update();
     });
 }
 
-void deform::decorate()
+void deform::apply_deformation()
 {
 
+}
+
+void deform::decorate()
+{
+	if (handles.isEmpty()) return;
+	
+	double worldRadius = mesh()->bbox().diagonal().norm();
+
+	// Draw handles
+	auto handleRadius = worldRadius * 0.2;
+	starlab::FrameSoup fs(handleRadius);
+	starlab::PointSoup ps (20);
+	for (auto & handle : handles)
+	{
+		auto handlepos = handle->position();
+		auto p = Vector3(handlepos[0], handlepos[1], handlepos[2]);
+		ps.addPoint(p);
+		fs.addFrame(Vector3(Vector3::UnitX()), Vector3(Vector3::UnitY()), Vector3(Vector3::UnitZ()), p);
+	}
+	ps.draw();
+	fs.draw();
 }
 
 void deform::drawWithNames()

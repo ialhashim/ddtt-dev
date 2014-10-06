@@ -6,7 +6,8 @@ QT += gui opengl xml svg
 
 HEADERS += \
     deform.h \
-    deform-widget.h
+    deform-widget.h \
+    deform-handle.h
 
 SOURCES += \
     deform.cpp \

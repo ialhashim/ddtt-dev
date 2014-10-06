@@ -4,6 +4,8 @@
 #include "RichParameterSet.h"
 #include "interfaces/ModePluginDockWidget.h"
 
+#include "deform-handle.h"
+
 class deform: public SurfaceMeshModePlugin{
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "deform.plugin.starlab")
@@ -19,7 +21,7 @@ public:
     void destroy(){}
     void decorate();
 
-    // Selectoin
+    // Selection
     void drawWithNames();
     bool postSelection( const QPoint& );
 
@@ -33,7 +35,11 @@ public:
     // Always usable
     bool isApplicable() { return true; }
 
-public slots:
+    // Deformation
+    QVector< QSharedPointer<DeformHandle> > handles;
 
+public slots:
+	void apply_deformation();
+	
 signals:
 };
