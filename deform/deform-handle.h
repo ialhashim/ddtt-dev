@@ -27,9 +27,14 @@ public:
         return (originalPos * (alpha)) + (newPos * (1-alpha));
     }
 
+	Vector3 pos(){ auto p = this->position(); return Vector3(p[0], p[1], p[2]); }
+
+public:
+	size_t id;
+	size_t constraint_id;
+
 private:
 	Vector3 startPos;
-	size_t id;
     double radius;
 
     double inline gaussianFunction(double x, double mu = 0.0, double sigma = 2){
