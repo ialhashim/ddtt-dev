@@ -3,16 +3,17 @@
 #include "ui_deform-widget.h"
 #include "RenderObjectExt.h"
 
-#include "Constraint.h"
+#define GEO_HEAT_USE_EIGEN_SOLVER
+#include "../surfacemesh_filter_geoheat/GeoHeatHelper.h"
 
-int num_iterations = 20;
+#include "Constraint.h"
 
 void deform::create()
 {
     if(widget) return;
 
     // Viewer
-    double worldRadius = mesh()->bbox().diagonal().norm();
+    worldRadius = mesh()->bbox().diagonal().norm();
     {
         //drawArea()->setAxisIsDrawn(true);
         drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
@@ -38,21 +39,32 @@ void deform::create()
 
     // UI
     connect(dw->ui->createHandle, &QPushButton::released, [&]{
-		DeformWidget * dw = (DeformWidget *)widget;
-        auto vid = Vertex( dw->ui->vertexID->value() );
-        Vector3 p = mesh()->vertex_coordinates()[vid];
-
-        auto handleRadius = worldRadius * 0.2;
-
-        QSharedPointer<DeformHandle> handle( new DeformHandle(p, vid.idx(), handleRadius) );
-
-		this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
-
-		drawArea()->setManipulatedFrame( handle.data() );
-
-		handles << handle;
-        drawArea()->update();
+		auto vid = Vertex(((DeformWidget *)widget)->ui->vertexID->value());
+		this->create_handle(mesh()->vertex_coordinates()[vid], vid.idx());
     });
+	connect(dw->ui->deleteHandle, &QPushButton::released, [&]{
+		auto newHandles = handles;
+		newHandles.clear();
+
+		auto vid = ((DeformWidget *)widget)->ui->vertexID->value();
+		for (size_t i = 0; i < handles.size(); i++)
+			if (!handles[i]->element_id.contains(vid))
+				newHandles << handles[i];
+
+		if (newHandles.size() == handles.size()) newHandles.removeLast();
+
+		handles = newHandles;
+
+		if (handles.empty())
+		{
+			//delete solver; // memory leak
+			this->solver = NULL;
+			this->isDeformReady = false;
+		}
+
+		drawArea()->update();
+	});
+	connect(dw->ui->createROI, SIGNAL(released()), SLOT(create_ROI()));
 
 	connect(dw->ui->deformButton, &QPushButton::released, [&]{
 		if ( handles.empty() ) return;
@@ -102,7 +114,7 @@ void deform::create()
 		}
 
 		// Laplacian constraints
-		if (true)
+		if (false)
 		{
 			double laplacian_weight = 1.0;
 
@@ -120,74 +132,166 @@ void deform::create()
 			}
 		}
 
+		// Bending constraints
+		if (true)
+		{
+			double bending_weight = 1.0;
+
+			for (auto & edge : mesh()->edges())
+			{
+				if (mesh()->is_boundary(edge)) continue;
+
+				auto h2 = mesh()->halfedge(edge, 1);
+				auto h3 = mesh()->halfedge(edge, 0);
+
+				auto v2 = mesh()->to_vertex(h2);
+				auto v3 = mesh()->to_vertex(h3);
+				auto v1 = mesh()->to_vertex(mesh()->next_halfedge(h3));
+				auto v4 = mesh()->to_vertex(mesh()->next_halfedge(h2));
+
+				std::vector<int> id_vector;
+				id_vector.push_back(v2.idx());
+				id_vector.push_back(v3.idx());
+				id_vector.push_back(v1.idx());
+				id_vector.push_back(v4.idx());
+
+				auto c = std::make_shared<ShapeOp::BendingConstraint>(id_vector, bending_weight, p);
+				solver->addConstraint(c);
+			}
+		}
+
 		// Closeness constraints
 		{
 			double close_weight = 1.0;
 			for (auto & handle : handles)
 			{
-				std::vector<int> id_vector;
-				id_vector.push_back( handle->id );
-				auto c = std::make_shared<ShapeOp::ClosenessConstraint>(id_vector, close_weight, p);
-				c->setPosition( handle->pos() );
-
-				handle->constraint_id = solver->addConstraint(c);
+				for (size_t i = 0; i < handle->element_id.size(); i++)
+				{
+					std::vector<int> id_vector;
+					id_vector.push_back( handle->element_id[i] );
+					auto c = std::make_shared<ShapeOp::ClosenessConstraint>(id_vector, close_weight, p);
+					handle->constraint_id.push_back( solver->addConstraint(c) );
+				}
 			}
 		}
 
 		// Forces:
-		//
 
 		// 4) Initalize the solver
 		solver->initialize();
-
+		 
 		// 5) Optimize
-		solver->solve( num_iterations );
+		solver->solve(((DeformWidget *)widget)->ui->numSolverIterations->value());
 
 		// 6) Get back the vertices
 		p = solver->getPoints();
 
+		this->isDeformReady = true;
 		mainWindow()->setStatusBarMessage(QString("Solver created."));
 	});
+}
+
+void deform::create_handle(const Vector3 & p, size_t vid)
+{
+	auto handleRadius = worldRadius * 0.1;
+	QSharedPointer<DeformHandle> handle(new DeformHandle(p, handleRadius));
+	
+	handle->element_orig_pos.push_back(p);
+	handle->element_id.push_back(vid);
+
+	this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
+	//drawArea()->setManipulatedFrame(handle.data());
+	handles << handle;
+	drawArea()->update();
+}
+
+void deform::create_ROI()
+{
+	if (last_selected < 0 || last_selected > mesh()->n_vertices()) return;
+
+	auto vid = Vertex(last_selected);
+
+	// Compute geodesic distance from selected point
+	GeoHeatHelper h(mesh());
+	ScalarVertexProperty distance = h.getUniformDistance( QSet<Vertex>() << vid );
+
+	// Create a handle of points geodesically within threshold
+	auto threshold = ((DeformWidget *)widget)->ui->roiDistance->value();
+
+	QSharedPointer<DeformHandle> handle(new DeformHandle(mesh()->vertex_coordinates()[vid], threshold));
+
+	for (auto v : mesh()->vertices())
+	{
+		double dist = distance[v];
+		if (dist > threshold) continue;
+
+		handle->element_orig_pos.push_back(mesh()->vertex_coordinates()[v]);
+		handle->element_id.push_back( v.idx() );
+	}
+
+	this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
+	handles << handle;
+	last_selected = -1; // clear selection
+	drawArea()->update();
 }
 
 void deform::apply_deformation()
 {
 	if (!solver) return;
 
-	// Update constraints
+	// Update positional constraints
+	auto gaussWeight = ((DeformWidget *)widget)->ui->gaussWeight->value();
 	for (auto & handle : handles)
 	{
-		auto c = std::dynamic_pointer_cast < ShapeOp::ClosenessConstraint >(solver->getConstraint(handle->constraint_id));
-		c->setPosition( handle->pos() );
+		for (size_t i = 0; i < handle->constraint_id.size(); i++)
+		{
+			auto c = std::dynamic_pointer_cast < ShapeOp::ClosenessConstraint >(solver->getConstraint( handle->constraint_id[i] ));
+			c->setPosition(handle->transformed(handle->element_orig_pos[i], gaussWeight));
+		}
 	}
 
 	size_t nb_points = mesh()->n_vertices();
 	Eigen::Map<ShapeOp::Matrix3X> p(mesh()->vertex_coordinates().data()->data(), 3, nb_points);
 
-	solver->solve( num_iterations );
+	solver->solve( ((DeformWidget *)widget)->ui->numSolverIterations->value() );
 
 	p = solver->getPoints();
 
 	mesh()->update_face_normals();
-	mesh()->update_vertex_normals();
+	//mesh()->update_vertex_normals();
 }
 
 void deform::decorate()
 {
+	double worldRadius = mesh()->bbox().diagonal().norm();
+	auto handleRadius = worldRadius * 0.1;
+
+	if (last_selected >= 0)
+	{
+		starlab::SphereSoup sphere;
+		sphere.addSphere(mesh()->vertex_coordinates()[Vertex(last_selected)], handleRadius);
+		sphere.draw();
+	}
+
 	if (handles.isEmpty()) return;
 	
-	double worldRadius = mesh()->bbox().diagonal().norm();
-
 	// Draw handles
-	auto handleRadius = worldRadius * 0.2;
 	starlab::FrameSoup fs(handleRadius);
-	starlab::PointSoup ps (20);
+	starlab::PointSoup ps(30);
 	for (auto & handle : handles)
 	{
 		auto handlepos = handle->position();
 		auto p = Vector3(handlepos[0], handlepos[1], handlepos[2]);
-		ps.addPoint(p);
+		ps.addPoint(p, handle->isActive ? Qt::red : Qt::blue);
 		fs.addFrame(Vector3(Vector3::UnitX()), Vector3(Vector3::UnitY()), Vector3(Vector3::UnitZ()), p);
+
+		starlab::PointSoup fixed(6);
+		if (handle->isActive){
+			for (auto vid : handle->element_id){
+				fixed.addPoint(mesh()->vertex_coordinates()[Vertex(vid)]);
+			}
+		}
+		fixed.draw();
 	}
 	ps.draw();
 	fs.draw();
@@ -217,7 +321,49 @@ bool deform::mousePressEvent(QMouseEvent * event)
 {
     if (event->modifiers() & Qt::SHIFT)
     {
-        drawArea()->select(event->pos());
+		last_selected = -1;
+
+		bool found = false;
+		auto pos = drawArea()->camera()->pointUnderPixel(event->pos(), found);
+		Vector3 p(pos[0], pos[1], pos[2]);
+
+		// Look up closest handle
+		if (isDeformReady)
+		{
+			if (!found)
+			{
+				for (auto & h : handles)
+					h->isActive = false;
+				drawArea()->setManipulatedFrame(drawArea()->camera()->frame());
+				return true;
+			}
+
+			if (!handles.empty())
+			{
+				QMap<double, size_t> distMap;
+				for (size_t i = 0; i < handles.size(); i++){
+					double dist = (p - handles[i]->pos()).norm();
+					distMap[dist] = i;
+				}
+				auto & selectedHandle = handles[distMap.values().front()];
+				selectedHandle->isActive = true;
+				drawArea()->setManipulatedFrame(selectedHandle.data());
+				return true;
+			}
+		}
+
+		Eigen::Map<ShapeOp::Matrix3X> points(mesh()->vertex_coordinates().data()->data(), 3, mesh()->n_vertices());
+		if (found)
+		{
+			QMap<double, size_t> distMap;
+			for (auto v : mesh()->vertices())
+			{
+				double dist = (p - points.col(v.idx())).norm();
+				distMap[dist] = v.idx();
+			}
+			last_selected = distMap.values().front();
+		}
+
         return true;
     }
 

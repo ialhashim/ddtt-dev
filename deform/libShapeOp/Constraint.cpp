@@ -317,7 +317,7 @@ SHAPEOP_INLINE void BendingConstraint::project(const Matrix3X &positions, Matrix
       e *= l;
     }
   }
-  projections.row(idO_) = weight_ * e;
+  projections.col(idO_) = weight_ * e;
 }
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE void BendingConstraint::addConstraint(std::vector<Triplet> &triplets, int &idO) const {

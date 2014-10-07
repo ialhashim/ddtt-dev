@@ -17,7 +17,7 @@ class deform: public SurfaceMeshModePlugin{
     QIcon icon(){ return QIcon(":/images/deform.png"); }
 
 public:
-	deform() : widget(NULL), dockwidget(NULL), isDeformReady(false), solver(NULL) {}
+	deform() : widget(NULL), dockwidget(NULL), isDeformReady(false), solver(NULL), last_selected(-1) {}
 
     // Main functionality
     void create();
@@ -27,6 +27,7 @@ public:
     // Selection
     void drawWithNames();
     bool postSelection( const QPoint& );
+	int last_selected;
 
 	bool keyPressEvent(QKeyEvent*);
 	bool mouseMoveEvent(QMouseEvent*);
@@ -35,15 +36,19 @@ public:
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;
 
+	double worldRadius;
+
     // Always usable
     bool isApplicable() { return true; }
 
     // Deformation
+	void create_handle(const Vector3 & p, size_t vid);
     QVector< QSharedPointer<DeformHandle> > handles;
 	bool isDeformReady;
 	ShapeOp::Solver * solver;
 
 public slots:
+	void create_ROI();
 	void apply_deformation();
 	
 signals:

@@ -8,14 +8,15 @@ using namespace SurfaceMesh;
 class DeformHandle : public ManipulatedFrame
 {
 public:
-    DeformHandle(const Vector3 & start, size_t id, double Radius){
+    DeformHandle(const Vector3 & start, double Radius){
         this->startPos = start;
-		this->id = id;
         this->radius = Radius;
         this->setPosition(start.x(), start.y(), start.z());
+
+		this->isActive = false;
     }
 
-    Vector3 transform(const Vector3 & originalPos){
+	Vector3 transformed(const Vector3 & originalPos, double gaussianWeight = 1.0){
         Vector3 d = originalPos - startPos;
         Vec delta(d[0], d[1], d[2]);
         Vec rotatedDelta = this->rotation() * delta;
@@ -23,6 +24,7 @@ public:
         Vector3 newPos(r.x, r.y, r.z);
 
         double alpha = 1 - gaussianFunction(((originalPos - startPos).norm() / radius));
+		alpha *= gaussianWeight;
 
         return (originalPos * (alpha)) + (newPos * (1-alpha));
     }
@@ -30,8 +32,10 @@ public:
 	Vector3 pos(){ auto p = this->position(); return Vector3(p[0], p[1], p[2]); }
 
 public:
-	size_t id;
-	size_t constraint_id;
+	QVector<size_t> element_id;
+	QVector<Vector3> element_orig_pos;
+	QVector<size_t> constraint_id;
+	bool isActive;
 
 private:
 	Vector3 startPos;

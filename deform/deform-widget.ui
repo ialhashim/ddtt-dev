@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>169</width>
-    <height>138</height>
+    <width>181</width>
+    <height>215</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -27,10 +27,10 @@
      </property>
     </widget>
    </item>
-   <item row="1" column="1">
-    <widget class="QPushButton" name="createHandle">
+   <item row="7" column="1">
+    <widget class="QPushButton" name="deformButton">
      <property name="text">
-      <string>Create Handle</string>
+      <string>Deform</string>
      </property>
     </widget>
    </item>
@@ -41,10 +41,78 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QPushButton" name="deformButton">
+   <item row="5" column="0">
+    <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Deform</string>
+      <string>Solver iterations</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QPushButton" name="createROI">
+     <property name="text">
+      <string>Create ROI</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QPushButton" name="createHandle">
+     <property name="text">
+      <string>Create Handle</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QPushButton" name="deleteHandle">
+     <property name="text">
+      <string>Delete</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QLabel" name="label_3">
+     <property name="text">
+      <string>Distance</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QDoubleSpinBox" name="roiDistance">
+     <property name="maximum">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="value">
+      <double>0.100000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="1">
+    <widget class="QSpinBox" name="numSolverIterations">
+     <property name="maximum">
+      <number>999999999</number>
+     </property>
+     <property name="singleStep">
+      <number>5</number>
+     </property>
+     <property name="value">
+      <number>20</number>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>Weight</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QDoubleSpinBox" name="gaussWeight">
+     <property name="decimals">
+      <number>3</number>
+     </property>
+     <property name="maximum">
+      <double>1.000000000000000</double>
      </property>
     </widget>
    </item>
