@@ -24,3 +24,7 @@ CONFIG(debug, debug|release) {CFG = debug} else {CFG = release}
 LIBS += -L$$PWD/libShapeOp/$$CFG/lib -llibShapeOp
 INCLUDEPATH += ./libShapeOp
 DEFINES += SHAPEOP_EXPORT
+
+# TetGen
+LIBS += -L$$PWD/libTetGen/$$CFG/lib -llibTetGen
+INCLUDEPATH += ./libTetGen

@@ -7,41 +7,46 @@
 #include "../surfacemesh_filter_geoheat/GeoHeatHelper.h"
 
 #include "Constraint.h"
+#include "Force.h"
+
+#ifndef DISABLE_TETGEN
+#include "tetgenLib.h"
+#endif
 
 void deform::create()
 {
-    if(widget) return;
+	if (widget) return;
 
-    // Viewer
-    worldRadius = mesh()->bbox().diagonal().norm();
-    {
-        //drawArea()->setAxisIsDrawn(true);
-        drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
+	// Viewer
+	worldRadius = mesh()->bbox().diagonal().norm();
+	{
+		//drawArea()->setAxisIsDrawn(true);
+		drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
 
-        drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
-        drawArea()->camera()->setPosition(qglviewer::Vec(worldRadius * 2,-worldRadius * 2, worldRadius * 1.5));
-        drawArea()->camera()->lookAt(qglviewer::Vec());
-        drawArea()->camera()->setSceneRadius( worldRadius );
-        drawArea()->camera()->showEntireScene();
-    }
+		drawArea()->camera()->setUpVector(qglviewer::Vec(0, 0, 1));
+		drawArea()->camera()->setPosition(qglviewer::Vec(worldRadius * 2, -worldRadius * 2, worldRadius * 1.5));
+		drawArea()->camera()->lookAt(qglviewer::Vec());
+		drawArea()->camera()->setSceneRadius(worldRadius);
+		drawArea()->camera()->showEntireScene();
+	}
 
-    // Rendering
-    {
-        drawArea()->setRenderer(mesh(), "Flat Wire");
-    }
+	// Rendering
+	{
+		drawArea()->setRenderer(mesh(), "Flat Wire");
+	}
 
-    ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Deform", mainWindow());
-    DeformWidget * dw = new DeformWidget();
-    widget = dw;
+	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Deform", mainWindow());
+	DeformWidget * dw = new DeformWidget();
+	widget = dw;
 
-    dockwidget->setWidget( widget );
-    mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+	dockwidget->setWidget(widget);
+	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
-    // UI
-    connect(dw->ui->createHandle, &QPushButton::released, [&]{
+	// UI
+	connect(dw->ui->createHandle, &QPushButton::released, [&]{
 		auto vid = Vertex(((DeformWidget *)widget)->ui->vertexID->value());
 		this->create_handle(mesh()->vertex_coordinates()[vid], vid.idx());
-    });
+	});
 	connect(dw->ui->deleteHandle, &QPushButton::released, [&]{
 		auto newHandles = handles;
 		newHandles.clear();
@@ -67,95 +72,111 @@ void deform::create()
 	connect(dw->ui->createROI, SIGNAL(released()), SLOT(create_ROI()));
 
 	connect(dw->ui->deformButton, &QPushButton::released, [&]{
-		if ( handles.empty() ) return;
+		if (handles.empty()) return;
 
-		// 1) Create the solver
+		// Options:
+		bool is_area = ((DeformWidget *)widget)->ui->areaConstraints->isChecked();
+		bool is_volume = ((DeformWidget *)widget)->ui->volumeConstraints->isChecked();
+		bool is_surface = !is_volume;
+		bool is_dynamic = ((DeformWidget *)widget)->ui->gravityEnabled->isChecked();
+		int num_iterations = ((DeformWidget *)widget)->ui->numSolverIterations->value();
+
+		/// 1) Create the solver
 		solver = new ShapeOp::Solver;
-		
-		// 2) Set the vertices
+
+		/// 2) Set the vertices
 		size_t nb_points = mesh()->n_vertices();
 		Eigen::Map<ShapeOp::Matrix3X> p(mesh()->vertex_coordinates().data()->data(), 3, nb_points);
-		solver->setPoints(p);
 
-		// 3) Setup the constraints and forces
-
-		// Edge strain constraints
-		if (false)
+		if (is_surface)
 		{
-			double edge_weight = 1.0;
+			solver->setPoints(p);
 
-			for (auto & edge : mesh()->edges())
+			/// 3) Setup the constraints and forces
+			// Triangle strain constraints
 			{
-				auto v1 = mesh()->vertex(edge, 0);
-				auto v2 = mesh()->vertex(edge, 1);
+				double triangle_weight = 1.0;
 
-				std::vector<int> id_vector;
-				id_vector.push_back(v1.idx());
-				id_vector.push_back(v2.idx());
+				for (auto & face : mesh()->faces())
+				{
+					std::vector<int> id_vector;
+					for (auto & v : mesh()->vertices(face)) id_vector.push_back(v.idx());
 
-				auto c = std::make_shared<ShapeOp::EdgeStrainConstraint>(id_vector, edge_weight, p);
-				solver->addConstraint(c);
-			}
-		}
-
-		// Triangle strain constraints
-		if (true)
-		{
-			double triangle_weight = 1.0;
-
-			for (auto & face : mesh()->faces())
-			{
-				std::vector<int> id_vector;
-				for (auto & v : mesh()->vertices(face)) id_vector.push_back(v.idx());
-
-				auto c = std::make_shared<ShapeOp::TriangleStrainConstraint>(id_vector, triangle_weight, p);
-				solver->addConstraint(c);
-			}
-		}
-
-		// Laplacian constraints
-		if (false)
-		{
-			double laplacian_weight = 1.0;
-
-			for (auto & v : mesh()->vertices())
-			{
-				std::vector<int> id_vector;
-				id_vector.push_back(v.idx());
-				for (auto hi : mesh()->onering_hedges(v)){ 
-					auto vj = mesh()->to_vertex(hi);
-					id_vector.push_back(vj.idx());
+					auto c = std::make_shared<ShapeOp::TriangleStrainConstraint>(id_vector, triangle_weight, p);
+					solver->addConstraint(c);
 				}
+			}
+			// Bending constraints
+			{
+				double bending_weight = 1.0;
 
-				auto c = std::make_shared<ShapeOp::UniformLaplacianConstraint>(id_vector, laplacian_weight, p, true);
-				solver->addConstraint(c);
+				for (auto & edge : mesh()->edges())
+				{
+					if (mesh()->is_boundary(edge)) continue;
+
+					auto h2 = mesh()->halfedge(edge, 1);
+					auto h3 = mesh()->halfedge(edge, 0);
+
+					auto v2 = mesh()->to_vertex(h2);
+					auto v3 = mesh()->to_vertex(h3);
+					auto v1 = mesh()->to_vertex(mesh()->next_halfedge(h3));
+					auto v4 = mesh()->to_vertex(mesh()->next_halfedge(h2));
+
+					std::vector<int> id_vector;
+					id_vector.push_back(v2.idx());
+					id_vector.push_back(v3.idx());
+					id_vector.push_back(v1.idx());
+					id_vector.push_back(v4.idx());
+
+					auto c = std::make_shared<ShapeOp::BendingConstraint>(id_vector, bending_weight, p);
+					solver->addConstraint(c);
+				}
+			}
+			// Area constraints
+			if (is_area)
+			{
+				double area_weight = 1.0;
+
+				for (auto & face : mesh()->faces())
+				{
+					std::vector<int> id_vector;
+					for (auto & v : mesh()->vertices(face)) id_vector.push_back(v.idx());
+
+					auto c = std::make_shared<ShapeOp::AreaConstraint>(id_vector, area_weight, p);
+					solver->addConstraint(c);
+				}
 			}
 		}
 
-		// Bending constraints
-		if (true)
+		// Volume constraints
+		if (is_volume)
 		{
-			double bending_weight = 1.0;
+			TetGen tet(mesh());
+			auto all_tet_points = tet.getPoints();
 
-			for (auto & edge : mesh()->edges())
+			ShapeOp::Matrix3X tetpnts(3, all_tet_points.size());
+			auto cells = tet.getCells();
+
+			for (size_t i = 0; i < all_tet_points.size(); i++)
+				tetpnts.col(i) = all_tet_points[i];
+
+			// DEBUG:
+			if (false)
 			{
-				if (mesh()->is_boundary(edge)) continue;
+				for (auto p : all_tet_points){
+					auto ps = new starlab::PointSoup;
+					ps->addPoint(p);
+					drawArea()->addRenderObject(ps);
+				}
+			}
 
-				auto h2 = mesh()->halfedge(edge, 1);
-				auto h3 = mesh()->halfedge(edge, 0);
+			solver->setPoints(tetpnts);
 
-				auto v2 = mesh()->to_vertex(h2);
-				auto v3 = mesh()->to_vertex(h3);
-				auto v1 = mesh()->to_vertex(mesh()->next_halfedge(h3));
-				auto v4 = mesh()->to_vertex(mesh()->next_halfedge(h2));
-
-				std::vector<int> id_vector;
-				id_vector.push_back(v2.idx());
-				id_vector.push_back(v3.idx());
-				id_vector.push_back(v1.idx());
-				id_vector.push_back(v4.idx());
-
-				auto c = std::make_shared<ShapeOp::BendingConstraint>(id_vector, bending_weight, p);
+			// Volume constraints
+			double volume_weight = 20.0;
+			for (auto id_vector : cells)
+			{
+				auto c = std::make_shared<ShapeOp::VolumeConstraint>(id_vector, volume_weight, tetpnts);
 				solver->addConstraint(c);
 			}
 		}
@@ -168,26 +189,32 @@ void deform::create()
 				for (size_t i = 0; i < handle->element_id.size(); i++)
 				{
 					std::vector<int> id_vector;
-					id_vector.push_back( handle->element_id[i] );
+					id_vector.push_back(handle->element_id[i]);
 					auto c = std::make_shared<ShapeOp::ClosenessConstraint>(id_vector, close_weight, p);
-					handle->constraint_id.push_back( solver->addConstraint(c) );
+					handle->constraint_id.push_back(solver->addConstraint(c));
 				}
 			}
 		}
 
 		// Forces:
+		if (is_dynamic)
+		{
+			auto f = std::make_shared<ShapeOp::GravityForce>(Vector3(0, 0, -1));
+			solver->addForces(f);
+		}
 
-		// 4) Initalize the solver
-		solver->initialize();
-		 
-		// 5) Optimize
-		solver->solve(((DeformWidget *)widget)->ui->numSolverIterations->value());
+		/// 4) Initalize the solver
+		solver->initialize(is_dynamic, 0.05, 0.5, 1.0);
 
-		// 6) Get back the vertices
-		p = solver->getPoints();
+		/// 5) Optimize
+		solver->solve(num_iterations);
+
+		/// 6) Get back the vertices
+		auto final_points = solver->getPoints();
+		for (size_t i = 0; i < p.cols(); i++) p.col(i) = final_points.col(i);
 
 		this->isDeformReady = true;
-		mainWindow()->setStatusBarMessage(QString("Solver created."));
+		mainWindow()->setStatusBarMessage(QString("Solver ready."));
 	});
 }
 
@@ -195,7 +222,7 @@ void deform::create_handle(const Vector3 & p, size_t vid)
 {
 	auto handleRadius = worldRadius * 0.1;
 	QSharedPointer<DeformHandle> handle(new DeformHandle(p, handleRadius));
-	
+
 	handle->element_orig_pos.push_back(p);
 	handle->element_id.push_back(vid);
 
@@ -213,7 +240,7 @@ void deform::create_ROI()
 
 	// Compute geodesic distance from selected point
 	GeoHeatHelper h(mesh());
-	ScalarVertexProperty distance = h.getUniformDistance( QSet<Vertex>() << vid );
+	ScalarVertexProperty distance = h.getUniformDistance(QSet<Vertex>() << vid);
 
 	// Create a handle of points geodesically within threshold
 	auto threshold = ((DeformWidget *)widget)->ui->roiDistance->value();
@@ -226,7 +253,7 @@ void deform::create_ROI()
 		if (dist > threshold) continue;
 
 		handle->element_orig_pos.push_back(mesh()->vertex_coordinates()[v]);
-		handle->element_id.push_back( v.idx() );
+		handle->element_id.push_back(v.idx());
 	}
 
 	this->connect(handle.data(), SIGNAL(manipulated()), SLOT(apply_deformation()));
@@ -245,7 +272,7 @@ void deform::apply_deformation()
 	{
 		for (size_t i = 0; i < handle->constraint_id.size(); i++)
 		{
-			auto c = std::dynamic_pointer_cast < ShapeOp::ClosenessConstraint >(solver->getConstraint( handle->constraint_id[i] ));
+			auto c = std::dynamic_pointer_cast <ShapeOp::ClosenessConstraint>(solver->getConstraint(handle->constraint_id[i]));
 			c->setPosition(handle->transformed(handle->element_orig_pos[i], gaussWeight));
 		}
 	}
@@ -253,9 +280,10 @@ void deform::apply_deformation()
 	size_t nb_points = mesh()->n_vertices();
 	Eigen::Map<ShapeOp::Matrix3X> p(mesh()->vertex_coordinates().data()->data(), 3, nb_points);
 
-	solver->solve( ((DeformWidget *)widget)->ui->numSolverIterations->value() );
+	solver->solve(((DeformWidget *)widget)->ui->numSolverIterations->value());
 
-	p = solver->getPoints();
+	auto final_points = solver->getPoints();
+	for (size_t i = 0; i < p.cols(); i++) p.col(i) = final_points.col(i);
 
 	mesh()->update_face_normals();
 	//mesh()->update_vertex_normals();
@@ -274,7 +302,7 @@ void deform::decorate()
 	}
 
 	if (handles.isEmpty()) return;
-	
+
 	// Draw handles
 	starlab::FrameSoup fs(handleRadius);
 	starlab::PointSoup ps(30);
@@ -304,23 +332,23 @@ void deform::drawWithNames()
 
 bool deform::postSelection(const QPoint &)
 {
-    return true;
+	return true;
 }
 
 bool deform::keyPressEvent(QKeyEvent *)
 {
-    return false;
+	return false;
 }
 
 bool deform::mouseMoveEvent(QMouseEvent *)
 {
-    return false;
+	return false;
 }
 
 bool deform::mousePressEvent(QMouseEvent * event)
 {
-    if (event->modifiers() & Qt::SHIFT)
-    {
+	if (event->modifiers() & Qt::SHIFT)
+	{
 		last_selected = -1;
 
 		bool found = false;
@@ -364,8 +392,8 @@ bool deform::mousePressEvent(QMouseEvent * event)
 			last_selected = distMap.values().front();
 		}
 
-        return true;
-    }
+		return true;
+	}
 
-    return false;
+	return false;
 }
