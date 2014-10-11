@@ -161,8 +161,7 @@ void deform::create()
 				tetpnts.col(i) = all_tet_points[i];
 
 			// DEBUG:
-			if (false)
-			{
+			if (false){
 				for (auto p : all_tet_points){
 					auto ps = new starlab::PointSoup;
 					ps->addPoint(p);
@@ -173,11 +172,23 @@ void deform::create()
 			solver->setPoints(tetpnts);
 
 			// Volume constraints
-			double volume_weight = 20.0;
+			double volume_weight = 1.0;
 			for (auto id_vector : cells)
 			{
 				auto c = std::make_shared<ShapeOp::VolumeConstraint>(id_vector, volume_weight, tetpnts);
 				solver->addConstraint(c);
+
+				for (int i = 0; i < 4; i++)
+				{
+					for (int j = i + 1; j < 4; j++)
+					{
+						std::vector<int> ids;
+						ids.push_back(id_vector[i]);
+						ids.push_back(id_vector[j]);
+						auto c = std::make_shared<ShapeOp::EdgeStrainConstraint>(ids, 1.0, tetpnts);
+						solver->addConstraint(c);
+					}
+				}
 			}
 		}
 
