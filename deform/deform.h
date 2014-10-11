@@ -45,6 +45,7 @@ public:
 	void create_handle(const Vector3 & p, size_t vid);
     QVector< QSharedPointer<DeformHandle> > handles;
 	bool isDeformReady;
+	bool isSolving;
 	ShapeOp::Solver * solver;
 
 public slots:

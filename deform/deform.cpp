@@ -13,6 +13,8 @@
 #include "tetgenLib.h"
 #endif
 
+QTimer *timer = NULL;
+
 void deform::create()
 {
 	if (widget) return;
@@ -215,7 +217,7 @@ void deform::create()
 		}
 
 		/// 4) Initalize the solver
-		solver->initialize(is_dynamic, 0.05, 0.5, 1.0);
+		solver->initialize(is_dynamic, 0.01, 0.5, 1.0);
 
 		/// 5) Optimize
 		solver->solve(num_iterations);
@@ -277,6 +279,8 @@ void deform::apply_deformation()
 {
 	if (!solver) return;
 
+	isSolving = true;
+
 	// Update positional constraints
 	auto gaussWeight = ((DeformWidget *)widget)->ui->gaussWeight->value();
 	for (auto & handle : handles)
@@ -298,6 +302,8 @@ void deform::apply_deformation()
 
 	mesh()->update_face_normals();
 	//mesh()->update_vertex_normals();
+
+	isSolving = false;
 }
 
 void deform::decorate()
@@ -311,6 +317,8 @@ void deform::decorate()
 		sphere.addSphere(mesh()->vertex_coordinates()[Vertex(last_selected)], handleRadius);
 		sphere.draw();
 	}
+
+	drawArea()->drawText(20, drawArea()->height() - 30, QString("Press space for simulation mode."), 10, Qt::gray);
 
 	if (handles.isEmpty()) return;
 
@@ -346,8 +354,27 @@ bool deform::postSelection(const QPoint &)
 	return true;
 }
 
-bool deform::keyPressEvent(QKeyEvent *)
+bool deform::keyPressEvent(QKeyEvent *event)
 {
+	// Simulation mode
+	if (event->key() == Qt::Key_Space)
+	{
+		if (timer){
+			timer->deleteLater();
+			timer = NULL;
+			return true;
+		}
+
+		timer = new QTimer(this);
+		connect(timer, &QTimer::timeout, [&]() { 
+			if (this->isSolving) return;
+			this->apply_deformation(); 
+			drawArea()->update(); 
+		});
+		timer->start(30);
+		return true;
+	}
+
 	return false;
 }
 
