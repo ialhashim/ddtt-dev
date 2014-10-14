@@ -15,7 +15,7 @@ public:
     explicit ExperimentWidget(QWidget *parent = 0);
     ~ExperimentWidget();
 
-private:
+//private:
     Ui::ExperimentWidget *ui;
 };
 
