@@ -4,10 +4,11 @@
 namespace Structure{
 	struct Landmark : public Eigen::Vector3d{
 		Landmark(size_t id = -1, const Eigen::Vector3d vec = Eigen::Vector3d(0, 0, 0)) :
-			id(id), Eigen::Vector3d(vec){ u = v = -1; partid = "none"; }
+			id(id), Eigen::Vector3d(vec), constraint_id(-1){ u = v = -1; partid = "none"; }
 		double u, v;
 		QString partid;
 		size_t id;
+		int constraint_id;
 		void serialize(QDataStream& os) const {
 			os << id;
 			os << partid;

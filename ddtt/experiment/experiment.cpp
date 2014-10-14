@@ -11,12 +11,14 @@
 
 #include "myglobals.h"
 
-static QVector<QColor> colors = rndColors2(512);
+static QVector<QColor> colors = rndColors2(100);
 
 #include "Deformer.h"
 void experiment::doCorrespond()
 {
-	Deformer d( graphs.front(), graphs.back(), 20 );
+	int num_solver_iterations = ((ExperimentWidget*)widget)->ui->numIterations->value();
+
+	Deformer d( graphs.front(), graphs.back(), num_solver_iterations );
 
 	for(auto debug : d.debug)drawArea()->addRenderObject( debug );
 }
@@ -93,11 +95,22 @@ void experiment::decorate()
         g->draw();
 		g->property["startX"].setValue(startX);
 
-		int r = 0;
-		for (auto & landmark : g->landmarks){
-			glEnable(GL_LIGHTING);
-			starlab::SphereSoup ss(colors[r++]);
-			ss.addSphere(landmark);
+		if (((ExperimentWidget*)widget)->ui->isShowLandmarks->isChecked())
+		{
+			starlab::SphereSoup ss;
+			//glDisable(GL_LIGHTING);
+
+			int r = 0;
+			for (auto & landmark : g->landmarks)
+			{
+				//glBegin(GL_POINTS);
+				//auto c = colors[r++];
+				//glColor3d(c.redF(), c.greenF(), c.blueF());
+				//glVertex3dv(landmark.data());
+				//glEnd();
+
+				ss.addSphere(landmark, 0.02, colors[r++]);
+			}
 			ss.draw();
 		}
 
