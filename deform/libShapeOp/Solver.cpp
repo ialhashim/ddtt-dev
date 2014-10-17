@@ -93,7 +93,7 @@ SHAPEOP_INLINE bool Solver::initialize(bool dynamic, Scalar masses, Scalar dampi
   return true; //TODO: fix this
 }
 ///////////////////////////////////////////////////////////////////////////////
-SHAPEOP_INLINE bool Solver::solve(unsigned int iteration) {
+SHAPEOP_INLINE bool Solver::solve(unsigned int iteration, int dimensions) {
   if (dynamic_) {
     SHAPEOP_OMP_PARALLEL
     {
@@ -113,7 +113,7 @@ SHAPEOP_INLINE bool Solver::solve(unsigned int iteration) {
       SHAPEOP_OMP_FOR for (int i = 0; i < static_cast<int>(constraints_.size()); ++i)
         constraints_[i]->project(points_, projections_);
       //global solve:  merging
-      SHAPEOP_OMP_FOR for (int i = 0; i < 3; ++i) {
+      SHAPEOP_OMP_FOR for (int i = 0; i < dimensions; ++i) {
         if (dynamic_)
           points_.row(i) = solver_->solve(At_ * projections_.row(i).transpose() + M_ * momentum_.row(i).transpose()); //TODO: should At_ nd M_ be row major? Temporary variables?
         else

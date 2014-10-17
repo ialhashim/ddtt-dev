@@ -82,6 +82,7 @@ void deform::create()
 		bool is_surface = !is_volume;
 		bool is_dynamic = ((DeformWidget *)widget)->ui->gravityEnabled->isChecked();
 		int num_iterations = ((DeformWidget *)widget)->ui->numSolverIterations->value();
+		int dimensions = ((DeformWidget *)widget)->ui->dimensions->value();
 
 		/// 1) Create the solver
 		solver = new ShapeOp::Solver;
@@ -220,7 +221,7 @@ void deform::create()
 		solver->initialize(is_dynamic, 0.01, 0.5, 1.0);
 
 		/// 5) Optimize
-		solver->solve(num_iterations);
+		solver->solve(num_iterations, dimensions);
 
 		/// 6) Get back the vertices
 		auto final_points = solver->getPoints();
@@ -294,8 +295,10 @@ void deform::apply_deformation()
 
 	size_t nb_points = mesh()->n_vertices();
 	Eigen::Map<ShapeOp::Matrix3X> p(mesh()->vertex_coordinates().data()->data(), 3, nb_points);
+	
+	int dimensions = ((DeformWidget *)widget)->ui->dimensions->value();
 
-	solver->solve(((DeformWidget *)widget)->ui->numSolverIterations->value());
+	solver->solve(((DeformWidget *)widget)->ui->numSolverIterations->value(), dimensions);
 
 	auto final_points = solver->getPoints();
 	for (size_t i = 0; i < p.cols(); i++) p.col(i) = final_points.col(i);
@@ -309,7 +312,7 @@ void deform::apply_deformation()
 void deform::decorate()
 {
 	double worldRadius = mesh()->bbox().diagonal().norm();
-	auto handleRadius = worldRadius * 0.1;
+	auto handleRadius = worldRadius * 0.01;
 
 	if (last_selected >= 0)
 	{
@@ -318,7 +321,7 @@ void deform::decorate()
 		sphere.draw();
 	}
 
-	drawArea()->drawText(20, drawArea()->height() - 30, QString("Press space for simulation mode."), 10, Qt::gray);
+	//drawArea()->drawText(20, drawArea()->height() - 30, QString("Press space for simulation mode."), 10, Qt::gray);
 
 	if (handles.isEmpty()) return;
 
@@ -338,7 +341,9 @@ void deform::decorate()
 				fixed.addPoint(mesh()->vertex_coordinates()[Vertex(vid)]);
 			}
 		}
+		glDisable(GL_DEPTH_TEST);
 		fixed.draw();
+		glEnable(GL_DEPTH_TEST);
 	}
 	ps.draw();
 	fs.draw();

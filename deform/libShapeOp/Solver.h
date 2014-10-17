@@ -49,7 +49,7 @@ class SHAPEOP_API Solver {
   /** \brief Initialize the ShapeOp linear system and the different parameters.*/
   bool initialize(bool dynamic = false, Scalar masses = 1.0, Scalar damping = 1.0, Scalar timestep = 1.0);
   /** \brief Solve the constraint problem by projecting and merging.*/
-  bool solve(unsigned int iteration);
+  bool solve(unsigned int iteration, int dimensions = 3);
   /** \brief Get the error for a using its id.*/
   Scalar getError(int i);
  private:
