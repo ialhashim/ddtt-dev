@@ -1,6 +1,7 @@
 #include "experiment.h"
 #include "experiment-widget.h"
 #include "ui_experiment-widget.h"
+#include <QFileDialog>
 
 #include "SurfaceMeshHelper.h"
 #include "RenderObjectExt.h"
@@ -13,14 +14,54 @@
 
 static QVector<QColor> colors = rndColors2(100);
 
-#include "Deformer.h"
+#include "CorrespondenceSearch.h"
+void experiment::doCorrespondSearch()
+{
+	auto search = new CorrespondenceSearch(graphs.front(), graphs.back(), CorrespondenceGenerator(graphs.front(), graphs.back()).generate());
+	
+	search->start();
+	//mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
+}
+
+#include "DeformEnergy.h"
 void experiment::doCorrespond()
 {
+    QElapsedTimer timer; timer.start();
+
+    QVector<QStringList> landmarks_front;
+    QVector<QStringList> landmarks_back;
+
+    for(auto landmark : graphs.front()->landmarks){
+        QStringList m;
+        for(auto l : landmark) m << l.partid;
+        landmarks_front << m;
+    }
+
+    for(auto landmark : graphs.back()->landmarks){
+        QStringList m;
+        for(auto l : landmark) m << l.partid;
+        landmarks_back << m;
+    }
+
+    DeformEnergy d( graphs.front(), graphs.back(), landmarks_front, landmarks_back );
+
+    for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+
+    mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
+}
+
+#include "Deformer.h"
+void experiment::doCorrespond2()
+{
+	QElapsedTimer timer; timer.start();
+
 	int num_solver_iterations = ((ExperimentWidget*)widget)->ui->numIterations->value();
 
 	Deformer d( graphs.front(), graphs.back(), num_solver_iterations );
 
 	for(auto debug : d.debug)drawArea()->addRenderObject( debug );
+
+	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
 
 void experiment::create()
@@ -82,6 +123,22 @@ void experiment::create()
 		this->doCorrespond();
 		drawArea()->update();
 	});
+	connect(pw->ui->clearShapes, &QPushButton::released, [=]{
+		graphs.clear();
+		drawArea()->clear();
+		drawArea()->update();
+	});
+	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
+		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Shape"), "", tr("Shape File (*.xml)"));
+		if (!filename.size()) return;
+		graphs << new Structure::ShapeGraph(filename);
+		drawArea()->update();
+	});
+	connect(pw->ui->searchBest, &QPushButton::released, [=]{
+		drawArea()->clear();
+		this->doCorrespondSearch();
+		drawArea()->update();
+	});
 }
 
 void experiment::decorate()
@@ -97,21 +154,22 @@ void experiment::decorate()
 
 		if (((ExperimentWidget*)widget)->ui->isShowLandmarks->isChecked())
 		{
-			starlab::SphereSoup ss;
-			//glDisable(GL_LIGHTING);
+			//starlab::SphereSoup ss;
+			glDisable(GL_LIGHTING);
 
 			int r = 0;
-			for (auto & landmark : g->landmarks)
+			for (auto & l : g->landmarks)
 			{
-				//glBegin(GL_POINTS);
-				//auto c = colors[r++];
-				//glColor3d(c.redF(), c.greenF(), c.blueF());
-				//glVertex3dv(landmark.data());
-				//glEnd();
+				glBegin(GL_POINTS);
+				auto c = colors[r++];
+				glColor3d(c.redF(), c.greenF(), c.blueF());
+				for(auto & landmark : l) glVertex3dv(landmark.data());
+				glEnd();
 
-				ss.addSphere(landmark, 0.02, colors[r++]);
+				//for (auto & landmark : l) ss.addSphere(landmark, 0.02, colors[r]);
+				r++;
 			}
-			ss.draw();
+			//ss.draw();
 		}
 
         glPopMatrix();
@@ -131,7 +189,7 @@ bool experiment::mouseMoveEvent(QMouseEvent *)
 
 bool experiment::mousePressEvent(QMouseEvent *event)
 {
-	if (event->modifiers() & Qt::SHIFT)
+	if (event->modifiers())
 	{
 		bool found = false;
 		auto pos = drawArea()->camera()->pointUnderPixel(event->pos(), found);
@@ -147,14 +205,14 @@ bool experiment::mousePressEvent(QMouseEvent *event)
 			for (auto n : g->nodes){
 				auto nodeBox = n->bbox(1.01);
 				Vector3 projection = p;
-				for (int i = 0; i < 3; i++){ 
+				for (int i = 0; i < 3; i++){
 					projection[i] = std::min(p[i], nodeBox.max()[i]);
 					projection[i] = std::max(projection[i], nodeBox.min()[i]);
 				}
 				distMap[n->id] = (p - projection).norm();
 			}
 			auto dists = distMap.values();
-			size_t minidx = std::min_element(dists.begin(),dists.end()) - dists.begin();
+			size_t minidx = std::min_element(dists.begin(), dists.end()) - dists.begin();
 			auto closeNode = g->getNode(distMap.keys().at(minidx));
 
 			auto coord = closeNode->approxCoordinates(p);
@@ -165,11 +223,12 @@ bool experiment::mousePressEvent(QMouseEvent *event)
 			landmark.v = coord[1];
 			landmark.partid = closeNode->id;
 
-			g->landmarks.push_back( landmark );
+			if (event->modifiers() & Qt::SHIFT)	g->landmarks.push_back(Structure::Landmarks());
+			if (g->landmarks.size()) g->landmarks.back().push_back(landmark);
 		}
 
 		drawArea()->update();
 	}
-
+	
 	return false;
 }

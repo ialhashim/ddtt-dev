@@ -28,7 +28,10 @@ public:
 	bool mousePressEvent(QMouseEvent* event);
 
 	void doCorrespond();
-	
+	void doCorrespond2();
+
+	void doCorrespondSearch();
+
     experiment() : widget(NULL), dockwidget(NULL) {}
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;
