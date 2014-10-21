@@ -2,8 +2,6 @@
 #include <Eigen/Geometry>
 #include "myglobals.h"
 
-#include "principal_curvature.h"
-
 int num_control_points = 10;
 Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(num_control_points);
 
@@ -61,13 +59,16 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 	// For uncorrespondend nodes
 	{
+		// Hide visualization for non-correspondend
+		//this->debugging = false;
+
 		// Collect list of uncorrespondend
 		QStringList remainingNodes;
 		for (auto n : a->nodes) remainingNodes << n->id;
 		for (auto l : a_landmarks) for (auto nid : l) remainingNodes.removeAll(nid);
 
 		auto box = a->bbox();
-		Vector3 delta = box.diagonal();delta.z() = 0;
+		Vector3 delta = box.diagonal(); //delta.z() = 0;
 		auto newCurve = NURBS::NURBSCurved::createCurve(box.min(), box.min() + delta);
 		//for (auto & p : newCurve.mCtrlPoint) p += Vector3(0,0,10);
 
@@ -75,7 +76,8 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		Structure::Node * null_node = a->addNode(newNode);
 
-		for(auto nid : remainingNodes) error += deform(a->getNode(nid), null_node);
+		for (auto nid : remainingNodes)
+			error += deform(a->getNode(nid), null_node);
 
 		a->removeNode(null_node->id);
 	}
@@ -240,60 +242,12 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 			}
 		}
 
+		double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
+			- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
+
+		//area *= (1 + ((1-dot) * 10));
+
 		if (debugging) debug << ps;
-
-		// Compute curvature
-		if (false)
-		{
-			Eigen::MatrixXd V(quads_pnts[si].size(), 3);
-			Eigen::MatrixXi F(quads[si].size() * 2, 3);
-
-			// Fill vertices
-			for (size_t v = 0; v < quads_pnts[si].size(); v++) V.row(v) = quads_pnts[si][v];
-
-			// Fill triangles
-			int fid = 0;
-			for (auto quad : quads[si])
-			{
-				F.row(fid++) = Eigen::Vector3i( quad[0], quad[1], quad[2] );
-				F.row(fid++) = Eigen::Vector3i( quad[2], quad[3], quad[0] );
-			}
-
-			Eigen::MatrixXd PD1, PD2;
-			Eigen::VectorXd PV1, PV2, gauss;
-			igl::principal_curvature(V, F, PD1, PD2, PV1, PV2);
-
-			gauss = PV1.array() * PV2.array();
-
-			double range = gauss.array().maxCoeff() - gauss.array().minCoeff();
-			gauss.array() -= gauss.array().minCoeff();
-			gauss.array() /= range;
-
-			// Visualize
-			if (debugging)
-			{
-				double s = 0.01;
-
-				auto ps = new starlab::PointSoup;
-				auto vs1 = new starlab::VectorSoup(Qt::red);
-				auto vs2 = new starlab::VectorSoup(Qt::blue);
-				for (size_t i = 0; i < V.rows(); i++)
-				{
-					auto p = Vector3(V.row(i));
-					auto pd1 = Vector3(PD1.row(i) * s);
-					auto pd2 = Vector3(PD2.row(i) * s);
-
-					double pv1 = PV1(i);
-					double pv2 = PV2(i);
-
-					ps->addPoint(p, starlab::qtJetColor(gauss(i)));
-					vs1->addVector(p, pd1);
-					vs2->addVector(p, pd2);
-				}
-
-				debug << ps << vs1 << vs2;
-			}
-		}
 	}
 
 

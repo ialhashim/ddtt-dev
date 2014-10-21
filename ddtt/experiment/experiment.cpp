@@ -2,6 +2,7 @@
 #include "experiment-widget.h"
 #include "ui_experiment-widget.h"
 #include <QFileDialog>
+#include <QMatrix4x4>
 
 #include "SurfaceMeshHelper.h"
 #include "RenderObjectExt.h"
@@ -13,6 +14,7 @@
 #include "myglobals.h"
 
 static QVector<QColor> colors = rndColors2(100);
+ExperimentWidget * pw = NULL;
 
 #include "DeformEnergy.h"
 #include "Deformer.h"
@@ -21,7 +23,26 @@ CorrespondenceSearch * search;
 
 void experiment::doCorrespondSearch()
 {
-	search = new CorrespondenceSearch(graphs.front(), graphs.back(), CorrespondenceGenerator(graphs.front(), graphs.back()).generate());
+	auto shapeA = new Structure::ShapeGraph(*graphs.front());
+	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+
+	if (pw->ui->isAnisotropy->isChecked())
+	{
+		auto bboxA = shapeA->bbox();
+		auto bboxB = shapeB->bbox();
+
+		Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
+		QMatrix4x4 mat;
+		mat.scale(s.x(), s.y(), s.z());
+		shapeB->transform(mat);
+
+		// Show
+		graphs.removeLast();
+		graphs.push_back(shapeB);
+	}
+
+	search = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate());
+
 	connect(search, SIGNAL(done()), SLOT(postCorrespond()));
 
 	search->start();
@@ -29,10 +50,38 @@ void experiment::doCorrespondSearch()
 
 void experiment::postCorrespond()
 {
-	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));   
-	
-	DeformEnergy d(graphs.front(), graphs.back(), search->bestCorrespondence.first, search->bestCorrespondence.second);
+	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
+
+	bool isVisualize = pw->ui->isVisualize->isChecked();
+
+	DeformEnergy d(graphs.front(), graphs.back(), search->bestCorrespondence.first, search->bestCorrespondence.second, isVisualize);
 	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+
+	// Show corresponding parts
+	if (pw->ui->isShowParts->isChecked())
+	{
+		graphs.front()->setColorAll(QColor(255, 255, 255, 10));
+		graphs.back()->setColorAll(QColor(255, 255, 255, 10));
+
+		auto nidA = search->bestCorrespondence.first;
+		auto nidB = search->bestCorrespondence.second;
+
+		for (size_t i = 0; i < nidA.size(); i++)
+		{
+			auto nidsA = nidA[i], nidsB = nidB[i];
+			QColor color = colors[i];
+			for (auto nid : nidsA) { 
+				graphs.front()->setColorFor(nid, color); 
+				graphs.front()->getNode(nid)->vis_property["meshSolid"].setValue(true); 
+			}
+			for (auto nid : nidsB) { 
+				graphs.back()->setColorFor(nid, color); 
+				graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true); 
+			}
+		}
+	}
+
+	drawArea()->update();
 }
 
 void experiment::doCorrespond()
@@ -79,14 +128,14 @@ void experiment::create()
     // Prepare UI
 	if (widget) return;
 
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
 	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
+	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
 
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);
 
-	graphs.front()->loadLandmarks("front.landmarks");
-	graphs.back()->loadLandmarks("back.landmarks");
+	//graphs.front()->loadLandmarks("back.landmarks");
+	//graphs.back()->loadLandmarks("front.landmarks");
 
 	//GraphCorresponder gcorr( graphs.front(), graphs.back() );
 	//QSharedPointer<Scheduler> scheduler ( new Scheduler );
@@ -107,7 +156,7 @@ void experiment::create()
     }
 
     ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
-    auto * pw = new ExperimentWidget();
+    pw = new ExperimentWidget();
     widget = pw;
 
     dockwidget->setWidget( widget );

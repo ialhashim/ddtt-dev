@@ -115,7 +115,7 @@ Paths CorrespondenceGenerator::generate()
 			auto grpB = b->groups[assignment[i]];
 
 			// Resolve many-to-many
-			if (grpA.size() > 1)
+			if (grpA.size() > 1 && grpB.size() > 1)
 			{
 				QVector<QString> tmpA, tmpB;
 

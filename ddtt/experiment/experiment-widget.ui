@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>174</width>
-    <height>313</height>
+    <width>176</width>
+    <height>432</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -21,10 +21,30 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="0">
+   <item row="9" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
       <string>Num. iterations</string>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0" colspan="2">
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="12" column="1">
+    <widget class="QPushButton" name="searchBest">
+     <property name="text">
+      <string>Search..</string>
      </property>
     </widget>
    </item>
@@ -38,7 +58,21 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="1">
+   <item row="10" column="0" colspan="2">
+    <widget class="QPushButton" name="executeButton">
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Execute...</string>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="1">
     <widget class="QSpinBox" name="numIterations">
      <property name="maximum">
       <number>1000</number>
@@ -48,6 +82,23 @@
      </property>
      <property name="value">
       <number>40</number>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0">
+    <widget class="QCheckBox" name="isShowParts">
+     <property name="text">
+      <string>Show parts</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="0" colspan="2">
+    <widget class="QCheckBox" name="isVisualize">
+     <property name="text">
+      <string>Visualize</string>
      </property>
     </widget>
    </item>
@@ -64,17 +115,17 @@
      </property>
     </spacer>
    </item>
-   <item row="8" column="0" colspan="2">
-    <widget class="QPushButton" name="executeButton">
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
-     </property>
+   <item row="0" column="1">
+    <widget class="QPushButton" name="loadShapes">
      <property name="text">
-      <string>Execute...</string>
+      <string>Load shape..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="2">
+    <widget class="QPushButton" name="loadLandmarks">
+     <property name="text">
+      <string>Load landmarks..</string>
      </property>
     </widget>
    </item>
@@ -92,37 +143,13 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
-    <widget class="QPushButton" name="loadShapes">
+   <item row="11" column="0" colspan="2">
+    <widget class="QCheckBox" name="isAnisotropy">
      <property name="text">
-      <string>Load shape..</string>
+      <string>Anisotropy</string>
      </property>
-    </widget>
-   </item>
-   <item row="2" column="0" colspan="2">
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item row="4" column="0" colspan="2">
-    <widget class="QPushButton" name="loadLandmarks">
-     <property name="text">
-      <string>Load landmarks..</string>
-     </property>
-    </widget>
-   </item>
-   <item row="9" column="1">
-    <widget class="QPushButton" name="searchBest">
-     <property name="text">
-      <string>Search..</string>
+     <property name="checked">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
