@@ -15,7 +15,10 @@ public:
     QVector<RenderObject::Base*> debug;
 
 	Structure::ShapeGraph *shapeA, *shapeB;
+	
 	Paths paths;
+	std::vector<double> pathScores;
+	AssignmentPair bestCorrespondence;
 
 public slots:
     void run();

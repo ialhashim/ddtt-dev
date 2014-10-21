@@ -20,7 +20,8 @@ void CorrespondenceSearch::run()
 {
     QElapsedTimer allTimer; allTimer.start();
 
-    std::vector<double> pathScores( paths.size(), DBL_MAX );
+	pathScores.clear();
+    pathScores.resize( paths.size(), DBL_MAX );
 
     bool abort = false;
 
@@ -64,7 +65,7 @@ void CorrespondenceSearch::run()
     /// Assign best correspondence:
     {
         auto bestPath = std::min_element(pathScores.begin(), pathScores.end()) - pathScores.begin();
-        //bestCorrespondence = paths[bestPath];
+        bestCorrespondence = paths[bestPath];
     }
 
     // Timing

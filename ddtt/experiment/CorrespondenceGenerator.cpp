@@ -37,9 +37,8 @@ Paths CorrespondenceGenerator::generate()
 			if (j < b->groups.size())
 			{
 				Eigen::AlignedBox3d groupBoxA, groupBoxB;
-
-				for (auto sid : a->groups[i]) groupBoxA.extend(a->getNode(sid)->bbox());
-				for (auto sid : b->groups[j]) groupBoxB.extend(b->getNode(sid)->bbox());
+				for (auto sid : a->groups[i]) groupBoxA.extend(a->getNode(sid)->bbox(1.01));
+				for (auto sid : b->groups[j]) groupBoxB.extend(b->getNode(sid)->bbox(1.01));
 
 				Vector3 relativeCenterA = (groupBoxA.center() - boxA.min()).array() / boxA.sizes().array();
 				Vector3 relativeCenterB = (groupBoxB.center() - boxB.min()).array() / boxB.sizes().array();
@@ -112,8 +111,41 @@ Paths CorrespondenceGenerator::generate()
 		{
 			if (assignment[i] == b->groups.size()) continue;
 
-			landmarksA << QStringList::fromVector(a->groups[i]);
-			landmarksB << QStringList::fromVector(b->groups[assignment[i]]);
+			auto grpA = a->groups[i];
+			auto grpB = b->groups[assignment[i]];
+
+			// Resolve many-to-many
+			if (grpA.size() > 1)
+			{
+				QVector<QString> tmpA, tmpB;
+
+				Eigen::AlignedBox3d groupBoxA, groupBoxB;
+				for (auto sid : grpA) groupBoxA.extend(a->getNode(sid)->bbox(1.01));
+				for (auto sid : grpB) groupBoxB.extend(b->getNode(sid)->bbox(1.01));
+
+				for (auto nodeid_i : grpA){
+					auto nodeA = a->getNode(nodeid_i);
+
+					QMap < QString, double > dists;
+					for (auto nodeid_j : grpB){
+						auto nodeB = b->getNode(nodeid_j);
+
+						Vector3 posA = (nodeA->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) - boxA.min()).array() / boxA.sizes().array();
+						Vector3 posB = (nodeB->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) - boxB.min()).array() / boxB.sizes().array();
+
+						dists[nodeid_j] = (posA - posB).norm();
+					}
+					auto nodeid_j = sortQMapByValue(dists).first().second;
+
+					landmarksA << (QStringList() << nodeid_i);
+					landmarksB << (QStringList() << nodeid_j);
+				}
+			}
+			else
+			{
+				landmarksA << QStringList::fromVector(grpA);
+				landmarksB << QStringList::fromVector(grpB);
+			}
 		}
 
 		result.push_back( qMakePair(landmarksA, landmarksB) );

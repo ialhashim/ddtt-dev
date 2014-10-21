@@ -3,7 +3,8 @@
 #include "ShapeGraph.h"
 #include "myglobals.h"
 
-typedef QVector<QPair<QVector<QStringList>, QVector<QStringList> > > Paths;
+typedef QPair < QVector<QStringList>, QVector<QStringList> > AssignmentPair;
+typedef QVector< AssignmentPair > Paths;
 
 class CorrespondenceGenerator
 {

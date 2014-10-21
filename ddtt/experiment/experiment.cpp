@@ -14,16 +14,27 @@
 
 static QVector<QColor> colors = rndColors2(100);
 
+#include "DeformEnergy.h"
+#include "Deformer.h"
 #include "CorrespondenceSearch.h"
+CorrespondenceSearch * search;
+
 void experiment::doCorrespondSearch()
 {
-	auto search = new CorrespondenceSearch(graphs.front(), graphs.back(), CorrespondenceGenerator(graphs.front(), graphs.back()).generate());
-	
+	search = new CorrespondenceSearch(graphs.front(), graphs.back(), CorrespondenceGenerator(graphs.front(), graphs.back()).generate());
+	connect(search, SIGNAL(done()), SLOT(postCorrespond()));
+
 	search->start();
-	//mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
 }
 
-#include "DeformEnergy.h"
+void experiment::postCorrespond()
+{
+	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));   
+	
+	DeformEnergy d(graphs.front(), graphs.back(), search->bestCorrespondence.first, search->bestCorrespondence.second);
+	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+}
+
 void experiment::doCorrespond()
 {
     QElapsedTimer timer; timer.start();
@@ -50,7 +61,6 @@ void experiment::doCorrespond()
     mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
 
-#include "Deformer.h"
 void experiment::doCorrespond2()
 {
 	QElapsedTimer timer; timer.start();

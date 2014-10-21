@@ -37,4 +37,7 @@ public:
 	ModePluginDockWidget * dockwidget;
 
     QVector<Structure::ShapeGraph*> graphs;
+
+public slots:
+	void postCorrespond();
 };

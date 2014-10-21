@@ -2,7 +2,10 @@
 #include <Eigen/Geometry>
 #include "myglobals.h"
 
-Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(20);
+#include "principal_curvature.h"
+
+int num_control_points = 10;
+Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(num_control_points);
 
 DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
                            const QVector<QStringList> & a_landmarks,
@@ -54,6 +57,27 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		if (isNodeAdded)
             graph->removeNode(landmarks->front());
+	}
+
+	// For uncorrespondend nodes
+	{
+		// Collect list of uncorrespondend
+		QStringList remainingNodes;
+		for (auto n : a->nodes) remainingNodes << n->id;
+		for (auto l : a_landmarks) for (auto nid : l) remainingNodes.removeAll(nid);
+
+		auto box = a->bbox();
+		Vector3 delta = box.diagonal();delta.z() = 0;
+		auto newCurve = NURBS::NURBSCurved::createCurve(box.min(), box.min() + delta);
+		//for (auto & p : newCurve.mCtrlPoint) p += Vector3(0,0,10);
+
+		Structure::Curve * newNode = new Structure::Curve(newCurve, "NULL_NODE");
+
+		Structure::Node * null_node = a->addNode(newNode);
+
+		for(auto nid : remainingNodes) error += deform(a->getNode(nid), null_node);
+
+		a->removeNode(null_node->id);
 	}
 }
 
@@ -132,12 +156,12 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 	// Number of sides to compute
 	int numSides = (nodeA->type() == Structure::SHEET || nodeB->type() == Structure::SHEET) ? 4 : 1;
 
-	QVector< QVector<Vector3> > quads;
+	QVector< QVector<Vector3> > quads_pnts(numSides);
+
+	int num_steps = 10;
 
 	// Transformation
 	{
-		int num_steps = 10;
-
 		auto cpntsA = nodeA->controlPoints();
 		auto cpntsB = nodeB->controlPoints();
 
@@ -148,6 +172,8 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 			prev[si] = nodeA->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[si])).front();
 			cur[si] = prev[si];
 
+			for (auto p : prev[si]) quads_pnts[si] << p;
+
 			for (int i = 1; i < num_steps; i++)
 			{
 				double t = double(i) / (num_steps - 1);
@@ -155,50 +181,121 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 				auto pI = nodeA->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[si])).front();
 				auto pJ = nodeB->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[si])).front();
 
-				for (int u = 0; u < prev[si].size(); u++)
-				{
+				for (int u = 0; u < cur[si].size(); u++)
 					cur[si][u] = AlphaBlend(t, pI[u], pJ[u]);
-				}
 
-				// Build faces
-				for (int i = 0; i < cur[si].size() - 1; i++)
-				{
-					QVector<Vector3> quad;
+				for (auto p : cur[si]) quads_pnts[si] << p;
+			}
+		}
+	}
 
-					quad << prev[si][i];
-					quad << cur[si][i];
-					quad << cur[si][i + 1];
-					quad << prev[si][i + 1];
+	typedef QVector<size_t> Quad;
+	QVector< QVector< Quad > > quads(numSides);
 
-					quads << quad;
-				}
+	int num_quads = quads_pnts.front().size();
 
-				prev[si] = cur[si];
+	for (int si = 0; si < numSides; si++)
+	{
+		// Build faces
+		for (int i = 0; i < num_steps - 1; i++)
+		{
+			for (int j = 0; j < num_control_points - 1; j++)
+			{
+				QVector<size_t> quad;
+
+				quad << (i * num_control_points) + j;
+				quad << (i * num_control_points) + (j + 1);
+				quad << ((i + 1) * num_control_points) + (j + 1);
+				quad << ((i + 1) * num_control_points) + j;
+
+				quads[si] << quad;
 			}
 		}
 	}
 
 	double area = 0.0;
 
-	starlab::PolygonSoup * ps;
-	if (debugging) ps = new starlab::PolygonSoup();
 
-	for(auto quad : quads)
+	for (int si = 0; si < numSides; si++)
 	{
-		double triArea1 = (quad[1] - quad[0]).cross(quad[2] - quad[0]).norm() / 2.0;
-		double triArea2 = (quad[2] - quad[0]).cross(quad[3] - quad[0]).norm() / 2.0;
-		double quadArea = triArea1 + triArea2;
+		starlab::PolygonSoup * ps;
+		if (debugging) ps = new starlab::PolygonSoup();
 
-		area += quadArea;
-
-		if (debugging)
+		for (auto quad : quads[si])
 		{
-			QVector<starlab::QVector3> pnts;
-			for (auto p : quad) pnts << p;
-			ps->addPoly(pnts);
+			QVector<Vector3> q;
+			for (auto v : quad)	q << quads_pnts[si][v];
+
+			double triArea1 = (q[1] - q[0]).cross(q[2] - q[0]).norm() / 2.0;
+			double triArea2 = (q[2] - q[0]).cross(q[3] - q[0]).norm() / 2.0;
+			double quadArea = triArea1 + triArea2;
+
+			area += quadArea;
+
+			if (debugging)
+			{
+				QVector<starlab::QVector3> pnts;
+				for (auto p : q) pnts << p;
+				ps->addPoly(pnts);
+			}
+		}
+
+		if (debugging) debug << ps;
+
+		// Compute curvature
+		if (false)
+		{
+			Eigen::MatrixXd V(quads_pnts[si].size(), 3);
+			Eigen::MatrixXi F(quads[si].size() * 2, 3);
+
+			// Fill vertices
+			for (size_t v = 0; v < quads_pnts[si].size(); v++) V.row(v) = quads_pnts[si][v];
+
+			// Fill triangles
+			int fid = 0;
+			for (auto quad : quads[si])
+			{
+				F.row(fid++) = Eigen::Vector3i( quad[0], quad[1], quad[2] );
+				F.row(fid++) = Eigen::Vector3i( quad[2], quad[3], quad[0] );
+			}
+
+			Eigen::MatrixXd PD1, PD2;
+			Eigen::VectorXd PV1, PV2, gauss;
+			igl::principal_curvature(V, F, PD1, PD2, PV1, PV2);
+
+			gauss = PV1.array() * PV2.array();
+
+			double range = gauss.array().maxCoeff() - gauss.array().minCoeff();
+			gauss.array() -= gauss.array().minCoeff();
+			gauss.array() /= range;
+
+			// Visualize
+			if (debugging)
+			{
+				double s = 0.01;
+
+				auto ps = new starlab::PointSoup;
+				auto vs1 = new starlab::VectorSoup(Qt::red);
+				auto vs2 = new starlab::VectorSoup(Qt::blue);
+				for (size_t i = 0; i < V.rows(); i++)
+				{
+					auto p = Vector3(V.row(i));
+					auto pd1 = Vector3(PD1.row(i) * s);
+					auto pd2 = Vector3(PD2.row(i) * s);
+
+					double pv1 = PV1(i);
+					double pv2 = PV2(i);
+
+					ps->addPoint(p, starlab::qtJetColor(gauss(i)));
+					vs1->addVector(p, pd1);
+					vs2->addVector(p, pd2);
+				}
+
+				debug << ps << vs1 << vs2;
+			}
 		}
 	}
-	if (debugging) debug << ps;
+
 
 	delete nodeA;
 	delete nodeB;
