@@ -18,6 +18,7 @@ public:
 	
 	Paths paths;
 	std::vector<double> pathScores;
+	std::vector<PropertyMap> pathDetails;
 	int bestCorrespondence;
 
 public slots:

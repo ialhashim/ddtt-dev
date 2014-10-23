@@ -11,57 +11,74 @@ Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordi
 DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
                            const QVector<QStringList> & a_landmarks,
                            const QVector<QStringList> & b_landmarks,
-                           bool debugging) : a(shapeA), b(shapeB), error(0), debugging(debugging)
+                           bool debugging) : a(shapeA), b(shapeB), total_error(0), debugging(debugging)
 {
+	bool isGeometryDistortion = true;
+	bool isUnCorrespondend = true;
+	bool isConnections = true;
+	bool isSymmetries = true;
+	bool isCoverage = true;
+
 	/// Deformed geometry:
-    for (size_t i = 0; i < a_landmarks.size(); i++)
+	if (isGeometryDistortion)
 	{
-        auto la = a_landmarks[i];
-        auto lb = b_landmarks[i];
-		bool isOneA = la.size() == 1;
-		bool isOneB = lb.size() == 1;
-        bool isSheetA = a->getNode(la.front())->type() == Structure::SHEET;
-        bool isSheetB = b->getNode(lb.front())->type() == Structure::SHEET;
-		bool isOneToMany = (isOneA != isOneB);
-		bool isOneIsSheet = (isSheetA || isSheetB);
-		bool isOtherNotSheet = !isSheetA || !isSheetB;
+		double errorGeometric = 0;
 
-		bool isNodeAdded = false;
-		Structure::ShapeGraph * graph;
-        QStringList * landmarks;
-
-		if (isOneToMany && isOneIsSheet && isOtherNotSheet)
+		for (size_t i = 0; i < a_landmarks.size(); i++)
 		{
-			graph = (isOneA) ? shapeB : shapeA;
-			landmarks = (isOneA) ? &lb : &la;
+			auto la = a_landmarks[i];
+			auto lb = b_landmarks[i];
+			bool isOneA = la.size() == 1;
+			bool isOneB = lb.size() == 1;
+			bool isSheetA = a->getNode(la.front())->type() == Structure::SHEET;
+			bool isSheetB = b->getNode(lb.front())->type() == Structure::SHEET;
+			bool isOneToMany = (isOneA != isOneB);
+			bool isOneIsSheet = (isSheetA || isSheetB);
+			bool isOtherNotSheet = !isSheetA || !isSheetB;
 
-            QString newnode = DeformEnergy::convertCurvesToSheet(graph, *landmarks);
+			bool isNodeAdded = false;
+			Structure::ShapeGraph * graph;
+			QStringList * landmarks;
 
-			landmarks->clear();
-            landmarks->push_back(newnode);
-
-			isNodeAdded = true;
-		}
-
-		for (size_t u = 0; u < la.size(); u++)
-		{
-			for (size_t v = 0; v < lb.size(); v++)
+			if (isOneToMany && isOneIsSheet && isOtherNotSheet)
 			{
-                auto nodeA = a->getNode(la[u]);
-                auto nodeB = b->getNode(lb[v]);
+				graph = (isOneA) ? shapeB : shapeA;
+				landmarks = (isOneA) ? &lb : &la;
 
-				double area = deform(nodeA, nodeB, true);
+				QString newnode = DeformEnergy::convertCurvesToSheet(graph, *landmarks);
 
-				error += area;
+				landmarks->clear();
+				landmarks->push_back(newnode);
+
+				isNodeAdded = true;
 			}
+
+			for (size_t u = 0; u < la.size(); u++)
+			{
+				for (size_t v = 0; v < lb.size(); v++)
+				{
+					auto nodeA = a->getNode(la[u]);
+					auto nodeB = b->getNode(lb[v]);
+
+					double area = deform(nodeA, nodeB, true);
+
+					errorGeometric += area;
+				}
+			}
+
+			if (isNodeAdded)
+				graph->removeNode(landmarks->front());
 		}
 
-		if (isNodeAdded)
-            graph->removeNode(landmarks->front());
+		errorTerms["geometric"].setValue(errorGeometric);
+		total_error += errorGeometric;
 	}
 
 	/// For uncorrespondend nodes:
+	if (isUnCorrespondend)
 	{
+		double errorUncorrespond = 0;
+
 		// Hide visualization for non-correspondend
 		//this->debugging = false;
 
@@ -81,12 +98,16 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		Structure::Node * null_node = a->addNode(newNode);
 
 		for (auto nid : remainingNodes)
-			error += deform(a->getNode(nid), null_node, true);
+			errorUncorrespond += deform(a->getNode(nid), null_node, true);
 
 		a->removeNode(null_node->id);
+
+		errorTerms["uncorrespond"].setValue(errorUncorrespond);
+		total_error += errorUncorrespond;
 	}
 
 	/// Connections:
+	if (isConnections)
 	{
 		QStringList targetNodes;
 		for(auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
@@ -137,11 +158,14 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		int numComponenets = disjoint.Groups().size();
 
-		error *= std::max(numComponenets, 1);
+		double errorConnection = std::max(numComponenets, 1);
+
+		errorTerms["connection"].setValue(errorConnection);
+		total_error *= errorConnection;
 	}
 
 	/// Symmetries: check for global reflectional symmetry 
-	if (!b_landmarks.empty())
+	if (isSymmetries && !b_landmarks.empty())
 	{
 		QStringList targetNodes;
 		for (auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
@@ -185,11 +209,15 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 			double ratio = double(foundMatches) / expectedMatches;
 			if (ratio == 0) ratio = 0.01;
 
-			error *= (1.0 / ratio);
+			double errorSymmetry = 1.0 / ratio;
+
+			errorTerms["symmetry"].setValue(errorSymmetry);
+			total_error *= errorSymmetry;
 		}
 	}
 
 	/// Coverage:
+	if (isCoverage)
 	{
 		QStringList sourceNodes;
 		for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
@@ -197,7 +225,10 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		double ratio = double(sourceNodes.size()) / a->nodes.size();
 		if (ratio == 0) ratio = 0.01;
 
-		error *= (1.0 / ratio);
+		double errorCoverage = 1.0 / ratio;
+
+		errorTerms["coverage"].setValue(errorCoverage);
+		total_error *= errorCoverage;
 	}
 }
 

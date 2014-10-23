@@ -23,6 +23,9 @@ void CorrespondenceSearch::run()
 	pathScores.clear();
     pathScores.resize( paths.size(), DBL_MAX );
 
+	pathDetails.clear();
+	pathDetails.resize(paths.size());
+
     bool abort = false;
 
 	// Make copy for thread safety
@@ -43,21 +46,21 @@ void CorrespondenceSearch::run()
         #pragma omp flush (abort)
         if(!abort)
         {
+			// Check for global abort
             if(pd->wasCanceled()){
                 abort = true;
                 #pragma omp flush (abort)
             }
 
-            double score = 0;
-            auto & path = paths[pi];
-
             // Evaluate correspondence:
-            {
-				score = DeformEnergy(shapeA_copy, shapeB_copy, path.first, path.second, false).error;
+			{
+				auto & path = paths[pi];
+				DeformEnergy de(shapeA_copy, shapeB_copy, path.first, path.second, false);
+				pathScores[pi] = de.total_error;
+				pathDetails[pi] = de.errorTerms;
             }
 
-            pathScores[pi] = score;
-
+			// Report progress
             emit( pathComputed() );
         }
     }

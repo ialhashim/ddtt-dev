@@ -20,7 +20,8 @@ public:
 	static Array2D_Vector4d DeformEnergy::computeSideCoordinates(int resolution);
 	static Array2D_Vector4d sideCoordinates;
 
-	double error;
+	double total_error;
+	PropertyMap errorTerms;
 
 	bool debugging;
 	QVector<RenderObject::Base*> debug;
