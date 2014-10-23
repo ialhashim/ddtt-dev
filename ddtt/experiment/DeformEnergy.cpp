@@ -1,6 +1,9 @@
 #include "DeformEnergy.h"
 #include <Eigen/Geometry>
 #include "myglobals.h"
+#include "disjointset.h"
+
+#include "NanoKdTree.h"
 
 int num_control_points = 10;
 Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(num_control_points);
@@ -10,7 +13,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
                            const QVector<QStringList> & b_landmarks,
                            bool debugging) : a(shapeA), b(shapeB), error(0), debugging(debugging)
 {
-	// Deform geometry
+	/// Deformed geometry:
     for (size_t i = 0; i < a_landmarks.size(); i++)
 	{
         auto la = a_landmarks[i];
@@ -47,7 +50,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
                 auto nodeA = a->getNode(la[u]);
                 auto nodeB = b->getNode(lb[v]);
 
-				double area = deform(nodeA, nodeB);
+				double area = deform(nodeA, nodeB, true);
 
 				error += area;
 			}
@@ -57,7 +60,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
             graph->removeNode(landmarks->front());
 	}
 
-	// For uncorrespondend nodes
+	/// For uncorrespondend nodes:
 	{
 		// Hide visualization for non-correspondend
 		//this->debugging = false;
@@ -68,8 +71,9 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		for (auto l : a_landmarks) for (auto nid : l) remainingNodes.removeAll(nid);
 
 		auto box = a->bbox();
-		Vector3 delta = box.diagonal(); //delta.z() = 0;
+		Vector3 delta = box.diagonal() * 0.5;
 		auto newCurve = NURBS::NURBSCurved::createCurve(box.min(), box.min() + delta);
+		newCurve.translate( box.center() - newCurve.GetPosition(0.5) );
 		//for (auto & p : newCurve.mCtrlPoint) p += Vector3(0,0,10);
 
 		Structure::Curve * newNode = new Structure::Curve(newCurve, "NULL_NODE");
@@ -77,9 +81,123 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		Structure::Node * null_node = a->addNode(newNode);
 
 		for (auto nid : remainingNodes)
-			error += deform(a->getNode(nid), null_node);
+			error += deform(a->getNode(nid), null_node, true);
 
 		a->removeNode(null_node->id);
+	}
+
+	/// Connections:
+	{
+		QStringList targetNodes;
+		for(auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
+
+		DisjointSet disjoint(targetNodes.size());
+
+		for (size_t u = 0; u < targetNodes.size(); u++)
+		{
+			bool isConnectedByEdge = false;
+
+			// Check using original edge relations
+			for (size_t v = u + 1; v < targetNodes.size(); v++){
+				if (b->shareEdge(targetNodes[u], targetNodes[v])){
+					disjoint.Union(u, v);
+					isConnectedByEdge = true;
+					break;
+				}
+			}
+
+			// Check using proximity
+			if (!isConnectedByEdge)
+			{
+				double edgeLength = -DBL_MAX;
+				for (auto edge : b->getEdges(targetNodes[u]))
+					edgeLength = std::max(edge->delta().norm(), edgeLength);
+
+				edgeLength *= 4;
+
+				auto cptsU = b->getNode(targetNodes[u])->controlPoints();
+					
+				for (size_t v = u + 1; v < targetNodes.size(); v++){
+					auto cptsV = b->getNode(targetNodes[v])->controlPoints();
+						
+					// Test all control point pair distances
+					for (auto cu : cptsU){
+						for (auto cv : cptsV){
+							if ((cu - cv).norm() <= edgeLength){
+								isConnectedByEdge = true;
+								disjoint.Union(u, v);
+								break;
+							}
+						}
+						if (isConnectedByEdge) break;
+					}
+				}
+			}
+		}
+
+		int numComponenets = disjoint.Groups().size();
+
+		error *= std::max(numComponenets, 1);
+	}
+
+	/// Symmetries: check for global reflectional symmetry 
+	if (!b_landmarks.empty())
+	{
+		QStringList targetNodes;
+		for (auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
+
+		// For now simply use x-axis
+		Vector3 plane_n(1,0,0);
+		Vector3 plane_pos = b->bbox().center();
+
+		// Add feature points
+		NanoKdTree tree;
+		for (auto nid : targetNodes)
+		{
+			tree.addPoint(b->position(nid, Eigen::Vector4d(0, 0, 0, 0)));
+			tree.addPoint(b->position(nid, Eigen::Vector4d(0.5,0.5,0,0)));
+			tree.addPoint(b->position(nid, Eigen::Vector4d(1, 0, 0, 0)));
+			tree.addPoint(b->position(nid, Eigen::Vector4d(1, 1, 0, 0)));
+			tree.addPoint(b->position(nid, Eigen::Vector4d(0, 1, 0, 0)));
+		}
+		tree.build();
+
+		double threshold = b->bbox().diagonal().x() * 0.05;
+		int foundMatches = 0;
+		int expectedMatches = 0;
+
+		for (auto p : tree.cloud.pts)
+		{
+			double distPlane = plane_n.dot(p - plane_pos);
+			if (distPlane <= 0) continue; // one side
+
+			Vector3 reflected = p - (2 * (distPlane*plane_n));
+
+			auto closest = tree.closest(reflected);
+			double dist = (reflected - tree.cloud.pts[closest]).norm();
+
+			expectedMatches++;
+			if (dist < threshold) foundMatches++;
+		}
+
+		if (expectedMatches > 0)
+		{
+			double ratio = double(foundMatches) / expectedMatches;
+			if (ratio == 0) ratio = 0.01;
+
+			error *= (1.0 / ratio);
+		}
+	}
+
+	/// Coverage:
+	{
+		QStringList sourceNodes;
+		for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
+
+		double ratio = double(sourceNodes.size()) / a->nodes.size();
+		if (ratio == 0) ratio = 0.01;
+
+		error *= (1.0 / ratio);
 	}
 }
 
@@ -143,7 +261,7 @@ Array2D_Vector4d DeformEnergy::computeSideCoordinates( int resolution )
 	return coords;
 }
 
-double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inputNodeB)
+double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inputNodeB, bool isTwistTerm )
 {
 	Structure::Node * nodeA = inputNodeA->clone();
 	Structure::Node * nodeB = inputNodeB->clone();
@@ -193,6 +311,7 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 
 	typedef QVector<size_t> Quad;
 	QVector< QVector< Quad > > quads(numSides);
+	QVector< Array2D_Vector3 > rectangles(numSides);
 
 	int num_quads = quads_pnts.front().size();
 
@@ -213,15 +332,40 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 				quads[si] << quad;
 			}
 		}
+
+		// Collect as rectangles
+		int h = 0;
+		rectangles[si].resize(num_steps);
+		for (int i = 0; i < num_steps; i++){
+			rectangles[si][i].resize(num_control_points);
+			for (int j = 0; j < num_control_points; j++)
+				rectangles[si][i][j] = quads_pnts[si][h++];
+		}
 	}
 
 	double area = 0.0;
-
 
 	for (int si = 0; si < numSides; si++)
 	{
 		starlab::PolygonSoup * ps;
 		if (debugging) ps = new starlab::PolygonSoup();
+
+		double total_angle = 0;
+		//if (isTwistTerm)
+		{
+			NURBS::NURBSRectangled rect = NURBS::NURBSRectangled::createSheetFromPoints(rectangles[si]);
+
+			for (int ti = 1; ti + 1< num_control_points; ti++)
+			{
+				double t0 = double(ti - 1) / (num_control_points - 1);
+				double t1 = double(ti) / (num_control_points - 1);
+				double t2 = double(ti + 1) / (num_control_points - 1);
+
+				auto p0(rect.P(t0, t0)), p1(rect.P(t1, t1)), p2(rect.P(t2, t2));
+				Vector3 v1 = (p0 - p1).normalized(), v2 = (p2 - p1).normalized();
+				total_angle += (M_PI - acos(v1.dot(v2)));
+			}
+		}
 
 		for (auto quad : quads[si])
 		{
@@ -238,18 +382,21 @@ double DeformEnergy::deform(Structure::Node * inputNodeA, Structure::Node * inpu
 			{
 				QVector<starlab::QVector3> pnts;
 				for (auto p : q) pnts << p;
-				ps->addPoly(pnts);
+				ps->addPoly(pnts, starlab::qtJetColor(total_angle, 0, 2));
 			}
 		}
 
-		double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
-			- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
+		if ( isTwistTerm )
+		{
+			area *= std::max(1.0, total_angle * 3);
+		}
 
+		//double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
+		//	- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
 		//area *= (1 + ((1-dot) * 10));
 
 		if (debugging) debug << ps;
 	}
-
 
 	delete nodeA;
 	delete nodeB;

@@ -13,7 +13,7 @@ public:
 
 	Structure::ShapeGraph *a, *b;
 
-	double deform(Structure::Node * nodeA, Structure::Node * nodeB);
+	double deform(Structure::Node * nodeA, Structure::Node * nodeB, bool isTwistTerm);
 
     static QString convertCurvesToSheet(Structure::Graph * graph, QStringList & nodeIDs);
 

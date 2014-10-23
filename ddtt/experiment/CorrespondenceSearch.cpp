@@ -64,8 +64,7 @@ void CorrespondenceSearch::run()
 
     /// Assign best correspondence:
     {
-        auto bestPath = std::min_element(pathScores.begin(), pathScores.end()) - pathScores.begin();
-        bestCorrespondence = paths[bestPath];
+		bestCorrespondence = std::min_element(pathScores.begin(), pathScores.end()) - pathScores.begin();
     }
 
     // Timing

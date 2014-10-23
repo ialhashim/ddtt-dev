@@ -7,24 +7,62 @@
     <x>0</x>
     <y>0</y>
     <width>176</width>
-    <height>432</height>
+    <height>571</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
+   <item row="9" column="0" colspan="2">
+    <widget class="QCheckBox" name="isVisualize">
+     <property name="text">
+      <string>Visualize</string>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="0" colspan="2">
+    <widget class="QPushButton" name="executeButton">
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Execute...</string>
+     </property>
+    </widget>
+   </item>
+   <item row="14" column="1">
+    <widget class="QPushButton" name="searchBest">
+     <property name="text">
+      <string>Search..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0" colspan="2">
+    <widget class="QPushButton" name="loadLandmarks">
+     <property name="text">
+      <string>Load landmarks..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="13" column="0" colspan="2">
+    <widget class="QCheckBox" name="isAnisotropy">
+     <property name="text">
+      <string>Anisotropy</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
    <item row="0" column="0">
     <widget class="QPushButton" name="clearShapes">
      <property name="text">
       <string>Clear shapes</string>
-     </property>
-    </widget>
-   </item>
-   <item row="9" column="0">
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Num. iterations</string>
      </property>
     </widget>
    </item>
@@ -41,51 +79,7 @@
      </property>
     </spacer>
    </item>
-   <item row="12" column="1">
-    <widget class="QPushButton" name="searchBest">
-     <property name="text">
-      <string>Search..</string>
-     </property>
-    </widget>
-   </item>
-   <item row="5" column="0" colspan="2">
-    <widget class="QCheckBox" name="isShowLandmarks">
-     <property name="text">
-      <string>Show landmarks</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="10" column="0" colspan="2">
-    <widget class="QPushButton" name="executeButton">
-     <property name="font">
-      <font>
-       <pointsize>10</pointsize>
-       <weight>75</weight>
-       <bold>true</bold>
-      </font>
-     </property>
-     <property name="text">
-      <string>Execute...</string>
-     </property>
-    </widget>
-   </item>
-   <item row="9" column="1">
-    <widget class="QSpinBox" name="numIterations">
-     <property name="maximum">
-      <number>1000</number>
-     </property>
-     <property name="singleStep">
-      <number>5</number>
-     </property>
-     <property name="value">
-      <number>40</number>
-     </property>
-    </widget>
-   </item>
-   <item row="8" column="0">
+   <item row="10" column="0">
     <widget class="QCheckBox" name="isShowParts">
      <property name="text">
       <string>Show parts</string>
@@ -96,13 +90,6 @@
     </widget>
    </item>
    <item row="7" column="0" colspan="2">
-    <widget class="QCheckBox" name="isVisualize">
-     <property name="text">
-      <string>Visualize</string>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="0" colspan="2">
     <spacer name="verticalSpacer_2">
      <property name="orientation">
       <enum>Qt::Vertical</enum>
@@ -122,10 +109,33 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0" colspan="2">
-    <widget class="QPushButton" name="loadLandmarks">
+   <item row="11" column="0">
+    <widget class="QLabel" name="label">
      <property name="text">
-      <string>Load landmarks..</string>
+      <string>Num. iterations</string>
+     </property>
+    </widget>
+   </item>
+   <item row="11" column="1">
+    <widget class="QSpinBox" name="numIterations">
+     <property name="maximum">
+      <number>1000</number>
+     </property>
+     <property name="singleStep">
+      <number>5</number>
+     </property>
+     <property name="value">
+      <number>40</number>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="2">
+    <widget class="QCheckBox" name="isShowLandmarks">
+     <property name="text">
+      <string>Show landmarks</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
@@ -143,12 +153,9 @@
      </property>
     </widget>
    </item>
-   <item row="11" column="0" colspan="2">
-    <widget class="QCheckBox" name="isAnisotropy">
-     <property name="text">
-      <string>Anisotropy</string>
-     </property>
-     <property name="checked">
+   <item row="8" column="0" colspan="2">
+    <widget class="QListWidget" name="pathsList">
+     <property name="sortingEnabled">
       <bool>true</bool>
      </property>
     </widget>

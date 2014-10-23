@@ -18,7 +18,7 @@ public:
 	
 	Paths paths;
 	std::vector<double> pathScores;
-	AssignmentPair bestCorrespondence;
+	int bestCorrespondence;
 
 public slots:
     void run();

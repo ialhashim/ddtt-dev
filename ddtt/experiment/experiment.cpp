@@ -2,6 +2,7 @@
 #include "experiment-widget.h"
 #include "ui_experiment-widget.h"
 #include <QFileDialog>
+#include <QListWidget>
 #include <QMatrix4x4>
 
 #include "SurfaceMeshHelper.h"
@@ -19,7 +20,7 @@ ExperimentWidget * pw = NULL;
 #include "DeformEnergy.h"
 #include "Deformer.h"
 #include "CorrespondenceSearch.h"
-CorrespondenceSearch * search;
+CorrespondenceSearch * search = NULL;
 
 void experiment::doCorrespondSearch()
 {
@@ -48,36 +49,64 @@ void experiment::doCorrespondSearch()
 	search->start();
 }
 
+void experiment::showCorrespond(int idx)
+{
+	if (!search || search->paths.empty()) return;
+
+	drawArea()->clear();
+
+	for (auto n : graphs.front()->nodes){
+		graphs.front()->setColorFor(n->id, QColor(255, 255, 255, 10));
+		n->vis_property["meshSolid"].setValue(false);
+	}
+	for (auto n : graphs.back()->nodes){
+		graphs.back()->setColorFor(n->id, QColor(255, 255, 255, 10));
+		n->vis_property["meshSolid"].setValue(false);
+	}
+
+	auto nidA = search->paths[idx].first;
+	auto nidB = search->paths[idx].second;
+
+	for (size_t i = 0; i < nidA.size(); i++)
+	{
+		auto nidsA = nidA[i], nidsB = nidB[i];
+		QColor color = colors[i];
+		for (auto nid : nidsA) {
+			graphs.front()->setColorFor(nid, color);
+			graphs.front()->getNode(nid)->vis_property["meshSolid"].setValue(true);
+		}
+		for (auto nid : nidsB) {
+			graphs.back()->setColorFor(nid, color);
+			graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true);
+		}
+	}
+
+	DeformEnergy d(graphs.front(), graphs.back(), nidA, nidB, pw->ui->isVisualize->isChecked());
+	for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+}
+
 void experiment::postCorrespond()
 {
 	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
 
 	bool isVisualize = pw->ui->isVisualize->isChecked();
 
-	DeformEnergy d(graphs.front(), graphs.back(), search->bestCorrespondence.first, search->bestCorrespondence.second, isVisualize);
-	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
-
-	// Show corresponding parts
 	if (pw->ui->isShowParts->isChecked())
+		showCorrespond( search->bestCorrespondence );
+
+	pw->ui->pathsList->clear();
+
+	// List scores
 	{
-		graphs.front()->setColorAll(QColor(255, 255, 255, 10));
-		graphs.back()->setColorAll(QColor(255, 255, 255, 10));
-
-		auto nidA = search->bestCorrespondence.first;
-		auto nidB = search->bestCorrespondence.second;
-
-		for (size_t i = 0; i < nidA.size(); i++)
+		for (size_t pi = 0; pi < search->pathScores.size(); pi++)
 		{
-			auto nidsA = nidA[i], nidsB = nidB[i];
-			QColor color = colors[i];
-			for (auto nid : nidsA) { 
-				graphs.front()->setColorFor(nid, color); 
-				graphs.front()->getNode(nid)->vis_property["meshSolid"].setValue(true); 
-			}
-			for (auto nid : nidsB) { 
-				graphs.back()->setColorFor(nid, color); 
-				graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true); 
-			}
+			//Arg1: the number, Arg2: how many 0 you want?, Arg3: i don't know but only 10 can take negative numbers
+			QString number;
+			number.sprintf("%012.3f", search->pathScores[pi]);
+
+			auto item = new QListWidgetItem(number);
+			item->setData(Qt::UserRole, pi);
+			pw->ui->pathsList->addItem(item);
 		}
 	}
 
@@ -128,8 +157,8 @@ void experiment::create()
     // Prepare UI
 	if (widget) return;
 
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
 	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
+	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
 
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);
@@ -163,39 +192,46 @@ void experiment::create()
     mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
     
 	// UI:
-	connect(pw->ui->saveLandmarks, &QPushButton::released, [=]{
+	connect(pw->ui->saveLandmarks, &QPushButton::released, [&]{
 		graphs.front()->saveLandmarks("front.landmarks");
 		graphs.back()->saveLandmarks("back.landmarks");
 		mainWindow()->setStatusBarMessage("Landmarks saved.");
 	});
-	connect(pw->ui->loadLandmarks, &QPushButton::released, [=]{
+	connect(pw->ui->loadLandmarks, &QPushButton::released, [&]{
 		graphs.front()->loadLandmarks("front.landmarks");
 		graphs.back()->loadLandmarks("back.landmarks");
 		drawArea()->update();
 	});
-	connect(pw->ui->clearLandmarks, &QPushButton::released, [=]{
+	connect(pw->ui->clearLandmarks, &QPushButton::released, [&]{
 		for (auto g : graphs) g->landmarks.clear();
 		drawArea()->update();
 	});
-	connect(pw->ui->executeButton, &QPushButton::released, [=]{
+	connect(pw->ui->executeButton, &QPushButton::released, [&]{
 		drawArea()->clear();
 		this->doCorrespond();
 		drawArea()->update();
 	});
-	connect(pw->ui->clearShapes, &QPushButton::released, [=]{
+	connect(pw->ui->clearShapes, &QPushButton::released, [&]{
 		graphs.clear();
 		drawArea()->clear();
 		drawArea()->update();
 	});
-	connect(pw->ui->loadShapes, &QPushButton::released, [=]{
+	connect(pw->ui->loadShapes, &QPushButton::released, [&]{
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Shape"), "", tr("Shape File (*.xml)"));
 		if (!filename.size()) return;
 		graphs << new Structure::ShapeGraph(filename);
 		drawArea()->update();
 	});
-	connect(pw->ui->searchBest, &QPushButton::released, [=]{
+	connect(pw->ui->searchBest, &QPushButton::released, [&]{
 		drawArea()->clear();
 		this->doCorrespondSearch();
+		drawArea()->update();
+	});
+	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&]{
+		if (search){
+			int pid = pw->ui->pathsList->currentItem()->data(Qt::UserRole).toInt();
+			showCorrespond(pid);
+		}
 		drawArea()->update();
 	});
 }

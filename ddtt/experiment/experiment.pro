@@ -1,5 +1,6 @@
 include($$[STARLAB])
 include($$[SURFACEMESH])
+include($$[NANOFLANN])
 StarlabTemplate(plugin)
 
 # Build flag

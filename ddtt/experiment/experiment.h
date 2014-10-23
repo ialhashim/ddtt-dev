@@ -40,4 +40,5 @@ public:
 
 public slots:
 	void postCorrespond();
+	void showCorrespond(int id);
 };

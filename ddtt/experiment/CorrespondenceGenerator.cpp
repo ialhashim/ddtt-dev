@@ -67,7 +67,7 @@ Paths CorrespondenceGenerator::generate()
 	//if (false) showTableColorMap(data, true); // DEBUG
 
 	// Parameters:
-	double similarity_threshold = 0.25;
+	double similarity_threshold = 0.4;
 	int count_threshold = 1;
 
 	// Collect good candidates
