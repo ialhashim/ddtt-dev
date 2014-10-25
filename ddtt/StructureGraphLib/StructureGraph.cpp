@@ -1760,7 +1760,7 @@ void Graph::scale( double scaleFactor )
 	property["AABB"].setValue(bbox());
 }
 
-void Graph::transform( QMatrix4x4 mat )
+void Graph::transform(QMatrix4x4 mat, bool isKeepMeshes)
 {
 	Vector3 c = bbox().center();
 
@@ -1782,6 +1782,7 @@ void Graph::transform( QMatrix4x4 mat )
 			((Sheet*)node)->surface.quads.clear();
 		
 		// Transform actual geometry
+        if(isKeepMeshes) continue;
 		if(!node->property.contains("mesh")) continue;
 		SurfaceMesh::Model* model = getMesh( node->id );
 		Vector3VertexProperty points = model->vertex_property<Vector3d>("v:point");

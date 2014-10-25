@@ -195,7 +195,7 @@ std::vector< std::vector<T> > sets( const std::vector<T> & input, int min_size =
 // Cartesian product of vector of vectors
 // From http://stackoverflow.com/questions/5279051/how-can-i-create-cartesian-product-of-vector-of-vectors
 template<typename Vvi>
-void cart_product(Vvi& out, const Vvi& in)
+void cart_product(Vvi& out, const Vvi& in, int maxCount = -1)
 {
 	typedef Vvi::value_type Vi;
 	struct Digits {
@@ -227,6 +227,8 @@ void cart_product(Vvi& out, const Vvi& in)
 		}
 
 		out.push_back(result);
+
+		if (maxCount > 0 && out.size() > maxCount) return;
 
 		// Increment the rightmost one, and repeat.
 

@@ -68,7 +68,6 @@ Paths CorrespondenceGenerator::generate()
 
 	// Parameters:
 	double similarity_threshold = 0.4;
-	int count_threshold = 1;
 
 	// Collect good candidates
 	Assignments candidates;
@@ -81,8 +80,19 @@ Paths CorrespondenceGenerator::generate()
 		candidates << candidate;
 	}
 
+	int count_threshold = 1;
+
 	Assignments assignments;
-	cart_product(assignments, candidates);
+	if (candidates.size() > 7)
+	{
+		debugBox(QString("%1 candidates. Too complex (lower similairty?)").arg(candidates.size()));
+		cart_product(assignments, candidates, 10000);
+		count_threshold = 12;
+	}
+	else
+	{
+		cart_product(assignments, candidates);
+	}
 
 	// Filter assignments
 	Assignments filtered;
@@ -93,7 +103,8 @@ Paths CorrespondenceGenerator::generate()
 		auto NOTHING_SEGMENT = similiarity.cols() - 1;
 
 		for (auto i : a) counts[i]++;
-		for (auto k : counts.keys()){
+		for (auto k : counts.keys())
+		{
 			if (k != NOTHING_SEGMENT && counts[k] > count_threshold){
 				accept = false;
 				break;

@@ -26,6 +26,8 @@ void experiment::doCorrespondSearch()
 {
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+	
+	QMatrix4x4 mat;
 
 	if (pw->ui->isAnisotropy->isChecked())
 	{
@@ -33,13 +35,12 @@ void experiment::doCorrespondSearch()
 		auto bboxB = shapeB->bbox();
 
 		Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
-		QMatrix4x4 mat;
 		mat.scale(s.x(), s.y(), s.z());
-		shapeB->transform(mat);
+		shapeB->transform(mat,true);
 
 		// Show
-		graphs.removeLast();
-		graphs.push_back(shapeB);
+		//graphs.removeLast();
+		//graphs.push_back(shapeB);
 	}
 
 	search = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate());
@@ -270,7 +271,7 @@ void experiment::decorate()
 		}
 
         glPopMatrix();
-        startX += 1;
+        startX += 4;
     }
 }
 

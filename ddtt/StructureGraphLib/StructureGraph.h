@@ -135,7 +135,7 @@ namespace Structure{
 		void translate( Vector3 delta, bool isKeepMeshes = false);
 		void rotate(double angle, Vector3 axis);
 		void scale(double scaleFactor);
-		void transform(QMatrix4x4 mat);
+        void transform(QMatrix4x4 mat,bool isKeepMeshes = false);
 		void moveCenterTo( Vector3 newCenter, bool isKeepMeshes );
 
 		// Point Landmarks
