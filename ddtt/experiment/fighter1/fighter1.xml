@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<document>
+<node>
+	<id>wingtopleft</id>
+	<type>CURVE</type>
+	<mesh>meshes/wingtopleft.obj</mesh>
+
+	<controls>
+		<c>30</c>
+	</controls>
+
+	<point>0.303184 0.686868 0.832196</point>
+	<point>0.365778 0.709232 0.832769</point>
+	<point>0.428202 0.732051 0.833612</point>
+	<point>0.490165 0.75608 0.834812</point>
+	<point>0.551623 0.781353 0.836306</point>
+	<point>0.612222 0.808598 0.838205</point>
+	<point>0.671674 0.838227 0.84056</point>
+	<point>0.729909 0.870136 0.843341</point>
+	<point>0.786971 0.904076 0.846499</point>
+	<point>0.842938 0.939763 0.849986</point>
+	<point>0.897679 0.977266 0.853821</point>
+	<point>0.950151 1.0178 0.858268</point>
+	<point>1.00038 1.06104 0.863297</point>
+	<point>1.04905 1.10598 0.868748</point>
+	<point>1.09637 1.15229 0.874621</point>
+	<point>1.14276 1.19949 0.880872</point>
+	<point>1.18877 1.24702 0.887375</point>
+	<point>1.23466 1.29462 0.894108</point>
+	<point>1.28057 1.3422 0.90104</point>
+	<point>1.32655 1.38967 0.908134</point>
+	<point>1.37264 1.437 0.915416</point>
+	<point>1.41886 1.48421 0.922868</point>
+	<point>1.46516 1.53128 0.930465</point>
+	<point>1.51156 1.57824 0.938229</point>
+	<point>1.55805 1.62509 0.946151</point>
+	<point>1.60459 1.67186 0.954196</point>
+	<point>1.65108 1.71867 0.962292</point>
+	<point>1.69733 1.76573 0.970408</point>
+	<point>1.74344 1.81291 0.978521</point>
+	<point>1.78942 1.86021 0.986621</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>wingtopright</id>
+	<type>CURVE</type>
+	<mesh>meshes/wingtopright.obj</mesh>
+
+	<controls>
+		<c>31</c>
+	</controls>
+
+	<point>-0.363926 0.705994 0.831621</point>
+	<point>-0.426683 0.727688 0.832893</point>
+	<point>-0.488774 0.751183 0.834588</point>
+	<point>-0.549748 0.777405 0.836767</point>
+	<point>-0.60984 0.80557 0.839255</point>
+	<point>-0.669392 0.834847 0.841907</point>
+	<point>-0.728314 0.865356 0.844741</point>
+	<point>-0.786271 0.897628 0.847836</point>
+	<point>-0.843147 0.931751 0.851208</point>
+	<point>-0.898851 0.967722 0.854867</point>
+	<point>-0.952275 1.00691 0.859061</point>
+	<point>-1.00208 1.05056 0.864064</point>
+	<point>-1.05163 1.09448 0.869119</point>
+	<point>-1.09934 1.14033 0.874731</point>
+	<point>-1.14504 1.18809 0.88108</point>
+	<point>-1.1904 1.23614 0.887756</point>
+	<point>-1.23583 1.2841 0.894597</point>
+	<point>-1.28144 1.33186 0.901605</point>
+	<point>-1.32721 1.37945 0.908766</point>
+	<point>-1.37312 1.4269 0.91606</point>
+	<point>-1.41912 1.47422 0.923479</point>
+	<point>-1.46519 1.52146 0.930995</point>
+	<point>-1.51127 1.56868 0.938576</point>
+	<point>-1.55731 1.61594 0.946234</point>
+	<point>-1.60332 1.66321 0.953902</point>
+	<point>-1.64929 1.71052 0.961585</point>
+	<point>-1.69507 1.75802 0.969286</point>
+	<point>-1.74077 1.80559 0.976984</point>
+	<point>-1.78626 1.85337 0.984667</point>
+	<point>-1.83161 1.90128 0.992337</point>
+	<point>-1.87695 1.9492 1</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>wingbottomleft</id>
+	<type>CURVE</type>
+	<mesh>meshes/wingbottomleft.obj</mesh>
+
+	<controls>
+		<c>32</c>
+	</controls>
+
+	<point>0.724377 0.40788 0.467176</point>
+	<point>0.785269 0.417137 0.45735</point>
+	<point>0.846014 0.42684 0.447059</point>
+	<point>0.906611 0.436951 0.436289</point>
+	<point>0.96705 0.447443 0.425018</point>
+	<point>1.02729 0.45838 0.413138</point>
+	<point>1.08742 0.469578 0.400904</point>
+	<point>1.14739 0.481123 0.388232</point>
+	<point>1.20716 0.493095 0.375046</point>
+	<point>1.26669 0.505588 0.361266</point>
+	<point>1.32597 0.518616 0.346895</point>
+	<point>1.3851 0.531924 0.332208</point>
+	<point>1.4441 0.545503 0.317202</point>
+	<point>1.50298 0.559281 0.30192</point>
+	<point>1.56173 0.573233 0.286301</point>
+	<point>1.62035 0.58729 0.270276</point>
+	<point>1.6789 0.601317 0.253988</point>
+	<point>1.73743 0.615218 0.237514</point>
+	<point>1.79596 0.628824 0.220828</point>
+	<point>1.85453 0.642111 0.203974</point>
+	<point>1.9131 0.655251 0.187056</point>
+	<point>1.97169 0.668339 0.170123</point>
+	<point>2.0303 0.68122 0.153137</point>
+	<point>2.08896 0.693855 0.13611</point>
+	<point>2.14763 0.706364 0.119069</point>
+	<point>2.20633 0.718821 0.102026</point>
+	<point>2.26502 0.73127 0.0849888</point>
+	<point>2.32371 0.743747 0.067961</point>
+	<point>2.38239 0.756266 0.0509452</point>
+	<point>2.44107 0.768857 0.0339479</point>
+	<point>2.49973 0.781511 0.0169658</point>
+	<point>2.55839 0.794236 -3.51424e-17</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>wingbottomright</id>
+	<type>CURVE</type>
+	<mesh>meshes/wingbottomright.obj</mesh>
+
+	<controls>
+		<c>33</c>
+	</controls>
+
+	<point>-0.663274 0.403452 0.473862</point>
+	<point>-0.724628 0.41081 0.465836</point>
+	<point>-0.785633 0.419943 0.457024</point>
+	<point>-0.846491 0.429563 0.447719</point>
+	<point>-0.907117 0.440002 0.437836</point>
+	<point>-0.967454 0.451368 0.427193</point>
+	<point>-1.02761 0.463159 0.416017</point>
+	<point>-1.08754 0.47515 0.403883</point>
+	<point>-1.14723 0.487464 0.390889</point>
+	<point>-1.20674 0.499962 0.377276</point>
+	<point>-1.26612 0.512627 0.363243</point>
+	<point>-1.32535 0.525417 0.348726</point>
+	<point>-1.3845 0.538185 0.33382</point>
+	<point>-1.44351 0.550889 0.31838</point>
+	<point>-1.50244 0.563537 0.302588</point>
+	<point>-1.56129 0.576243 0.286498</point>
+	<point>-1.62009 0.589018 0.270281</point>
+	<point>-1.67883 0.601949 0.253969</point>
+	<point>-1.73746 0.615164 0.237539</point>
+	<point>-1.79604 0.628528 0.221045</point>
+	<point>-1.85459 0.641999 0.204491</point>
+	<point>-1.91309 0.655567 0.187839</point>
+	<point>-1.97157 0.669128 0.171141</point>
+	<point>-2.03006 0.682603 0.1544</point>
+	<point>-2.08858 0.695891 0.137608</point>
+	<point>-2.14716 0.708819 0.120748</point>
+	<point>-2.20576 0.721585 0.103861</point>
+	<point>-2.26441 0.734118 0.08694</point>
+	<point>-2.32311 0.746342 0.0699743</point>
+	<point>-2.38186 0.75821 0.052951</point>
+	<point>-2.44067 0.769804 0.0358765</point>
+	<point>-2.49951 0.780951 0.0186689</point>
+	<point>-2.55839 0.791706 0.00133457</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>body</id>
+	<type>CURVE</type>
+	<mesh>meshes/body.obj</mesh>
+
+	<controls>
+		<c>30</c>
+	</controls>
+
+	<point>-0.0102791 1.20057 0.443815</point>
+	<point>-0.0102183 1.09196 0.452602</point>
+	<point>-0.0100219 0.983339 0.461149</point>
+	<point>-0.00962015 0.874673 0.469163</point>
+	<point>-0.00909334 0.765976 0.476728</point>
+	<point>-0.00850822 0.657263 0.484054</point>
+	<point>-0.007865 0.548538 0.49122</point>
+	<point>-0.00717877 0.439815 0.498377</point>
+	<point>-0.0064723 0.331103 0.505727</point>
+	<point>-0.00577901 0.22242 0.513494</point>
+	<point>-0.00512482 0.113785 0.521885</point>
+	<point>-0.00452406 0.00520737 0.530999</point>
+	<point>-0.00399914 -0.103291 0.541025</point>
+	<point>-0.00355661 -0.211706 0.551911</point>
+	<point>-0.00317849 -0.320071 0.563292</point>
+	<point>-0.00284944 -0.428427 0.574758</point>
+	<point>-0.00256255 -0.536827 0.585809</point>
+	<point>-0.00233071 -0.645332 0.595759</point>
+	<point>-0.00216624 -0.753958 0.604272</point>
+	<point>-0.00211499 -0.862728 0.610722</point>
+	<point>-0.0021754 -0.971581 0.615534</point>
+	<point>-0.00244886 -1.08052 0.61773</point>
+	<point>-0.00297175 -1.18947 0.617316</point>
+	<point>-0.00382601 -1.29837 0.613791</point>
+	<point>-0.00489314 -1.40719 0.608296</point>
+	<point>-0.00618176 -1.51585 0.600493</point>
+	<point>-0.00755594 -1.62435 0.590414</point>
+	<point>-0.00880905 -1.7327 0.578973</point>
+	<point>-0.00963439 -1.84098 0.566826</point>
+	<point>-0.00944168 -1.9492 0.554177</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>engineleft</id>
+	<type>CURVE</type>
+	<mesh>meshes/engineleft.obj</mesh>
+
+	<controls>
+		<c>15</c>
+	</controls>
+
+	<point>0.685047 0.638345 0.647945</point>
+	<point>0.684807 0.606591 0.648086</point>
+	<point>0.685119 0.574839 0.648034</point>
+	<point>0.685534 0.543086 0.647952</point>
+	<point>0.685954 0.511334 0.647872</point>
+	<point>0.686383 0.479582 0.647798</point>
+	<point>0.686824 0.44783 0.647736</point>
+	<point>0.687264 0.416079 0.64769</point>
+	<point>0.687675 0.384326 0.647677</point>
+	<point>0.687931 0.352571 0.647734</point>
+	<point>0.688097 0.320818 0.647821</point>
+	<point>0.688261 0.289063 0.64791</point>
+	<point>0.688351 0.257308 0.648004</point>
+	<point>0.68803 0.225557 0.648082</point>
+	<point>0.6872 0.193812 0.648127</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<node>
+	<id>engineright</id>
+	<type>CURVE</type>
+	<mesh>meshes/engineright.obj</mesh>
+
+	<controls>
+		<c>17</c>
+	</controls>
+
+	<point>-0.690388 0.702805 0.64808</point>
+	<point>-0.691208 0.671409 0.647818</point>
+	<point>-0.692013 0.640012 0.647568</point>
+	<point>-0.6927 0.60861 0.647439</point>
+	<point>-0.693274 0.577208 0.647431</point>
+	<point>-0.69386 0.545804 0.647435</point>
+	<point>-0.694528 0.514403 0.64746</point>
+	<point>-0.695288 0.483004 0.647506</point>
+	<point>-0.696058 0.451605 0.647551</point>
+	<point>-0.696844 0.420206 0.647592</point>
+	<point>-0.697638 0.388808 0.64763</point>
+	<point>-0.698442 0.357409 0.647659</point>
+	<point>-0.69924 0.326011 0.647666</point>
+	<point>-0.700013 0.294612 0.64764</point>
+	<point>-0.700769 0.263213 0.647601</point>
+	<point>-0.701493 0.231812 0.647529</point>
+	<point>-0.702086 0.20041 0.647385</point>
+
+	<weights>1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 </weights>
+</node>
+
+<edge>
+	<id>body : wingtopleft</id>
+	<type>POINT</type>
+
+	<n>body</n>
+	<n>wingtopleft</n>
+	<coord>
+		<uv>0.146467 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0 0 0 0</uv>
+	</coord>
+</edge>
+
+<edge>
+	<id>body : wingtopright</id>
+	<type>POINT</type>
+
+	<n>body</n>
+	<n>wingtopright</n>
+	<coord>
+		<uv>0.14488 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0 0 0 0</uv>
+	</coord>
+</edge>
+
+<edge>
+	<id>body : wingbottomleft</id>
+	<type>POINT</type>
+
+	<n>body</n>
+	<n>wingbottomleft</n>
+	<coord>
+		<uv>0.232707 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0 0 0 0</uv>
+	</coord>
+</edge>
+
+<edge>
+	<id>body : wingbottomright</id>
+	<type>POINT</type>
+
+	<n>body</n>
+	<n>wingbottomright</n>
+	<coord>
+		<uv>0.235457 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0 0 0 0</uv>
+	</coord>
+</edge>
+
+<edge>
+	<id>engineleft : wingbottomleft</id>
+	<type>POINT</type>
+
+	<n>engineleft</n>
+	<n>wingbottomleft</n>
+	<coord>
+		<uv>0.523194 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0 0 0 0</uv>
+	</coord>
+</edge>
+
+<edge>
+	<id>engineright : wingbottomright</id>
+	<type>POINT</type>
+
+	<n>engineright</n>
+	<n>wingbottomright</n>
+	<coord>
+		<uv>0.598998 0 0 0</uv>
+	</coord>
+	<coord>
+		<uv>0.00299096 0 0 0</uv>
+	</coord>
+</edge>
+
+<group>
+	<n>wingtopleft</n>
+	<n>wingtopright</n>
+</group>
+
+<group>
+	<n>wingbottomleft</n>
+	<n>wingbottomright</n>
+</group>
+
+<group>
+	<n>engineleft</n>
+	<n>engineright</n>
+</group>
+
+
+</document>

@@ -23,7 +23,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 	bool isUnCorrespondend = true;
 	bool isCoverage = true;
 	bool isSymmetries = false;
-	bool isConnections = true;
+	bool isConnections = false;
 
 	/// (1) Deformed geometry:
 	if (isGeometryDistortion)
@@ -392,7 +392,7 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 
 			if (std::isnan(twist)) twist = 1.0;
 
-			if (debugging) debugBox(twist);
+			//if (debugging) debugBox(twist);
 
 			// Extra penalty:
 			if (twist > 0.4) sideArea *= 3;
