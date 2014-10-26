@@ -271,7 +271,7 @@ void experiment::decorate()
 		}
 
         glPopMatrix();
-        startX += 4;
+        startX += 1;
     }
 }
 

@@ -79,28 +79,26 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 	{
 		double errorUncorrespond = 0;
 
-		// Hide visualization for non-correspondend
-		//this->debugging = false;
-
 		// Collect list of uncorrespondend
 		QStringList remainingNodes;
 		for (auto n : a->nodes) remainingNodes << n->id;
 		for (auto l : a_landmarks) for (auto nid : l) remainingNodes.removeAll(nid);
 
-		auto box = a->bbox();
-		Vector3 delta = box.diagonal() * 0.5;
-		auto newCurve = NURBS::NURBSCurved::createCurve(box.min(), box.min() + delta);
-		newCurve.translate( box.center() - newCurve.GetPosition(0.5) );
-		//for (auto & p : newCurve.mCtrlPoint) p += Vector3(0,0,10);
-
-		Structure::Curve * newNode = new Structure::Curve(newCurve, "NULL_NODE");
-
-		Structure::Node * null_node = a->addNode(newNode);
-
 		for (auto nid : remainingNodes)
-			errorUncorrespond += deform(a->getNode(nid), null_node, true);
+		{
+			double lengthSum = 0;
 
-		a->removeNode(null_node->id);
+			int numSides = (shapeA->getNode(nid)->type() == Structure::SHEET) ? 4 : 1;
+			for (int si = 0; si < numSides; si++)
+			{
+				auto pnts = shapeA->getNode(nid)->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[si])).front();
+				for (size_t i = 1; i < pnts.size(); i++)
+					lengthSum += (pnts[i-1] - pnts[i]).norm();
+			}
+
+			double lengthSquared = pow(lengthSum,2);
+			errorUncorrespond += lengthSquared;
+		}
 
 		errorTerms["uncorrespond"].setValue(errorUncorrespond);
 		total_error += errorUncorrespond;
