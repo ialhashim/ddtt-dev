@@ -5,6 +5,12 @@
 
 #include "NanoKdTree.h"
 
+struct NormalAnalysis{
+	std::vector<double> x, y, z;
+	void addNormal(const Eigen::Vector3d & n){ x.push_back(n.x()); y.push_back(n.y()); z.push_back(n.z()); }
+	double standardDeviation(){ return std::max(stdev(x), std::max(stdev(y),stdev(z))); }
+};
+
 int num_control_points = 10;
 Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(num_control_points);
 
@@ -15,11 +21,11 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 {
 	bool isGeometryDistortion = true;
 	bool isUnCorrespondend = true;
-	bool isConnections = true;
-	bool isSymmetries = true;
 	bool isCoverage = true;
+	bool isSymmetries = false;
+	bool isConnections = true;
 
-	/// Deformed geometry:
+	/// (1) Deformed geometry:
 	if (isGeometryDistortion)
 	{
 		double errorGeometric = 0;
@@ -36,9 +42,10 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 			bool isOneIsSheet = (isSheetA || isSheetB);
 			bool isOtherNotSheet = !isSheetA || !isSheetB;
 
-			bool isNodeAdded = false;
+			bool isMergedNodes = false;
 			Structure::ShapeGraph * graph;
 			QStringList * landmarks;
+			Structure::Node * newNode;
 
 			if (isOneToMany && isOneIsSheet && isOtherNotSheet)
 			{
@@ -46,11 +53,12 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 				landmarks = (isOneA) ? &lb : &la;
 
 				QString newnode = DeformEnergy::convertCurvesToSheet(graph, *landmarks);
+				newNode = graph->getNode(newnode);
 
 				landmarks->clear();
 				landmarks->push_back(newnode);
 
-				isNodeAdded = true;
+				isMergedNodes = true;
 			}
 
 			for (size_t u = 0; u < la.size(); u++)
@@ -62,11 +70,13 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 					double area = deform(nodeA, nodeB, true);
 
+					if (isMergedNodes) area += newNode->area();
+
 					errorGeometric += area;
 				}
 			}
 
-			if (isNodeAdded)
+			if (isMergedNodes)
 				graph->removeNode(landmarks->front());
 		}
 
@@ -74,7 +84,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		total_error += errorGeometric;
 	}
 
-	/// For uncorrespondend nodes:
+	/// (2) For uncorrespondend nodes:
 	if (isUnCorrespondend)
 	{
 		double errorUncorrespond = 0;
@@ -86,90 +96,53 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		for (auto nid : remainingNodes)
 		{
-			double lengthSum = 0;
-
 			int numSides = (shapeA->getNode(nid)->type() == Structure::SHEET) ? 4 : 1;
+
+			double longestSide = 0;
+
 			for (int si = 0; si < numSides; si++)
 			{
+				double lengthSum = 0;
 				auto pnts = shapeA->getNode(nid)->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[si])).front();
-				for (size_t i = 1; i < pnts.size(); i++)
-					lengthSum += (pnts[i-1] - pnts[i]).norm();
+				for (size_t i = 1; i < pnts.size(); i++) lengthSum += (pnts[i-1] - pnts[i]).norm();
+				longestSide = std::max(longestSide, lengthSum);
 			}
 
-			double lengthSquared = pow(lengthSum,2);
-			errorUncorrespond += lengthSquared;
+			double lengthSquared = pow(longestSide, 2);
+
+			errorUncorrespond += (lengthSquared * numSides);
 		}
 
 		errorTerms["uncorrespond"].setValue(errorUncorrespond);
 		total_error += errorUncorrespond;
 	}
 
-	/// Connections:
-	if (isConnections)
+	/// (3) Coverage:
+	if (isCoverage)
 	{
-		QStringList targetNodes;
-		for(auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
+		//QStringList sourceNodes;
+		//for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
 
-		DisjointSet disjoint(targetNodes.size());
+		int nodesCountedInGroups = shapeA->groups.size();
+		for (auto n : shapeA->nodes) if (shapeA->groupsOf(n->id).isEmpty()) nodesCountedInGroups++;
 
-		for (size_t u = 0; u < targetNodes.size(); u++)
-		{
-			bool isConnectedByEdge = false;
+		double ratio = double(a_landmarks.size()) / nodesCountedInGroups;
+		if (ratio == 0) ratio = 0.01;
 
-			// Check using original edge relations
-			for (size_t v = u + 1; v < targetNodes.size(); v++){
-				if (b->shareEdge(targetNodes[u], targetNodes[v])){
-					disjoint.Union(u, v);
-					isConnectedByEdge = true;
-					break;
-				}
-			}
+		double errorCoverage = 1.0 / ratio;
 
-			// Check using proximity
-			if (!isConnectedByEdge)
-			{
-				double edgeLength = -DBL_MAX;
-				for (auto edge : b->getEdges(targetNodes[u]))
-					edgeLength = std::max(edge->delta().norm(), edgeLength);
-
-				edgeLength *= 4;
-
-				auto cptsU = b->getNode(targetNodes[u])->controlPoints();
-					
-				for (size_t v = u + 1; v < targetNodes.size(); v++){
-					auto cptsV = b->getNode(targetNodes[v])->controlPoints();
-						
-					// Test all control point pair distances
-					for (auto cu : cptsU){
-						for (auto cv : cptsV){
-							if ((cu - cv).norm() <= edgeLength){
-								isConnectedByEdge = true;
-								disjoint.Union(u, v);
-								break;
-							}
-						}
-						if (isConnectedByEdge) break;
-					}
-				}
-			}
-		}
-
-		int numComponenets = disjoint.Groups().size();
-
-		double errorConnection = std::max(numComponenets, 1);
-
-		errorTerms["connection"].setValue(errorConnection);
-		total_error *= errorConnection;
+		errorTerms["coverage"].setValue(errorCoverage);
+		total_error *= errorCoverage;
 	}
 
-	/// Symmetries: check for global reflectional symmetry 
+	/// (4) Symmetries: check for global reflectional symmetry 
 	if (isSymmetries && !b_landmarks.empty())
 	{
 		QStringList targetNodes;
 		for (auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
 
 		// For now simply use x-axis
-		Vector3 plane_n(1,0,0);
+		Vector3 plane_n(1, 0, 0);
 		Vector3 plane_pos = b->bbox().center();
 
 		// Add feature points
@@ -177,7 +150,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		for (auto nid : targetNodes)
 		{
 			tree.addPoint(b->position(nid, Eigen::Vector4d(0, 0, 0, 0)));
-			tree.addPoint(b->position(nid, Eigen::Vector4d(0.5,0.5,0,0)));
+			tree.addPoint(b->position(nid, Eigen::Vector4d(0.5, 0.5, 0, 0)));
 			tree.addPoint(b->position(nid, Eigen::Vector4d(1, 0, 0, 0)));
 			tree.addPoint(b->position(nid, Eigen::Vector4d(1, 1, 0, 0)));
 			tree.addPoint(b->position(nid, Eigen::Vector4d(0, 1, 0, 0)));
@@ -214,19 +187,29 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 		}
 	}
 
-	/// Coverage:
-	if (isCoverage)
+	/// (5) Connections:
+	if (isConnections)
 	{
-		QStringList sourceNodes;
-		for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
+		QStringList targetNodes;
+		for(auto lb : b_landmarks) for (auto nidB : lb) targetNodes << nidB;
 
-		double ratio = double(sourceNodes.size()) / a->nodes.size();
-		if (ratio == 0) ratio = 0.01;
+		DisjointSet disjoint(targetNodes.size());
 
-		double errorCoverage = 1.0 / ratio;
+		for (size_t u = 0; u < targetNodes.size(); u++){
+			for (size_t v = 0; v < targetNodes.size(); v++){
+				if (u != v && shapeB->shareEdge(targetNodes[u], targetNodes[v])){
+					disjoint.Union(u, v);
+					break;
+				}
+			}
+		}
 
-		errorTerms["coverage"].setValue(errorCoverage);
-		total_error *= errorCoverage;
+		int numComponenets = disjoint.Groups().size();
+
+		double errorConnection = std::max(numComponenets, 1);
+
+		errorTerms["connection"].setValue(errorConnection);
+		total_error *= errorConnection;
 	}
 }
 
@@ -379,52 +362,58 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 		starlab::PolygonSoup * ps;
 		if (debugging) ps = new starlab::PolygonSoup();
 
-		double total_angle = 0;
-		//if (isTwistTerm)
-		{
-			NURBS::NURBSRectangled rect = NURBS::NURBSRectangled::createSheetFromPoints(rectangles[si]);
+		double sideArea = 0;
 
-			for (int ti = 1; ti + 1< num_control_points; ti++)
-			{
-				double t0 = double(ti - 1) / (num_control_points - 1);
-				double t1 = double(ti) / (num_control_points - 1);
-				double t2 = double(ti + 1) / (num_control_points - 1);
-
-				auto p0(rect.P(t0, t0)), p1(rect.P(t1, t1)), p2(rect.P(t2, t2));
-				Vector3 v1 = (p0 - p1).normalized(), v2 = (p2 - p1).normalized();
-				total_angle += (M_PI - acos(v1.dot(v2)));
-			}
-		}
+		NormalAnalysis normals;
+		double twist = 0;
 
 		for (auto quad : quads[si])
 		{
 			QVector<Vector3> q;
 			for (auto v : quad)	q << quads_pnts[si][v];
 
-			double triArea1 = (q[1] - q[0]).cross(q[2] - q[0]).norm() / 2.0;
-			double triArea2 = (q[2] - q[0]).cross(q[3] - q[0]).norm() / 2.0;
+			auto n1 = (q[1] - q[0]).cross(q[2] - q[0]);
+			auto n2 = (q[2] - q[0]).cross(q[3] - q[0]);
+
+			double triArea1 = n1.norm() / 2.0;
+			double triArea2 = n2.norm() / 2.0;
 			double quadArea = triArea1 + triArea2;
 
-			area += quadArea;
+			sideArea += quadArea;
 
-			if (debugging)
+			normals.addNormal(n1.normalized());
+		}
+
+		if (isTwistTerm)
+		{
+			double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
+							- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
+			twist = normals.standardDeviation() + (1.0 - dot);
+
+			if (std::isnan(twist)) twist = 1.0;
+
+			if (debugging) debugBox(twist);
+
+			// Extra penalty:
+			if (twist > 0.4) sideArea *= 3;
+
+			sideArea *= (1.0 + twist);
+		}
+
+		area += sideArea;
+
+		if (debugging)
+		{
+			for (auto quad : quads[si])
 			{
 				QVector<starlab::QVector3> pnts;
+				QVector<Vector3> q;
+				for (auto v : quad)	q << quads_pnts[si][v];
 				for (auto p : q) pnts << p;
-				ps->addPoly(pnts, starlab::qtJetColor(total_angle, 0, 2));
+				ps->addPoly(pnts, starlab::qtJetColor(twist));
 			}
+			debug << ps;
 		}
-
-		if ( isTwistTerm )
-		{
-			area *= std::max(1.0, total_angle * 3);
-		}
-
-		//double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
-		//	- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
-		//area *= (1 + ((1-dot) * 10));
-
-		if (debugging) debug << ps;
 	}
 
 	delete nodeA;

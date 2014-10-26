@@ -103,9 +103,9 @@ void experiment::postCorrespond()
 		{
 			//Arg1: the number, Arg2: how many 0 you want?, Arg3: i don't know but only 10 can take negative numbers
 			QString number;
-			number.sprintf("%012.3f -", search->pathScores[pi]);
+			number.sprintf("%09.3f ", search->pathScores[pi]);
 
-			for (auto key : search->pathDetails[pi].keys()) number += QString("(%1=%2)").arg(key.left(3)).arg(search->pathDetails[pi][key].toDouble());
+			for (auto key : search->pathDetails[pi].keys()) number += QString(",%1=%2").arg(key.left(4)).arg(search->pathDetails[pi][key].toDouble());
 
 			auto item = new QListWidgetItem(number);
 			item->setData(Qt::UserRole, pi);
