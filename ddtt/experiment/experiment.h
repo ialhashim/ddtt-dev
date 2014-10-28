@@ -23,6 +23,8 @@ public:
     void destroy(){}
     void decorate();
 	
+	bool isReady;
+	
 	bool keyPressEvent(QKeyEvent*);
 	bool mouseMoveEvent(QMouseEvent*);
 	bool mousePressEvent(QMouseEvent* event);
@@ -32,7 +34,7 @@ public:
 
 	void doCorrespondSearch();
 
-    experiment() : widget(NULL), dockwidget(NULL) {}
+	experiment() : widget(NULL), dockwidget(NULL), isReady(false) {}
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;
 

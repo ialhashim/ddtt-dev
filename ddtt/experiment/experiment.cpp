@@ -52,7 +52,7 @@ void experiment::doCorrespondSearch()
 
 void experiment::showCorrespond(int idx)
 {
-	if (!search || search->paths.empty()) return;
+	if (graphs.empty() || !search || search->paths.empty() || idx > search->paths.size()-1) return;
 
 	drawArea()->clear();
 
@@ -99,8 +99,13 @@ void experiment::postCorrespond()
 
 	// List scores
 	{
+		QSet<double> scoreSet;
+
 		for (size_t pi = 0; pi < search->pathScores.size(); pi++)
 		{
+			if (scoreSet.contains(search->pathScores[pi])) continue;
+			scoreSet.insert(search->pathScores[pi]);
+
 			//Arg1: the number, Arg2: how many 0 you want?, Arg3: i don't know but only 10 can take negative numbers
 			QString number;
 			number.sprintf("%09.3f ", search->pathScores[pi]);
@@ -177,12 +182,14 @@ void experiment::create()
     // Setup viewer
     {
         //drawArea()->setAxisIsDrawn(true);
-        drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
+        drawArea()->camera()->setType(qglviewer::Camera::ORTHOGRAPHIC);
 
         double worldRadius = 1;
         drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
-        drawArea()->camera()->setPosition(qglviewer::Vec(2,-2,1.5));
-        drawArea()->camera()->lookAt(qglviewer::Vec());
+        drawArea()->camera()->setPosition(qglviewer::Vec(-0.36,-2.2,1.3));
+		auto center = qglviewer::Vec(0.5, 0, 0.5);
+		drawArea()->setSceneCenter(center);
+        drawArea()->camera()->lookAt(center);
         drawArea()->camera()->setSceneRadius( worldRadius );
         drawArea()->camera()->showEntireScene();
     }
@@ -217,6 +224,7 @@ void experiment::create()
 	connect(pw->ui->clearShapes, &QPushButton::released, [&]{
 		graphs.clear();
 		drawArea()->clear();
+		pw->ui->pathsList->clear();
 		drawArea()->update();
 	});
 	connect(pw->ui->loadShapes, &QPushButton::released, [&]{
@@ -237,13 +245,19 @@ void experiment::create()
 		}
 		drawArea()->update();
 	});
+
+	this->isReady = true;
 }
 
 void experiment::decorate()
 {
-    int startX = 0;
-    for(auto g : graphs)
+	if (!isReady) return;
+
+    double startX = 0;
+	for (size_t i = 0; i < graphs.size(); i++)
     {
+		auto & g = graphs[i];
+
         glPushMatrix();
         glTranslated(startX,0,0);
 
@@ -271,12 +285,48 @@ void experiment::decorate()
 		}
 
         glPopMatrix();
-        startX += 1;
+
+		// Spacing between models:
+		if (i + 1 < graphs.size()){
+			auto & g2 = graphs[i + 1];
+			Eigen::AlignedBox3d bbox = g2->bbox();
+			if (!g2->property.contains("width"))
+			{
+				for (auto n : g2->nodes){
+					auto m = g2->getMesh(n->id);
+					if (!m) g2->property["width"].setValue(bbox.sizes().x());
+					m->updateBoundingBox();
+					bbox.extend(m->bbox());
+				}
+				g2->property["width"].setValue(bbox.sizes().x());
+
+				drawArea()->setSceneRadius(g->property["width"].toDouble() * 4);
+			}
+			double g1_width = g->property["width"].toDouble();
+			double g2_width = g2->property["width"].toDouble();
+
+			startX += (g1_width * 0.2) + g2_width;
+		}else{
+			Eigen::AlignedBox3d bbox = g->bbox();
+			for (auto n : g->nodes){
+				auto m = g->getMesh(n->id);
+				if (!m) g->property["width"].setValue(bbox.sizes().x());
+				m->updateBoundingBox();
+				bbox.extend(m->bbox());
+			}
+			g->property["width"].setValue(bbox.sizes().x());
+		}
     }
 }
 
-bool experiment::keyPressEvent(QKeyEvent *)
+bool experiment::keyPressEvent(QKeyEvent * event)
 {
+	if (event->key() == Qt::Key_P) 
+	{
+		drawArea()->setStateFileName("cameraSettings.xml");
+		drawArea()->saveStateToFile();
+	}
+
     return false;
 }
 

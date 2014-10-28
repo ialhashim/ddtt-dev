@@ -69,6 +69,8 @@ Paths CorrespondenceGenerator::generate()
 	// Parameters:
 	double similarity_threshold = 0.4;
 
+	if (similiarity.rows() < 4) similarity_threshold = 1.0;
+
 	// Collect good candidates
 	Assignments candidates;
 	for (size_t i = 0; i < similiarity.rows(); i++){

@@ -28,7 +28,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 	/// (1) Deformed geometry:
 	if (isGeometryDistortion)
 	{
-		double errorGeometric = 0;
+		QMap<QString,double> partError;
 
 		for (size_t i = 0; i < a_landmarks.size(); i++)
 		{
@@ -72,13 +72,17 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 					if (isMergedNodes) area += newNode->area();
 
-					errorGeometric += area;
+					partError[nodeA->id] = area;
 				}
 			}
 
 			if (isMergedNodes)
 				graph->removeNode(landmarks->front());
 		}
+		
+		double errorGeometric = 0;
+
+		for (auto nid : partError.keys()) errorGeometric += partError[nid];
 
 		errorTerms["geometric"].setValue(errorGeometric);
 		total_error += errorGeometric;
@@ -120,14 +124,32 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 	/// (3) Coverage:
 	if (isCoverage)
 	{
-		//QStringList sourceNodes;
-		//for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
+		QStringList sourceNodes;
+		for (auto l : a_landmarks) for (auto nid : l) sourceNodes << nid;
 
-		int nodesCountedInGroups = shapeA->groups.size();
-		for (auto n : shapeA->nodes) if (shapeA->groupsOf(n->id).isEmpty()) nodesCountedInGroups++;
+		// Get shape A nodes as groups
+		auto grps = shapeA->groups;
+		for (auto n : shapeA->nodes){
+			bool isFound = false;
+			for (auto g : grps) if (g.contains(n->id)) isFound = true;
+			if (!isFound) grps.push_back(QVector<QString>() << n->id);
+		}
 
-		double ratio = double(a_landmarks.size()) / nodesCountedInGroups;
-		if (ratio == 0) ratio = 0.01;
+		// Count corresponded groups
+		int correspondedGroups = 0;
+		for (auto g : grps){
+			bool isFound = false;
+			for (auto nid : sourceNodes){
+				if (g.contains(nid)){
+					isFound = true;
+					break;
+				}
+			}
+			if (isFound) correspondedGroups++;
+		}
+
+		double ratio = double(correspondedGroups) / grps.size();
+		if (ratio == 0) ratio = 0.001;
 
 		double errorCoverage = 1.0 / ratio;
 
@@ -388,7 +410,22 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 		{
 			double dot = abs(((quads_pnts[si][num_control_points - 1] - quads_pnts[si][0]).normalized()).dot((quads_pnts[si].back()
 							- quads_pnts[si][quads_pnts[si].size() - num_control_points]).normalized()));
-			twist = normals.standardDeviation() + (1.0 - dot);
+
+			double angleTerm = 1.0 - dot;
+
+			double lengthFrom = 0, lengthTo = 0;
+			int total_pnts = quads_pnts[si].size();
+			for (int i = 1; i < num_control_points; i++){
+				lengthFrom += (quads_pnts[si][i] - quads_pnts[si][i-1]).norm();
+				lengthTo += (quads_pnts[si][total_pnts - i] - quads_pnts[si][total_pnts - i - 1]).norm();
+			}
+			double lengthTerm = 1.0 - (std::min(lengthFrom, lengthTo) / std::max(lengthFrom, lengthTo));
+
+			double normalsTerm = normals.standardDeviation();
+
+			if (angleTerm < 0.1) normalsTerm = 0;
+
+			twist = normalsTerm + angleTerm + lengthTerm;
 
 			if (std::isnan(twist)) twist = 1.0;
 
