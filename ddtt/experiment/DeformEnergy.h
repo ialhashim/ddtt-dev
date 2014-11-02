@@ -15,13 +15,10 @@ public:
 
 	double deform(Structure::Node * nodeA, Structure::Node * nodeB, bool isTwistTerm);
 
-    static QString convertCurvesToSheet(Structure::Graph * graph, QStringList & nodeIDs);
-
-	static Array2D_Vector4d DeformEnergy::computeSideCoordinates(int resolution);
 	static Array2D_Vector4d sideCoordinates;
 
-	double total_error;
-	PropertyMap errorTerms;
+	PropertyMap energyTerms;
+	double total_energy;
 
 	bool debugging;
 	QVector<RenderObject::Base*> debug;

@@ -14,14 +14,21 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="9" column="0" colspan="2">
+   <item row="3" column="0" colspan="2">
+    <widget class="QPushButton" name="saveLandmarks">
+     <property name="text">
+      <string>Save landmarks..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="10" column="0" colspan="2">
     <widget class="QCheckBox" name="isVisualize">
      <property name="text">
       <string>Visualize</string>
      </property>
     </widget>
    </item>
-   <item row="12" column="0" colspan="2">
+   <item row="13" column="0" colspan="2">
     <widget class="QPushButton" name="executeButton">
      <property name="font">
       <font>
@@ -35,10 +42,57 @@
      </property>
     </widget>
    </item>
-   <item row="14" column="1">
-    <widget class="QPushButton" name="searchBest">
+   <item row="12" column="1">
+    <widget class="QSpinBox" name="numIterations">
+     <property name="maximum">
+      <number>1000</number>
+     </property>
+     <property name="singleStep">
+      <number>5</number>
+     </property>
+     <property name="value">
+      <number>40</number>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="0">
+    <widget class="QLabel" name="label">
      <property name="text">
-      <string>Search..</string>
+      <string>Num. iterations</string>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="0" colspan="2">
+    <widget class="QListWidget" name="pathsList">
+     <property name="sortingEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QPushButton" name="clearShapes">
+     <property name="text">
+      <string>Clear shapes</string>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0" colspan="2">
+    <spacer name="verticalSpacer_2">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="1" column="0" colspan="2">
+    <widget class="QPushButton" name="clearLandmarks">
+     <property name="text">
+      <string>Clear landmarks</string>
      </property>
     </widget>
    </item>
@@ -49,7 +103,17 @@
      </property>
     </widget>
    </item>
-   <item row="13" column="0" colspan="2">
+   <item row="11" column="0">
+    <widget class="QCheckBox" name="isShowParts">
+     <property name="text">
+      <string>Show parts</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="14" column="0" colspan="2">
     <widget class="QCheckBox" name="isAnisotropy">
      <property name="text">
       <string>Anisotropy</string>
@@ -59,10 +123,27 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QPushButton" name="clearShapes">
+   <item row="0" column="1">
+    <widget class="QPushButton" name="loadShapes">
      <property name="text">
-      <string>Clear shapes</string>
+      <string>Load shape..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="0" colspan="2">
+    <widget class="QCheckBox" name="isShowLandmarks">
+     <property name="text">
+      <string>Show landmarks</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="15" column="1">
+    <widget class="QPushButton" name="searchBest">
+     <property name="text">
+      <string>Search..</string>
      </property>
     </widget>
    </item>
@@ -79,84 +160,10 @@
      </property>
     </spacer>
    </item>
-   <item row="10" column="0">
-    <widget class="QCheckBox" name="isShowParts">
-     <property name="text">
-      <string>Show parts</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="0" colspan="2">
-    <spacer name="verticalSpacer_2">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
-   </item>
-   <item row="0" column="1">
-    <widget class="QPushButton" name="loadShapes">
-     <property name="text">
-      <string>Load shape..</string>
-     </property>
-    </widget>
-   </item>
-   <item row="11" column="0">
-    <widget class="QLabel" name="label">
-     <property name="text">
-      <string>Num. iterations</string>
-     </property>
-    </widget>
-   </item>
-   <item row="11" column="1">
-    <widget class="QSpinBox" name="numIterations">
-     <property name="maximum">
-      <number>1000</number>
-     </property>
-     <property name="singleStep">
-      <number>5</number>
-     </property>
-     <property name="value">
-      <number>40</number>
-     </property>
-    </widget>
-   </item>
    <item row="5" column="0" colspan="2">
-    <widget class="QCheckBox" name="isShowLandmarks">
+    <widget class="QPushButton" name="swapButton">
      <property name="text">
-      <string>Show landmarks</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="2">
-    <widget class="QPushButton" name="clearLandmarks">
-     <property name="text">
-      <string>Clear landmarks</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="0" colspan="2">
-    <widget class="QPushButton" name="saveLandmarks">
-     <property name="text">
-      <string>Save landmarks..</string>
-     </property>
-    </widget>
-   </item>
-   <item row="8" column="0" colspan="2">
-    <widget class="QListWidget" name="pathsList">
-     <property name="sortingEnabled">
-      <bool>true</bool>
+      <string>Swap shapes</string>
      </property>
     </widget>
    </item>

@@ -1,5 +1,5 @@
 #include "CorrespondenceSearch.h"
-#include "DeformEnergy.h"
+#include "DeformEnergy2.h"
 
 #include <QProgressDialog>
 QProgressDialog * pd = NULL;
@@ -55,9 +55,9 @@ void CorrespondenceSearch::run()
             // Evaluate correspondence:
 			{
 				auto & path = paths[pi];
-				DeformEnergy de(shapeA_copy, shapeB_copy, path.first, path.second, false);
-				pathScores[pi] = de.total_error;
-				pathDetails[pi] = de.errorTerms;
+				DeformEnergy2 de(shapeA_copy, shapeB_copy, path.first, path.second, false);
+				pathScores[pi] = de.total_energy;
+				pathDetails[pi] = de.energyTerms;
             }
 
 			// Report progress

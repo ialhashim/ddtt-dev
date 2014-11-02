@@ -38,20 +38,6 @@ inline QVector<QColor> rndColors2(int count){
 	return colors;
 }
 
-#include <numeric>
-template<typename Scalar>
-Scalar stdev( const std::vector<Scalar> & v )
-{
-	Scalar sum = std::accumulate(v.begin(), v.end(), 0.0);
-	Scalar mean = sum / v.size();
-	std::vector<Scalar> diff(v.size());
-	std::transform(v.begin(), v.end(), diff.begin(), std::bind2nd(std::minus<Scalar>(), mean));
-	Scalar sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
-	Scalar stdev = std::sqrt(sq_sum / v.size());
-
-	return stdev;
-}
-
 template<typename T, typename Container>
 std::vector<T> random_sampling( const Container& original_samples, size_t count ){
 	std::vector<T> samples( original_samples.begin(), original_samples.end() );

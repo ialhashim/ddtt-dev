@@ -14,16 +14,20 @@ QT += gui opengl xml svg
 
 HEADERS +=  experiment.h \
             experiment-widget.h \
-    Deformer.h \
-    DeformEnergy.h \
-    CorrespondenceGenerator.h \
-    CorrespondenceSearch.h
+            Deformer.h \
+            DeformEnergy.h \
+            CorrespondenceGenerator.h \
+            CorrespondenceSearch.h \
+            ShapeGraph.h \
+            DeformEnergy2.h
+
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
-    Deformer.cpp \
-    DeformEnergy.cpp \
-    CorrespondenceGenerator.cpp \
-    CorrespondenceSearch.cpp
+            Deformer.cpp \
+            DeformEnergy.cpp \
+            CorrespondenceGenerator.cpp \
+            CorrespondenceSearch.cpp \
+            DeformEnergy2.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc

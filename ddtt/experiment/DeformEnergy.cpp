@@ -5,19 +5,12 @@
 
 #include "NanoKdTree.h"
 
-struct NormalAnalysis{
-	std::vector<double> x, y, z;
-	void addNormal(const Eigen::Vector3d & n){ x.push_back(n.x()); y.push_back(n.y()); z.push_back(n.z()); }
-	double standardDeviation(){ return std::max(stdev(x), std::max(stdev(y),stdev(z))); }
-};
-
-int num_control_points = 10;
-Array2D_Vector4d DeformEnergy::sideCoordinates = DeformEnergy::computeSideCoordinates(num_control_points);
+Array2D_Vector4d DeformEnergy::sideCoordinates = Structure::ShapeGraph::computeSideCoordinates();
 
 DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
                            const QVector<QStringList> & a_landmarks,
                            const QVector<QStringList> & b_landmarks,
-                           bool debugging) : a(shapeA), b(shapeB), total_error(0), debugging(debugging)
+                           bool debugging) : a(shapeA), b(shapeB), total_energy(0), debugging(debugging)
 {
 	bool isGeometryDistortion = true;
 	bool isUnCorrespondend = true;
@@ -52,7 +45,7 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 				graph = (isOneA) ? shapeB : shapeA;
 				landmarks = (isOneA) ? &lb : &la;
 
-				QString newnode = DeformEnergy::convertCurvesToSheet(graph, *landmarks);
+                QString newnode = Structure::ShapeGraph::convertCurvesToSheet(graph, *landmarks, sideCoordinates);
 				newNode = graph->getNode(newnode);
 
 				landmarks->clear();
@@ -84,8 +77,8 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		for (auto nid : partError.keys()) errorGeometric += partError[nid];
 
-		errorTerms["geometric"].setValue(errorGeometric);
-		total_error += errorGeometric;
+		energyTerms["geometric"].setValue(errorGeometric);
+		total_energy += errorGeometric;
 	}
 
 	/// (2) For uncorrespondend nodes:
@@ -117,8 +110,8 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 			errorUncorrespond += (lengthSquared * numSides);
 		}
 
-		errorTerms["uncorrespond"].setValue(errorUncorrespond);
-		total_error += errorUncorrespond;
+		energyTerms["uncorrespond"].setValue(errorUncorrespond);
+		total_energy += errorUncorrespond;
 	}
 
 	/// (3) Coverage:
@@ -153,8 +146,8 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		double errorCoverage = 1.0 / ratio;
 
-		errorTerms["coverage"].setValue(errorCoverage);
-		total_error *= errorCoverage;
+		energyTerms["coverage"].setValue(errorCoverage);
+		total_energy *= errorCoverage;
 	}
 
 	/// (4) Symmetries: check for global reflectional symmetry 
@@ -204,8 +197,8 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 			double errorSymmetry = 1.0 / ratio;
 
-			errorTerms["symmetry"].setValue(errorSymmetry);
-			total_error *= errorSymmetry;
+			energyTerms["symmetry"].setValue(errorSymmetry);
+			total_energy *= errorSymmetry;
 		}
 	}
 
@@ -230,69 +223,9 @@ DeformEnergy::DeformEnergy(Structure::ShapeGraph * shapeA, Structure::ShapeGraph
 
 		double errorConnection = std::max(numComponenets, 1);
 
-		errorTerms["connection"].setValue(errorConnection);
-		total_error *= errorConnection;
+		energyTerms["connection"].setValue(errorConnection);
+		total_energy *= errorConnection;
 	}
-}
-
-QString DeformEnergy::convertCurvesToSheet(Structure::Graph * graph, QStringList & nodeIDs)
-{
-	// Fit centers into 3D line
-	Vector3 point, direction;
-    MatrixXd curveCenters(nodeIDs.size(), 3);
-    for (size_t r = 0; r < nodeIDs.size(); r++)
-        curveCenters.row(r) = graph->getNode(nodeIDs[r])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
-	point = Vector3(curveCenters.colwise().mean());
-	curveCenters = curveCenters.rowwise() - point.transpose();
-	Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
-	direction = Vector3(svd.matrixV().col(0)).normalized();
-
-	// Sort curves
-	std::vector <size_t> sorted;
-	QMap<size_t, double> dists;
-    for (size_t r = 0; r < nodeIDs.size(); r++) dists[r] = curveCenters.row(r).dot(direction);
-	for (auto p : sortQMapByValue(dists)) sorted.push_back(p.second);
-
-	// Build sheet control points
-	Array2D_Vector3 cpnts;
-	for (size_t i = 0; i < sorted.size(); i++){
-		size_t idx = sorted[i];
-		cpnts.push_back(graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front());
-	}
-
-	// Requirment for NURBS is minimum 4 rows
-	if (cpnts.size() < 4){
-		if (cpnts.size() == 2)
-		{
-			Array1D_Vector3 m1, m2;
-			for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
-			for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(2.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
-			cpnts.insert(cpnts.begin() + 1, m1);
-			cpnts.insert(cpnts.begin() + 2, m2);
-		}
-		else
-		{
-			Array1D_Vector3 m1, m2;
-			for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 2.0, cpnts[0][i], cpnts[1][i]));
-			for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(1.0 / 2.0, cpnts[1][i], cpnts[2][i]));
-			cpnts.insert(cpnts.begin() + 1, m1);
-			cpnts.insert(cpnts.begin() + 3, m2);
-		}
-	}
-	NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(cpnts);
-    Structure::Sheet * newSheet = new Structure::Sheet(sheet, nodeIDs.front() + nodeIDs.back());
-
-	return graph->addNode(newSheet)->id;
-}
-
-Array2D_Vector4d DeformEnergy::computeSideCoordinates( int resolution )
-{
-	Array2D_Vector4d coords(4);
-	for (int i = 0; i < resolution; i++) coords[0].push_back(Eigen::Vector4d(double(i) / (resolution - 1), 0, 0, 0));
-	for (int i = 0; i < resolution; i++) coords[1].push_back(Eigen::Vector4d(1, double(i) / (resolution - 1), 0, 0));
-	for (int i = 0; i < resolution; i++) coords[2].push_back(Eigen::Vector4d(1 - (double(i) / (resolution - 1)), 1, 0, 0));
-	for (int i = 0; i < resolution; i++) coords[3].push_back(Eigen::Vector4d(0, 1 - (double(i) / (resolution - 1)), 0, 0));
-	return coords;
 }
 
 double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inputNodeB, bool isTwistTerm )
@@ -348,6 +281,8 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 	QVector< Array2D_Vector3 > rectangles(numSides);
 
 	int num_quads = quads_pnts.front().size();
+
+	int num_control_points = sideCoordinates.front().size();
 
 	for (int si = 0; si < numSides; si++)
 	{

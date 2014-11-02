@@ -18,6 +18,8 @@ static QVector<QColor> colors = rndColors2(100);
 ExperimentWidget * pw = NULL;
 
 #include "DeformEnergy.h"
+#include "DeformEnergy2.h"
+
 #include "Deformer.h"
 #include "CorrespondenceSearch.h"
 CorrespondenceSearch * search = NULL;
@@ -68,6 +70,8 @@ void experiment::showCorrespond(int idx)
 	auto nidA = search->paths[idx].first;
 	auto nidB = search->paths[idx].second;
 
+	QMap<QString, QStringList> mapback;
+
 	for (size_t i = 0; i < nidA.size(); i++)
 	{
 		auto nidsA = nidA[i], nidsB = nidB[i];
@@ -79,10 +83,19 @@ void experiment::showCorrespond(int idx)
 		for (auto nid : nidsB) {
 			graphs.back()->setColorFor(nid, color);
 			graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true);
+
+			if (mapback.contains(nid)){
+				for (auto nid : mapback[nid]) {
+					graphs.front()->setColorFor(nid, color);
+					graphs.front()->getNode(nid)->vis_property["meshSolid"].setValue(true);
+				}
+			}
+			else
+				mapback[nid] = nidsA;
 		}
 	}
 
-	DeformEnergy d(graphs.front(), graphs.back(), nidA, nidB, pw->ui->isVisualize->isChecked());
+	DeformEnergy2 d(graphs.front(), graphs.back(), nidA, nidB, pw->ui->isVisualize->isChecked());
 	for (auto debug : d.debug) drawArea()->addRenderObject(debug);
 }
 
@@ -103,7 +116,7 @@ void experiment::postCorrespond()
 
 		for (size_t pi = 0; pi < search->pathScores.size(); pi++)
 		{
-			if (scoreSet.contains(search->pathScores[pi])) continue;
+			//if (scoreSet.contains(search->pathScores[pi])) continue; // avoid duplicated scores
 			scoreSet.insert(search->pathScores[pi]);
 
 			//Arg1: the number, Arg2: how many 0 you want?, Arg3: i don't know but only 10 can take negative numbers
@@ -140,7 +153,7 @@ void experiment::doCorrespond()
         landmarks_back << m;
     }
 
-    DeformEnergy d( graphs.front(), graphs.back(), landmarks_front, landmarks_back );
+    DeformEnergy2 d( graphs.front(), graphs.back(), landmarks_front, landmarks_back, true );
 
     for (auto debug : d.debug)drawArea()->addRenderObject(debug);
 
@@ -165,14 +178,14 @@ void experiment::create()
     // Prepare UI
 	if (widget) return;
 
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
 	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
+	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
+
+	graphs.front()->loadLandmarks("back.landmarks");
+	graphs.back()->loadLandmarks("front.landmarks");
 
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);
-
-	//graphs.front()->loadLandmarks("back.landmarks");
-	//graphs.back()->loadLandmarks("front.landmarks");
 
 	//GraphCorresponder gcorr( graphs.front(), graphs.back() );
 	//QSharedPointer<Scheduler> scheduler ( new Scheduler );
@@ -225,6 +238,10 @@ void experiment::create()
 		graphs.clear();
 		drawArea()->clear();
 		pw->ui->pathsList->clear();
+		drawArea()->update();
+	});
+	connect(pw->ui->swapButton, &QPushButton::released, [&]{
+		std::swap(graphs.front(), graphs.back());
 		drawArea()->update();
 	});
 	connect(pw->ui->loadShapes, &QPushButton::released, [&]{
@@ -305,7 +322,7 @@ void experiment::decorate()
 			double g1_width = g->property["width"].toDouble();
 			double g2_width = g2->property["width"].toDouble();
 
-			startX += (g1_width * 0.2) + g2_width;
+			startX += (g1_width * 0.3) + g2_width + 0.05;
 		}else{
 			Eigen::AlignedBox3d bbox = g->bbox();
 			for (auto n : g->nodes){
