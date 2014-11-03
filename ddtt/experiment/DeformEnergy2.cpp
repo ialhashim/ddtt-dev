@@ -1,5 +1,8 @@
 #include "DeformEnergy2.h"
 
+#define _USE_MATH_DEFINES 
+#include <math.h>
+
 Array2D_Vector4d DeformEnergy2::sideCoordinates = Structure::ShapeGraph::computeSideCoordinates();
 
 DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
@@ -19,7 +22,13 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 		bool isOneToMany = (isOneA != isOneB), isOneIsSheet = (isSheetA || isSheetB), isOtherNotSheet = !isSheetA || !isSheetB;
 
 		// Map between parts from shape A to shape B
-		for (size_t j = 0; j < la.size(); j++) mappingAB[la[j]] = lb;
+		for (size_t j = 0; j < la.size(); j++)
+		{
+			mappingAB[la[j]] = lb;
+
+			// Align parts in their parameter space
+			for (auto tid : lb) Structure::ShapeGraph::correspondTwoNodes(la[j], a, tid, b);
+		}
 
 		if (isOneToMany && isOneIsSheet && isOtherNotSheet)
 		{
@@ -55,12 +64,19 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 
 			if ( partsShareEdge(a, mappedPartsA[i], mappedPartsA[j]) )
 			{
+				bool isExistOnBoth = partsShareEdge(b, mappedPartsB[i], mappedPartsB[j]);
+
 				for (size_t n = 0; n < mappedPartsA[i].size(); n++)
 				{
-					if (partsShareEdge(b, mappedPartsB[i], mappedPartsB[j]))
-						B << qMakePair(mappedPartsA[i][n], mappedPartsA[j][n]);
-					else
-						B_missed << qMakePair(mappedPartsA[i][n], mappedPartsA[j][n]);
+					for (size_t m = 0; m < mappedPartsA[j].size(); m++)
+					{
+						if (!a->shareEdge(mappedPartsA[i][n], mappedPartsA[j][m])) continue;
+
+						if (isExistOnBoth)
+							B << qMakePair(mappedPartsA[i][n], mappedPartsA[j][m]);
+						else
+							B_missed << qMakePair(mappedPartsA[i][n], mappedPartsA[j][m]);
+					}
 				}
 			}
 		}
@@ -70,9 +86,9 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 	double theta = 0, omega = 0, kappa = 0, rho = 0;
 	{
 		theta = computeAngles(B, B_missed);
-		omega = computeEdges(B);
+		omega = computeEdges(B, B_missed);
 		kappa = computeContext(A);
-		//rho = computeSymmetry(R);
+		rho = computeSymmetry(A);
 	}
 
 	// Structural energy:
@@ -124,6 +140,8 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 /* ===================	*/
 double DeformEnergy2::computeAngles(const ShapeEdges & B, const ShapeEdges & B_missed)
 {
+	if (B.size() == 0) return 1.0;
+
 	QMap<QString,double> angleDissimilarity;
 
 	// Compare angle using normals at edges of parametric parts:
@@ -172,19 +190,73 @@ double DeformEnergy2::computeAngles(const ShapeEdges & B, const ShapeEdges & B_m
 	}
 
 	// Sum up angle dissimilarities
-	double theta = 0;
-	for (auto dissimilarity : angleDissimilarity) theta += dissimilarity;
+	double sum = 0;
+	for (auto dissimilarity : angleDissimilarity) sum += dissimilarity;
+
+	double theta = sum / (B.size() + B_missed.size());
 	return theta;
 }
 
-double DeformEnergy2::computeEdges(const ShapeEdges & B)
+double DeformEnergy2::computeEdges(const ShapeEdges & B, const ShapeEdges & B_missed)
 {
-	return 0;
+	if (B.size() == 0) return 1.0;
+
+	QMap<QString, double> edgeDissimilarity;
+
+	auto getCoordinates = [&](Structure::ShapeGraph * shape, const PairParts & parts, bool isDropV1, bool isDropV2){
+		auto edge = shape->getEdge(parts.first, parts.second);
+		auto c1 = edge->getCoord(parts.first).front();
+		auto c2 = edge->getCoord(parts.second).front();
+
+		if (isDropV1) c1[1] = 0;
+		if (isDropV2) c2[1] = 0;
+
+		return qMakePair(c1, c2);
+	};
+
+	// Go over all edge relations:
+	for (size_t i = 0; i < B.size(); i++)
+	{
+		auto corrEdges = correspondedEdges(B[i]);
+
+		// We need to resolve this for sheet parts (default: disable 'v' coordinate)
+		bool isDropV1 = true, isDropV2 = true;
+
+		QVector< QPair<Eigen::Vector4d, Eigen::Vector4d> > coordsA, coordsB;
+		for (auto edge : corrEdges.first) coordsA << getCoordinates(a, edge, isDropV1, isDropV2);
+		for (auto edge : corrEdges.second) coordsB << getCoordinates(b, edge, isDropV1, isDropV2);
+
+		QPair<double, double> minDiff(DBL_MAX, DBL_MAX);
+		for (size_t u = 0; u < coordsA.size(); u++){
+			for (size_t v = 0; v < coordsB.size(); v++){
+				minDiff.first = std::min(minDiff.first, (coordsA[u].first - coordsB[u].first).norm());
+				minDiff.second = std::min(minDiff.second, (coordsA[u].second - coordsB[u].second).norm());
+			}
+		}
+
+		QPair<double, double> edge_difference (minDiff.first, minDiff.second);
+
+		// Average of edge distance
+		edgeDissimilarity[B[i].first + "-" + B[i].second] = (edge_difference.first + edge_difference.second) / 2.0;
+	}
+
+	// Penalties of missed relations:
+	for (size_t i = 0; i < B_missed.size(); i++)
+	{
+		edgeDissimilarity[B_missed[i].first + "-" + B_missed[i].second] = 1.0;
+	}
+
+	// Sum up edge dissimilarities
+	double sum = 0;
+	for (auto dissimilarity : edgeDissimilarity) sum += dissimilarity;
+
+	double omega = sum / (B.size() + B_missed.size());
+	return omega;
 }
 
 double DeformEnergy2::computeContext(const QStringList & A)
 {
-	typedef QVector< QPair<double, double> > VecPairDoubles;
+	if (A.size() == 0) return 1.0;
 
 	// Compute spatial range of a part along the upright axis (conventionally z-axis):
 	auto partInterval = [&](Structure::ShapeGraph * shape, const QString & part){
@@ -198,6 +270,7 @@ double DeformEnergy2::computeContext(const QStringList & A)
 	};
 
 	// Context computation:
+	typedef QVector< QPair<double, double> > VecPairDoubles;
 	auto context = [&](const VecPairDoubles & intervals, size_t i, size_t j){
 		bool isBelow = intervals[i].second < intervals[j].first;
 		bool isAbove = intervals[i].first > intervals[j].second;
@@ -233,14 +306,53 @@ double DeformEnergy2::computeContext(const QStringList & A)
 	}
 
 	// Sum up context dissimilarities
-	double kappa = 0;
-	for (auto dissimilarity : contextDissimilarity) kappa += dissimilarity;
+	double sum = 0;
+	for (auto dissimilarity : contextDissimilarity) sum += dissimilarity;
+
+	double kappa = sum / (A.size());
 	return kappa;
 }
 
-double DeformEnergy2::computeSymmetry(const ShapeEdges & R)
+double DeformEnergy2::computeSymmetry(const QStringList & A)
 {
-	return 0;
+	if (A.size() == 0) return 1.0;
+
+	// Groups from source with members in A 
+	QMap < QString, QVector<QString> > foundGroups;
+	for (auto group : a->groups){
+		for (auto nid : group){
+			if (A.contains(nid)){
+				QStringList key;
+				for (auto nid : group) key << nid;
+				foundGroups[key.join("-")] = group;
+				break;
+			}
+		}
+	}
+
+	// Compute group dissimilarity:
+	QMap<QString, double> contextDissimilarity;
+	for (auto groupKey : foundGroups.keys())
+	{
+		auto & group = foundGroups[groupKey];
+
+		int beforeCount = group.size();
+
+		// Find its equivalent
+		QString targetPart = mappingAB[group.front()].front();
+		int afterCount = b->groupsOf(targetPart).front().size();
+
+		double ratio = double(std::min(beforeCount, afterCount)) / std::max(beforeCount, afterCount);
+
+		contextDissimilarity[groupKey] = 1.0 - ratio;
+	}
+
+	// Sum up group dissimilarities
+	double sum = 0;
+	for (auto dissimilarity : contextDissimilarity) sum += dissimilarity;
+
+	double rho = sum / (A.size());
+	return rho;
 }
 
 double DeformEnergy2::E_regularizer(const QVector<QStringList> & correspondedSet)
@@ -253,7 +365,7 @@ double DeformEnergy2::E_regularizer(const QVector<QStringList> & correspondedSet
 	for (auto n : a->nodes){
 		bool isFound = false;
 		for (auto g : grps) if (g.contains(n->id)) isFound = true;
-		if (!isFound) grps.push_back(QVector<QString>() << n->id);
+		if (!isFound && !n->id.contains(",")) grps.push_back(QVector<QString>() << n->id);
 	}
 
 	// Count corresponded groups
@@ -291,6 +403,8 @@ QPair< QVector<PairParts>, QVector<PairParts> > DeformEnergy2::correspondedEdges
 			for (auto tj : mappingAB[edge.second])
 				if (b->shareEdge(ti, tj)) pairEdgesB << PairParts(ti, tj);
 	}
+
+	assert(!pairEdgesA.isEmpty() && !pairEdgesB.isEmpty());
 
 	// Contains duplicates in one case
 	return qMakePair(pairEdgesA, pairEdgesB);

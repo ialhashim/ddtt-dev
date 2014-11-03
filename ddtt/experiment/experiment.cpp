@@ -155,7 +155,21 @@ void experiment::doCorrespond()
 
     DeformEnergy2 d( graphs.front(), graphs.back(), landmarks_front, landmarks_back, true );
 
-    for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+
+	// Display score
+	{
+		pw->ui->pathsList->clear();
+		QSet<double> scoreSet;
+
+		QString number;
+		number.sprintf("%09.3f ", d.total_energy);
+		for (auto key : d.energyTerms.keys()) number += QString(",%1=%2").arg(key.left(4)).arg(d.energyTerms[key].toDouble());
+
+		auto item = new QListWidgetItem(number);
+		item->setData(Qt::UserRole, 0);
+		pw->ui->pathsList->addItem(item);
+	}
 
     mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
@@ -178,11 +192,11 @@ void experiment::create()
     // Prepare UI
 	if (widget) return;
 
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
 	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
+	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairWood1/Woodchair1.xml");
 
-	graphs.front()->loadLandmarks("back.landmarks");
-	graphs.back()->loadLandmarks("front.landmarks");
+	//graphs.front()->loadLandmarks("back.landmarks");
+	//graphs.back()->loadLandmarks("front.landmarks");
 
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);

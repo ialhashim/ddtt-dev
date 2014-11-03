@@ -235,10 +235,10 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 
 	// Point-to-point correspondence
 	if (nodeA->type() == Structure::SHEET && nodeB->type() == Structure::SHEET)
-		Structure::ShapeGraph::correspondTwoSheets((Structure::Sheet*)nodeA, (Structure::Sheet*)nodeB);
+		Structure::ShapeGraph::correspondTwoSheets((Structure::Sheet*)nodeA, (Structure::Sheet*)nodeB, b);
 
 	if (nodeA->type() == Structure::CURVE && nodeB->type() == Structure::CURVE)
-		Structure::ShapeGraph::correspondTwoCurves((Structure::Curve*)nodeA, (Structure::Curve*)nodeB);
+		Structure::ShapeGraph::correspondTwoCurves((Structure::Curve*)nodeA, (Structure::Curve*)nodeB, b);
 
 	// Number of sides to compute
 	int numSides = (nodeA->type() == Structure::SHEET || nodeB->type() == Structure::SHEET) ? 4 : 1;

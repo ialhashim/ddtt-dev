@@ -36,7 +36,7 @@ namespace Structure{
 			QFile file(filename); file.open(QIODevice::WriteOnly);
 			QDataStream os(&file);
 			os << (int)landmarks.size();
-			for (auto & landmark : landmarks) 
+			for (auto & landmark : landmarks)
 			{
 				os << (int)landmark.size();
 				for (auto & l : landmark) l.serialize(os);
@@ -49,7 +49,7 @@ namespace Structure{
 			int count;
 			is >> count;
 			landmarks.resize(count);
-			for (int i = 0; i < count; i++) 
+			for (int i = 0; i < count; i++)
 			{
 				int landmarkCount;
 				is >> landmarkCount;
@@ -59,12 +59,43 @@ namespace Structure{
 			}
 		}
 
-		static void correspondTwoCurves(Structure::Curve *sCurve, Structure::Curve *tCurve)
+		static void correspondTwoNodes(QString sid, Structure::Graph * src, QString tid, Structure::Graph * tgt)
+		{
+			auto sn = src->getNode(sid);
+			auto tn = tgt->getNode(tid);
+
+			if (sn->type() == tn->type())
+			{
+				if (sn->type() == Structure::CURVE) 
+					ShapeGraph::correspondTwoCurves((Structure::Curve *)sn, (Structure::Curve *)tn, tgt);
+				
+				if (sn->type() == Structure::SHEET)
+					ShapeGraph::correspondTwoSheets((Structure::Sheet *)sn, (Structure::Sheet *)tn, tgt);
+			}
+			else
+			{
+				Structure::Curve * sourceCurve, * targetCurve;
+				Structure::Graph * target = tgt;
+
+				Structure::Node * snode = (sn->type() == Structure::SHEET) ? sn : tn;
+				if (snode != sn) tn = sn;
+
+				auto cpts = snode->controlPoints();
+				double resolution = (cpts[0] - cpts[1]).norm() * 0.5;
+				sourceCurve = new Structure::Curve(NURBS::NURBSCurved::createCurveFromPoints(snode->discretizedAsCurve(resolution)), "temp");
+
+				ShapeGraph::correspondTwoCurves(sourceCurve, (Structure::Curve *)tn, target);
+
+				delete sourceCurve;
+			}
+		}
+
+		static void correspondTwoCurves(Structure::Curve *sCurve, Structure::Curve *tCurve, Structure::Graph * tgt)
 		{
 			std::vector<Vector3> sCtrlPoint = sCurve->controlPoints();
 			std::vector<Vector3> tCtrlPoint = tCurve->controlPoints();
 
-			// Euclidean for now, could use Geodesic distance instead if need
+			// Euclidean for now, can use Geodesic distance instead if need
 			Vector3 scenter = sCurve->center();
 			Vector3 sfront = sCtrlPoint.front() - scenter;
 			Vector3 tcenter = tCurve->center();
@@ -75,7 +106,6 @@ namespace Structure{
 			float f2b = (sfront - tback).norm();
 
 			float diff = std::abs(f2f - f2b);
-
 			float threshold = 0.1f;
 
 			if (f2f > f2b && diff > threshold)
@@ -87,10 +117,14 @@ namespace Structure{
 
 				NURBS::NURBSCurved newCurve(tCtrlPoint, tCtrlWeight);
 				tCurve->curve = newCurve;
+
+				// Update the coordinates of links
+				foreach(Structure::Link * l, tgt->getEdges(tCurve->id))
+					l->setCoord(tCurve->id, inverseCoords(l->getCoord(tCurve->id)));
 			}
 		}
 
-		static void correspondTwoSheets(Structure::Sheet *sSheet, Structure::Sheet *tSheet)
+		static void correspondTwoSheets(Structure::Sheet *sSheet, Structure::Sheet *tSheet, Structure::Graph * tgt)
 		{
 			// Old properties
 			NURBS::NURBSRectangled &oldRect = tSheet->surface;
@@ -142,6 +176,13 @@ namespace Structure{
 				tU = -tU;
 				tUV = -tUV;
 				isModified = true;
+
+				// Update the coordinates of links
+				foreach(Structure::Link * l, tgt->getEdges(tSheet->id)){
+					Array1D_Vector4d oldCoord = l->getCoord(tSheet->id), newCoord;
+					foreach(Vector4d c, oldCoord) newCoord.push_back(Vector4d(1 - c[0], c[1], c[2], c[3]));
+					l->setCoord(tSheet->id, newCoord);
+				}
 			}
 
 			// Rotate if need
@@ -174,6 +215,13 @@ namespace Structure{
 				tCtrlPointNew = tCtrlPoint;
 				tCtrlWeightNew = tCtrlWeight;
 				isModified = true;
+
+				// Update the coordinates of links
+				foreach(Structure::Link * l, tgt->getEdges(tSheet->id)){
+					Array1D_Vector4d oldCoord = l->getCoord(tSheet->id), newCoord;
+					foreach(Vector4d c, oldCoord) newCoord.push_back(Vector4d(1 - c[0], 1 - c[1], c[2], c[3]));
+					l->setCoord(tSheet->id, newCoord);
+				}
 			}
 			// Rotate 90 degrees 
 			else
@@ -190,6 +238,13 @@ namespace Structure{
 
 					std::reverse(tCtrlPointNew.begin(), tCtrlPointNew.end());
 					std::reverse(tCtrlWeightNew.begin(), tCtrlWeightNew.end());
+
+					// Update the coordinates of links
+					foreach(Structure::Link * l, tgt->getEdges(tSheet->id)){
+						Array1D_Vector4d oldCoord = l->getCoord(tSheet->id), newCoord;
+						foreach(Vector4d c, oldCoord) newCoord.push_back(Vector4d(1 - c[1], c[0], c[2], c[3]));
+						l->setCoord(tSheet->id, newCoord);
+					}
 				}
 				else
 				{
@@ -202,6 +257,13 @@ namespace Structure{
 
 					tCtrlPointNew = transpose<Vector3>(tCtrlPoint);
 					tCtrlWeightNew = transpose<Scalar>(tCtrlWeight);
+
+					// Update the coordinates of links
+					foreach(Structure::Link * l, tgt->getEdges(tSheet->id)){
+						Array1D_Vector4d oldCoord = l->getCoord(tSheet->id), newCoord;
+						foreach(Vector4d c, oldCoord) newCoord.push_back(Vector4d(c[1], 1 - c[0], c[2], c[3]));
+						l->setCoord(tSheet->id, newCoord);
+					}
 				}
 
 				isModified = true;
@@ -221,84 +283,84 @@ namespace Structure{
 			}
 		}
 
-        static Array2D_Vector4d computeSideCoordinates( int resolution = 10 )
-        {
-            Array2D_Vector4d coords(4);
-            for (int i = 0; i < resolution; i++) coords[0].push_back(Eigen::Vector4d(double(i) / (resolution - 1), 0, 0, 0));
-            for (int i = 0; i < resolution; i++) coords[1].push_back(Eigen::Vector4d(1, double(i) / (resolution - 1), 0, 0));
-            for (int i = 0; i < resolution; i++) coords[2].push_back(Eigen::Vector4d(1 - (double(i) / (resolution - 1)), 1, 0, 0));
-            for (int i = 0; i < resolution; i++) coords[3].push_back(Eigen::Vector4d(0, 1 - (double(i) / (resolution - 1)), 0, 0));
-            return coords;
-        }
+		static Array2D_Vector4d computeSideCoordinates(int resolution = 10)
+		{
+			Array2D_Vector4d coords(4);
+			for (int i = 0; i < resolution; i++) coords[0].push_back(Eigen::Vector4d(double(i) / (resolution - 1), 0, 0, 0));
+			for (int i = 0; i < resolution; i++) coords[1].push_back(Eigen::Vector4d(1, double(i) / (resolution - 1), 0, 0));
+			for (int i = 0; i < resolution; i++) coords[2].push_back(Eigen::Vector4d(1 - (double(i) / (resolution - 1)), 1, 0, 0));
+			for (int i = 0; i < resolution; i++) coords[3].push_back(Eigen::Vector4d(0, 1 - (double(i) / (resolution - 1)), 0, 0));
+			return coords;
+		}
 
-        static QString convertCurvesToSheet(Structure::Graph * graph, QStringList & nodeIDs, const Array2D_Vector4d & sideCoordinates)
-        {
-            // Fit centers into 3D line
-            Vector3 point, direction;
-            MatrixXd curveCenters(nodeIDs.size(), 3);
-            for (int r = 0; r < (int)nodeIDs.size(); r++)
-                curveCenters.row(r) = graph->getNode(nodeIDs[r])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
-            point = Vector3(curveCenters.colwise().mean());
-            curveCenters = curveCenters.rowwise() - point.transpose();
-            Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
-            direction = Vector3(svd.matrixV().col(0)).normalized();
+		static QString convertCurvesToSheet(Structure::Graph * graph, QStringList & nodeIDs, const Array2D_Vector4d & sideCoordinates)
+		{
+			// Fit centers into 3D line
+			Vector3 point, direction;
+			MatrixXd curveCenters(nodeIDs.size(), 3);
+			for (int r = 0; r < (int)nodeIDs.size(); r++)
+				curveCenters.row(r) = graph->getNode(nodeIDs[r])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
+			point = Vector3(curveCenters.colwise().mean());
+			curveCenters = curveCenters.rowwise() - point.transpose();
+			Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
+			direction = Vector3(svd.matrixV().col(0)).normalized();
 
-            // Sort curves
-            std::vector <size_t> sorted;
-            QMap<size_t, double> dists;
-            for (size_t r = 0; r < nodeIDs.size(); r++) dists[r] = curveCenters.row(r).dot(direction);
-            for (auto p : sortQMapByValue(dists)) sorted.push_back(p.second);
+			// Sort curves
+			std::vector <size_t> sorted;
+			QMap<size_t, double> dists;
+			for (size_t r = 0; r < nodeIDs.size(); r++) dists[r] = curveCenters.row(r).dot(direction);
+			for (auto p : sortQMapByValue(dists)) sorted.push_back(p.second);
 
-            // Build sheet control points
-            Array2D_Vector3 cpnts;
-            for (size_t i = 0; i < sorted.size(); i++){
-                size_t idx = sorted[i];
-                cpnts.push_back(graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front());
-            }
+			// Build sheet control points
+			Array2D_Vector3 cpnts;
+			for (size_t i = 0; i < sorted.size(); i++){
+				size_t idx = sorted[i];
+				cpnts.push_back(graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front());
+			}
 
-            // Requirment for NURBS is minimum 4 rows
-            if (cpnts.size() < 4){
-                if (cpnts.size() == 2)
-                {
-                    Array1D_Vector3 m1, m2;
-                    for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
-                    for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(2.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
-                    cpnts.insert(cpnts.begin() + 1, m1);
-                    cpnts.insert(cpnts.begin() + 2, m2);
-                }
-                else
-                {
-                    Array1D_Vector3 m1, m2;
-                    for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 2.0, cpnts[0][i], cpnts[1][i]));
-                    for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(1.0 / 2.0, cpnts[1][i], cpnts[2][i]));
-                    cpnts.insert(cpnts.begin() + 1, m1);
-                    cpnts.insert(cpnts.begin() + 3, m2);
-                }
-            }
-            NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(cpnts);
-            Structure::Sheet * newSheet = new Structure::Sheet(sheet, nodeIDs.join(","));
+			// Requirment for NURBS is minimum 4 rows
+			if (cpnts.size() < 4){
+				if (cpnts.size() == 2)
+				{
+					Array1D_Vector3 m1, m2;
+					for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
+					for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(2.0 / 3.0, cpnts.front()[i], cpnts.back()[i]));
+					cpnts.insert(cpnts.begin() + 1, m1);
+					cpnts.insert(cpnts.begin() + 2, m2);
+				}
+				else
+				{
+					Array1D_Vector3 m1, m2;
+					for (size_t i = 0; i < cpnts.front().size(); i++) m1.push_back(AlphaBlend(1.0 / 2.0, cpnts[0][i], cpnts[1][i]));
+					for (size_t i = 0; i < cpnts.front().size(); i++) m2.push_back(AlphaBlend(1.0 / 2.0, cpnts[1][i], cpnts[2][i]));
+					cpnts.insert(cpnts.begin() + 1, m1);
+					cpnts.insert(cpnts.begin() + 3, m2);
+				}
+			}
+			NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(cpnts);
+			Structure::Sheet * newSheet = new Structure::Sheet(sheet, nodeIDs.join(","));
 
-            return graph->addNode(newSheet)->id;
-        }
+			return graph->addNode(newSheet)->id;
+		}
 	};
 }
 
 #include <numeric>
 template<typename Scalar>
-static inline Scalar stdev( const std::vector<Scalar> & v )
+static inline Scalar stdev(const std::vector<Scalar> & v)
 {
-    Scalar sum = std::accumulate(v.begin(), v.end(), 0.0);
-    Scalar mean = sum / v.size();
-    std::vector<Scalar> diff(v.size());
-    std::transform(v.begin(), v.end(), diff.begin(), std::bind2nd(std::minus<Scalar>(), mean));
-    Scalar sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
-    Scalar stdev = std::sqrt(sq_sum / v.size());
+	Scalar sum = std::accumulate(v.begin(), v.end(), 0.0);
+	Scalar mean = sum / v.size();
+	std::vector<Scalar> diff(v.size());
+	std::transform(v.begin(), v.end(), diff.begin(), std::bind2nd(std::minus<Scalar>(), mean));
+	Scalar sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+	Scalar stdev = std::sqrt(sq_sum / v.size());
 
-    return stdev;
+	return stdev;
 }
 
 struct NormalAnalysis{
-    std::vector<double> x, y, z;
-    void addNormal(const Eigen::Vector3d & n){ x.push_back(n.x()); y.push_back(n.y()); z.push_back(n.z()); }
-    double standardDeviation(){ return std::max(stdev(x), std::max(stdev(y),stdev(z))); }
+	std::vector<double> x, y, z;
+	void addNormal(const Eigen::Vector3d & n){ x.push_back(n.x()); y.push_back(n.y()); z.push_back(n.z()); }
+	double standardDeviation(){ return std::max(stdev(x), std::max(stdev(y), stdev(z))); }
 };

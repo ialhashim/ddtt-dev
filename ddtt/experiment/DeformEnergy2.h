@@ -25,9 +25,9 @@ public:
 
 	// Energy terms:
 	double computeAngles(const ShapeEdges & B, const ShapeEdges & B_missed);
-	double computeEdges(const ShapeEdges & B);
+	double computeEdges(const ShapeEdges & B, const ShapeEdges & B_missed);
 	double computeContext(const QStringList & A);
-	double computeSymmetry(const ShapeEdges & R);
+	double computeSymmetry(const QStringList & A);
 
 	// Regularization:
 	double E_regularizer(const QVector<QStringList> & correspondedSet);
