@@ -89,6 +89,19 @@ Paths CorrespondenceGenerator::generate()
 	if (candidates.size() > 7)
 	{
 		debugBox(QString("%1 candidates. Too complex (lower similairty?)").arg(candidates.size()));
+
+		similarity_threshold = 0.1;
+
+		Assignments candidates;
+		for (size_t i = 0; i < similiarity.rows(); i++){
+			QVector<size_t> candidate;
+			for (size_t j = 0; j < similiarity.cols(); j++){
+				if (similiarity(i, j) < similarity_threshold)
+					candidate << j;
+			}
+			candidates << candidate;
+		}
+
 		cart_product(assignments, candidates, 10000);
 		count_threshold = 12;
 	}
