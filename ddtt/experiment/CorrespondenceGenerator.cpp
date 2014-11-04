@@ -1,4 +1,5 @@
 #include "CorrespondenceGenerator.h"
+#include <unordered_map>
 
 typedef QVector< QVector<size_t> > Assignments;
 

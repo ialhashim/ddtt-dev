@@ -23,11 +23,16 @@ public:
 	PropertyMap energyTerms;
 	double total_energy;
 
-	// Energy terms:
+	/// Energy terms:
+
+	// Structural:
 	double computeAngles(const ShapeEdges & B, const ShapeEdges & B_missed);
 	double computeEdges(const ShapeEdges & B, const ShapeEdges & B_missed);
 	double computeContext(const QStringList & A);
 	double computeSymmetry(const QStringList & A);
+
+	// Geometric:
+	double computeGeometry(const QStringList & A);
 
 	// Regularization:
 	double E_regularizer(const QVector<QStringList> & correspondedSet);

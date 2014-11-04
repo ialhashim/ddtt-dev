@@ -104,7 +104,7 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 
 	// Geometric energy:
 	double w_g = 1.0;
-	double E_g = 1.0;
+	double E_g = computeGeometry(A);
 	this->energyTerms["w_g"].setValue(w_g);
 	this->energyTerms["E_g"].setValue(E_g);
 
@@ -262,9 +262,9 @@ double DeformEnergy2::computeContext(const QStringList & A)
 	auto partInterval = [&](Structure::ShapeGraph * shape, const QString & part){
 		std::vector<double> z_values;
 		auto node = shape->getNode(part);
-		z_values.push_back(node->position(Eigen::Vector4d(0, 0, 0, 0)).z());
+		//z_values.push_back(node->position(Eigen::Vector4d(0, 0, 0, 0)).z());
 		z_values.push_back(node->position(Eigen::Vector4d(0.5, 0.5, 0, 0)).z());
-		z_values.push_back(node->position(Eigen::Vector4d(1, 1, 0, 0)).z());
+		//z_values.push_back(node->position(Eigen::Vector4d(1, 1, 0, 0)).z());
 		auto minmax = std::minmax_element(z_values.begin(), z_values.end());
 		return qMakePair(*minmax.first, *minmax.second);
 	};
@@ -330,6 +330,8 @@ double DeformEnergy2::computeSymmetry(const QStringList & A)
 		}
 	}
 
+	if (foundGroups.size() == 0) return a->groups.empty() ? 0.0 : 1.0;
+
 	// Compute group dissimilarity:
 	QMap<QString, double> contextDissimilarity;
 	for (auto groupKey : foundGroups.keys())
@@ -351,8 +353,13 @@ double DeformEnergy2::computeSymmetry(const QStringList & A)
 	double sum = 0;
 	for (auto dissimilarity : contextDissimilarity) sum += dissimilarity;
 
-	double rho = sum / (A.size());
+	double rho = sum / foundGroups.size();
 	return rho;
+}
+
+double DeformEnergy2::computeGeometry(const QStringList & A)
+{
+	return 0;
 }
 
 double DeformEnergy2::E_regularizer(const QVector<QStringList> & correspondedSet)

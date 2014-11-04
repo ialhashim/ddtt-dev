@@ -26,6 +26,8 @@ CorrespondenceSearch * search = NULL;
 
 void experiment::doCorrespondSearch()
 {
+	pw->ui->searchBest->setEnabled(false);
+
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
 	
@@ -45,7 +47,7 @@ void experiment::doCorrespondSearch()
 		//graphs.push_back(shapeB);
 	}
 
-	search = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate());
+	search = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate(), pw->ui->isOtherEnergy->isChecked());
 
 	connect(search, SIGNAL(done()), SLOT(postCorrespond()));
 
@@ -95,12 +97,42 @@ void experiment::showCorrespond(int idx)
 		}
 	}
 
-	DeformEnergy2 d(graphs.front(), graphs.back(), nidA, nidB, pw->ui->isVisualize->isChecked());
-	for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+	// Apply for debugging:
+	{
+		// anisotropy:		
+		auto shapeA = new Structure::ShapeGraph(*graphs.front());
+		auto shapeB = new Structure::ShapeGraph(*graphs.back());
+		{
+			QMatrix4x4 mat;
+
+			if (pw->ui->isAnisotropy->isChecked())
+			{
+				auto bboxA = shapeA->bbox();
+				auto bboxB = shapeB->bbox();
+
+				Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
+				mat.scale(s.x(), s.y(), s.z());
+				shapeB->transform(mat, true);
+			}
+		}
+
+		if (!pw->ui->isOtherEnergy->isChecked())
+		{
+			DeformEnergy2 d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
+			for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+		}
+		else
+		{
+			DeformEnergy d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
+			for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+		}
+	}
 }
 
 void experiment::postCorrespond()
 {
+	pw->ui->searchBest->setEnabled(true);
+
 	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
 
 	bool isVisualize = pw->ui->isVisualize->isChecked();

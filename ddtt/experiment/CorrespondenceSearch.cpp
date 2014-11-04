@@ -1,11 +1,12 @@
 #include "CorrespondenceSearch.h"
 #include "DeformEnergy2.h"
+#include "DeformEnergy.h"
 
 #include <QProgressDialog>
 QProgressDialog * pd = NULL;
 
-CorrespondenceSearch::CorrespondenceSearch(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, const Paths & paths) 
-	: paths(paths), shapeA(shapeA), shapeB(shapeB)
+CorrespondenceSearch::CorrespondenceSearch(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, const Paths & paths, bool isUseAlternative)
+	: paths(paths), shapeA(shapeA), shapeB(shapeB), isUseAlternative(isUseAlternative)
 {
 	property["pathsCount"].setValue(paths.size());
 
@@ -28,20 +29,12 @@ void CorrespondenceSearch::run()
 
     bool abort = false;
 
-	// Make copy for thread safety
-	QVector<Structure::ShapeGraph*> shapeAs(omp_get_max_threads());
-	QVector<Structure::ShapeGraph*> shapeBs(omp_get_max_threads());
-	for (size_t i = 0; i < shapeAs.size(); i++){
-		shapeAs[i] = new Structure::ShapeGraph(*shapeA);
-		shapeBs[i] = new Structure::ShapeGraph(*shapeB);
-	}
-
     // Evaluate correspondences
 	#pragma omp parallel for
 	for (int pi = 0; pi < paths.size(); pi++)
     {
-		auto & shapeA_copy = shapeAs[omp_get_thread_num()];
-		auto & shapeB_copy = shapeBs[omp_get_thread_num()];
+		Structure::ShapeGraph shapeA_copy(*shapeA);
+		Structure::ShapeGraph shapeB_copy(*shapeB);
 
         #pragma omp flush (abort)
         if(!abort)
@@ -52,13 +45,21 @@ void CorrespondenceSearch::run()
                 #pragma omp flush (abort)
             }
 
+			auto & path = paths[pi];
+
             // Evaluate correspondence:
+			if (!isUseAlternative)
 			{
-				auto & path = paths[pi];
-				DeformEnergy2 de(shapeA_copy, shapeB_copy, path.first, path.second, false);
+				DeformEnergy2 de(&shapeA_copy, &shapeB_copy, path.first, path.second, false);
 				pathScores[pi] = de.total_energy;
 				pathDetails[pi] = de.energyTerms;
             }
+			else
+			{
+				DeformEnergy de(&shapeA_copy, &shapeB_copy, path.first, path.second, false);
+				pathScores[pi] = de.total_energy;
+				pathDetails[pi] = de.energyTerms;
+			}
 
 			// Report progress
             emit( pathComputed() );

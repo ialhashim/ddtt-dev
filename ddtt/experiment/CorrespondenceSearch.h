@@ -9,7 +9,7 @@ class CorrespondenceSearch : public QThread
 {
     Q_OBJECT
 public:
-	CorrespondenceSearch(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, const Paths & paths);
+	CorrespondenceSearch(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, const Paths & paths, bool isUseAlternative = false);
 
     PropertyMap property;
     QVector<RenderObject::Base*> debug;
@@ -20,6 +20,9 @@ public:
 	std::vector<double> pathScores;
 	std::vector<PropertyMap> pathDetails;
 	int bestCorrespondence;
+
+	// DEBUG:
+	bool isUseAlternative;
 
 public slots:
     void run();
