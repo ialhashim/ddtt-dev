@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>185</width>
-    <height>356</height>
+    <width>181</width>
+    <height>674</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -27,7 +27,14 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="volumeConstraints">
+        <property name="text">
+         <string>Volume constraints</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QCheckBox" name="areaConstraints">
         <property name="text">
          <string>Area constraints</string>
@@ -37,31 +44,14 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
-       <widget class="QCheckBox" name="volumeConstraints">
+      <item row="1" column="0">
+       <widget class="QCheckBox" name="laplacianConstraints">
         <property name="text">
-         <string>Volume constraints</string>
+         <string>Uniform Laplacian</string>
         </property>
        </widget>
       </item>
      </layout>
-    </widget>
-   </item>
-   <item row="5" column="1">
-    <widget class="QPushButton" name="createROI">
-     <property name="text">
-      <string>Create ROI</string>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="1">
-    <widget class="QDoubleSpinBox" name="gaussWeight">
-     <property name="decimals">
-      <number>3</number>
-     </property>
-     <property name="maximum">
-      <double>1.000000000000000</double>
-     </property>
     </widget>
    </item>
    <item row="8" column="1">
@@ -77,17 +67,51 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QLabel" name="label">
+   <item row="5" column="1">
+    <widget class="QPushButton" name="createROI">
      <property name="text">
-      <string>Vertex</string>
+      <string>Create ROI</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="1">
-    <widget class="QPushButton" name="createHandle">
+   <item row="7" column="0">
+    <widget class="QLabel" name="label_5">
      <property name="text">
-      <string>Create Handle</string>
+      <string>Dimension</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="1">
+    <widget class="QDoubleSpinBox" name="roiDistance">
+     <property name="decimals">
+      <number>3</number>
+     </property>
+     <property name="maximum">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="value">
+      <double>0.100000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="label_4">
+     <property name="text">
+      <string>Weight</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QPushButton" name="deleteHandle">
+     <property name="text">
+      <string>Delete</string>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0">
+    <widget class="QLabel" name="label_2">
+     <property name="text">
+      <string>Solver iterations</string>
      </property>
     </widget>
    </item>
@@ -104,57 +128,17 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="0">
-    <widget class="QLabel" name="label_4">
+   <item row="0" column="0">
+    <widget class="QLabel" name="label">
      <property name="text">
-      <string>Weight</string>
+      <string>Vertex</string>
      </property>
     </widget>
-   </item>
-   <item row="8" column="0">
-    <widget class="QLabel" name="label_2">
-     <property name="text">
-      <string>Solver iterations</string>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QPushButton" name="deleteHandle">
-     <property name="text">
-      <string>Delete</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="1">
-    <spacer name="verticalSpacer_2">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
    </item>
    <item row="9" column="1">
     <widget class="QPushButton" name="deformButton">
      <property name="text">
       <string>Deform</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="1">
-    <widget class="QDoubleSpinBox" name="roiDistance">
-     <property name="decimals">
-      <number>3</number>
-     </property>
-     <property name="maximum">
-      <double>1.000000000000000</double>
-     </property>
-     <property name="value">
-      <double>0.100000000000000</double>
      </property>
     </widget>
    </item>
@@ -191,11 +175,94 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="0">
-    <widget class="QLabel" name="label_5">
+   <item row="1" column="1">
+    <widget class="QPushButton" name="createHandle">
      <property name="text">
-      <string>Dimension</string>
+      <string>Create Handle</string>
      </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QDoubleSpinBox" name="gaussWeight">
+     <property name="decimals">
+      <number>3</number>
+     </property>
+     <property name="maximum">
+      <double>1.000000000000000</double>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <spacer name="verticalSpacer_2">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+   <item row="11" column="0" colspan="2">
+    <widget class="QGroupBox" name="groupBox_2">
+     <property name="title">
+      <string>GroupBox</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="1">
+       <widget class="QDoubleSpinBox" name="weight1">
+        <property name="maximum">
+         <double>10000.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_6">
+        <property name="text">
+         <string>w1</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QDoubleSpinBox" name="weight2">
+        <property name="maximum">
+         <double>10000.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_7">
+        <property name="text">
+         <string>w2</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="weight3">
+        <property name="maximum">
+         <double>10000.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>1.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_8">
+        <property name="text">
+         <string>w3</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>

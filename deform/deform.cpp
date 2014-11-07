@@ -77,12 +77,18 @@ void deform::create()
 		if (handles.empty()) return;
 
 		// Options:
+		bool is_laplacian = ((DeformWidget *)widget)->ui->laplacianConstraints->isChecked();
 		bool is_area = ((DeformWidget *)widget)->ui->areaConstraints->isChecked();
 		bool is_volume = ((DeformWidget *)widget)->ui->volumeConstraints->isChecked();
 		bool is_surface = !is_volume;
 		bool is_dynamic = ((DeformWidget *)widget)->ui->gravityEnabled->isChecked();
 		int num_iterations = ((DeformWidget *)widget)->ui->numSolverIterations->value();
 		int dimensions = ((DeformWidget *)widget)->ui->dimensions->value();
+
+		// Weights:
+		double w1 = ((DeformWidget *)widget)->ui->weight1->value();
+		double w2 = ((DeformWidget *)widget)->ui->weight2->value();
+		double w3 = ((DeformWidget *)widget)->ui->weight3->value();
 
 		/// 1) Create the solver
 		solver = new ShapeOp::Solver;
@@ -98,7 +104,7 @@ void deform::create()
 			/// 3) Setup the constraints and forces
 			// Triangle strain constraints
 			{
-				double triangle_weight = 1.0;
+				double triangle_weight = w1;
 
 				for (auto & face : mesh()->faces())
 				{
@@ -138,7 +144,7 @@ void deform::create()
 			// Area constraints
 			if (is_area)
 			{
-				double area_weight = 1.0;
+				double area_weight = w2;
 
 				for (auto & face : mesh()->faces())
 				{
@@ -146,6 +152,23 @@ void deform::create()
 					for (auto & v : mesh()->vertices(face)) id_vector.push_back(v.idx());
 
 					auto c = std::make_shared<ShapeOp::AreaConstraint>(id_vector, area_weight, p);
+					solver->addConstraint(c);
+				}
+			}
+
+			if (is_laplacian)
+			{
+				double laplacian_weight = w3;
+
+				for (auto & v : mesh()->vertices())
+				{
+					//if (mesh()->is_boundary(v)) continue;
+
+					std::vector<int> id_vector;
+					id_vector.push_back(v.idx());
+					for (auto & h : mesh()->onering_hedges(v)) id_vector.push_back(mesh()->to_vertex(h).idx());
+
+					auto c = std::make_shared<ShapeOp::UniformLaplacianConstraint>(id_vector, laplacian_weight, p, false);
 					solver->addConstraint(c);
 				}
 			}
@@ -235,7 +258,7 @@ void deform::create()
 void deform::create_handle(const Vector3 & p, size_t vid)
 {
 	auto handleRadius = worldRadius * 0.1;
-	QSharedPointer<DeformHandle> handle(new DeformHandle(p, handleRadius));
+	QSharedPointer<DeformHandle> handle(new DeformHandle(p, handleRadius, ((DeformWidget *)widget)->ui->dimensions->value() == 2));
 
 	handle->element_orig_pos.push_back(p);
 	handle->element_id.push_back(vid);
@@ -259,7 +282,7 @@ void deform::create_ROI()
 	// Create a handle of points geodesically within threshold
 	auto threshold = ((DeformWidget *)widget)->ui->roiDistance->value();
 
-	QSharedPointer<DeformHandle> handle(new DeformHandle(mesh()->vertex_coordinates()[vid], threshold));
+	QSharedPointer<DeformHandle> handle(new DeformHandle(mesh()->vertex_coordinates()[vid], threshold, ((DeformWidget *)widget)->ui->dimensions->value() == 2));
 
 	for (auto v : mesh()->vertices())
 	{
@@ -390,6 +413,11 @@ bool deform::mouseMoveEvent(QMouseEvent *)
 
 bool deform::mousePressEvent(QMouseEvent * event)
 {
+	if (event->buttons().testFlag(Qt::MouseButton::RightButton))
+	{
+		create_ROI();
+	}
+
 	if (event->modifiers() & Qt::SHIFT)
 	{
 		last_selected = -1;
