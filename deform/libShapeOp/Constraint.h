@@ -68,7 +68,7 @@ class SHAPEOP_API TriangleStrainConstraint : public Constraint {
   /** \brief Constraint constructor.*/
   TriangleStrainConstraint(const std::vector<int> &idI,
                            Scalar weight,
-                           const Matrix3X &positions,
+                           const Matrix3X &positions, bool is2D = false,
                            Scalar rangeMin = 1.0,
                            Scalar rangeMax = 1.0);
   virtual ~TriangleStrainConstraint() {}
@@ -80,6 +80,7 @@ class SHAPEOP_API TriangleStrainConstraint : public Constraint {
   Matrix22 rest_;
   Scalar rangeMin_;
   Scalar rangeMax_;
+  bool is2D;
 };
 ///////////////////////////////////////////////////////////////////////////////
 /** \brief Tetrahedron strain constraint. See \cite Bouaziz2014 for more details.*/

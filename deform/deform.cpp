@@ -111,7 +111,7 @@ void deform::create()
 					std::vector<int> id_vector;
 					for (auto & v : mesh()->vertices(face)) id_vector.push_back(v.idx());
 
-					auto c = std::make_shared<ShapeOp::TriangleStrainConstraint>(id_vector, triangle_weight, p);
+					auto c = std::make_shared<ShapeOp::TriangleStrainConstraint>(id_vector, triangle_weight, p, dimensions == 2);
 					solver->addConstraint(c);
 				}
 			}

@@ -64,18 +64,18 @@ SHAPEOP_INLINE void EdgeStrainConstraint::setEdgeLength(Scalar length) {
 ///////////////////////////////////////////////////////////////////////////////
 SHAPEOP_INLINE TriangleStrainConstraint::TriangleStrainConstraint(const std::vector<int> &idI,
                                                                   Scalar weight,
-                                                                  const Matrix3X &positions,
+                                                                  const Matrix3X &positions, bool is2D,
                                                                   Scalar rangeMin,
                                                                   Scalar rangeMax) :
   Constraint(idI, weight),
   rangeMin_(rangeMin),
-  rangeMax_(rangeMax) {
+  rangeMax_(rangeMax), is2D(is2D) {
   assert(idI.size() == 3);
   Matrix32 edges, P;
   edges.col(0) = positions.col(idI_[1]) - positions.col(idI_[0]);
   edges.col(1) = positions.col(idI_[2]) - positions.col(idI_[0]);
-  P.col(0) = edges.col(0).normalized();
-  P.col(1) = (edges.col(1) - edges.col(1).dot(P.col(0)) * P.col(0)).normalized();
+  P.col(0) = is2D ? Vector3::UnitX() : edges.col(0).normalized();
+  P.col(1) = is2D ? Vector3::UnitY() : (edges.col(1) - edges.col(1).dot(P.col(0)) * P.col(0)).normalized();
   rest_ = (P.transpose() * edges).inverse();
   Scalar A = (P.transpose() * edges).determinant() / 2.0f;
   weight_ *= std::sqrt(std::abs(A));
@@ -85,13 +85,14 @@ SHAPEOP_INLINE void TriangleStrainConstraint::project(const Matrix3X &positions,
   Matrix32 edges, P;
   edges.col(0) = (positions.col(idI_[1]) - positions.col(idI_[0]));
   edges.col(1) = (positions.col(idI_[2]) - positions.col(idI_[0]));
-  P.col(0) = edges.col(0).normalized();
-  P.col(1) = (edges.col(1) - edges.col(1).dot(P.col(0)) * P.col(0)).normalized();
+  P.col(0) = is2D ? Vector3::UnitX() : edges.col(0).normalized();
+  P.col(1) = is2D ? Vector3::UnitY() : (edges.col(1) - edges.col(1).dot(P.col(0)) * P.col(0)).normalized();
   Matrix22 F = P.transpose() * edges * rest_;
   Eigen::JacobiSVD<Matrix22> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
   Vector2 S = svd.singularValues();
   S(0) = clamp(S(0), rangeMin_, rangeMax_);
   S(1) = clamp(S(1), rangeMin_, rangeMax_);
+  if (is2D && svd.matrixU().determinant()*svd.matrixV().determinant() < 0.0f) S(1) = -S(1); //For 2D
   F = svd.matrixU() * S.asDiagonal() * svd.matrixV().transpose();
   projections.block<3, 2>(0, idO_) = (weight_ * P * F);
 }
