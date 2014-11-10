@@ -43,4 +43,5 @@ public:
 public slots:
 	void postCorrespond();
 	void showCorrespond(int id);
+	void doEnergySearch();
 };
