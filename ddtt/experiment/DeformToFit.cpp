@@ -57,6 +57,10 @@ static inline Vector3 quad_interpolate(const Vector3 a, const Vector3 b, const V
 	return vec_lerp(ab, cd, v);
 }
 
+static inline Vector3 small_noise(double scale = 1.0){
+	return Vector3::Random() * scale;
+}
+
 void DeformToFit::registerAndDeformNodes(Structure::Node * snode, Structure::Node * tnode)
 {
     auto scenter = snode->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
@@ -181,15 +185,44 @@ void DeformToFit::registerAndDeformNodes(Structure::Node * snode, Structure::Nod
 		Structure::Curve curve((snode->type() == Structure::CURVE) ? (*(Structure::Curve*)snode) : (*(Structure::Curve*)tnode));
 		Structure::Sheet sheet((snode->type() == Structure::SHEET) ? (*(Structure::Sheet*)snode) : (*(Structure::Sheet*)tnode));
 
-		bool isProjectAlongU = std::min((sheet.surface.P(0,0) - sheet.surface.P(1,0)).norm(), (sheet.surface.P(0,1) - sheet.surface.P(1,1)).norm()) <
-							std::min((sheet.surface.P(0,0) - sheet.surface.P(0,1)).norm(), (sheet.surface.P(1,0) - sheet.surface.P(1,1)).norm());
+		double minU = std::min((sheet.surface.P(0, 0) - sheet.surface.P(1, 0)).norm(), (sheet.surface.P(0, 1) - sheet.surface.P(1, 1)).norm());
+		double minV = std::min((sheet.surface.P(0, 0) - sheet.surface.P(0, 1)).norm(), (sheet.surface.P(1, 0) - sheet.surface.P(1, 1)).norm());
+		bool isProjectAlongU = minU < minV;
 
 		// Roll up sheet
-		Array1D_Vector3 projection = (isProjectAlongU) ? 
-										sheet.surface.GetControlPointsU((sheet.surface.mNumUCtrlPoints - 1) * 0.5) : 
-										sheet.surface.GetControlPointsV((sheet.surface.mNumVCtrlPoints - 1) * 0.5);
-		sheet.surface.mCtrlPoint = Array2D_Vector3(isProjectAlongU ? sheet.surface.mNumUCtrlPoints : sheet.surface.mNumVCtrlPoints, projection);
+		int idx = (isProjectAlongU) ? (sheet.surface.mNumUCtrlPoints - 1) * 0.5 : (sheet.surface.mNumVCtrlPoints - 1) * 0.5;
+		Array1D_Vector3 projection = (isProjectAlongU) ? sheet.surface.GetControlPointsV(idx) : sheet.surface.GetControlPointsU(idx);
+		Array2D_Vector3 ctrlPnts(sheet.surface.mNumUCtrlPoints);
+		if (isProjectAlongU){
+			ctrlPnts = Array2D_Vector3(sheet.surface.mNumUCtrlPoints, projection);
+		}else{
+			for (size_t i = 0; i < sheet.surface.mNumUCtrlPoints; i++)
+				ctrlPnts[i] = Array1D_Vector3(sheet.surface.mNumVCtrlPoints, projection[i]);
+		}
+		sheet.surface.mCtrlPoint = ctrlPnts;
 
+		Structure::Curve curveFromSheet(NURBS::NURBSCurved::createCurveFromPoints(isProjectAlongU ?
+			sheet.surface.GetControlPointsV(0) : sheet.surface.GetControlPointsU(0)), "temp");
 
+		// Sheet to curve case:
+		if (snode->type() == Structure::SHEET)
+		{
+			DeformToFit::registerAndDeformNodes(&curveFromSheet, &curve);
+
+			if (isProjectAlongU)
+				sheet.surface.mCtrlPoint = Array2D_Vector3(sheet.surface.mNumUCtrlPoints, curveFromSheet.curve.mCtrlPoint);
+			else{
+				for (size_t i = 0; i < sheet.surface.mNumUCtrlPoints; i++)
+					sheet.surface.mCtrlPoint[i] = Array1D_Vector3(sheet.surface.mNumVCtrlPoints, curveFromSheet.curve.mCtrlPoint[i]);
+			}
+
+			((Structure::Sheet*)snode)->surface.mCtrlPoint = sheet.surface.mCtrlPoint;
+		}
+
+		// Curve to sheet case:
+		if (snode->type() == Structure::CURVE)
+		{
+			DeformToFit::registerAndDeformNodes(snode, &curveFromSheet);
+		}
     }
 }

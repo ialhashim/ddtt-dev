@@ -76,6 +76,14 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
     {
         double resolution = (nc->mCtrlPoint.front().front() - nc->mCtrlPoint.back().back()).norm() * 0.05;
         nc->generateSurfaceQuads( resolution );
+
+        // Degenerate surface
+        if(nc->quads.empty()){
+            NURBS::NURBSCurved alongU = NURBS::NURBSCurved::createCurveFromPoints(nc->GetControlPointsU(0));
+            NURBS::NURBSCurved alongV = NURBS::NURBSCurved::createCurveFromPoints(nc->GetControlPointsV(0));
+            CurveDraw::draw(&alongU, sheet_color);
+            CurveDraw::draw(&alongV, sheet_color);
+        }
     }
 
     if(!isColorOverRide) glEnable(GL_LIGHTING);
@@ -110,11 +118,10 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
 	glEnable(GL_LIGHTING);
 
     // Draw UV indicator
+    glLineWidth(3);
     if(!nc->quads.empty())
     {
         SurfaceQuad quad = nc->quads.front();
-
-        glLineWidth(3);
 
         glColor3d(1,0,0);
         glBegin(GL_LINES);
@@ -126,7 +133,18 @@ void SurfaceDraw::draw( NURBSRectangled * nc, QColor sheet_color, bool drawContr
         glVector3(quad.p[0]); glVector3(quad.p[3]);
         glEnd();
     }
+    else
+    {
+        glColor3d(1,0,0);
+        glBegin(GL_LINES);
+        glVector3(nc->P(0,0)); glVector3(nc->P(0.05,0));
+        glEnd();
 
+        glColor3d(0,1,0);
+        glBegin(GL_LINES);
+        glVector3(nc->P(0,0)); glVector3(nc->P(0,0.05));
+        glEnd();
+    }
 
     if(drawControl)
     {
