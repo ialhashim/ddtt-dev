@@ -65,7 +65,9 @@ void experiment::doEnergySearch()
 
 	EnergyGuidedDeformation egd(shapeA, shapeB, landmarks_front, landmarks_back, true);
 
-	for (auto debug : egd.debug)drawArea()->addRenderObject(debug);
+	for (auto debug : egd.debug) drawArea()->addRenderObject(debug);
+	for (auto debug : shapeA->debug) drawArea()->addRenderObject(debug);
+	for (auto debug : shapeB->debug) drawArea()->addRenderObject(debug);
 
 	// Show deformed
 	graphs.clear();
@@ -275,19 +277,20 @@ void experiment::create()
     // Prepare UI
 	if (widget) return;
 
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic1/SimpleChair1.xml");
-	graphs << new Structure::ShapeGraph("C:/Temp/dataset/ChairBasic2/shortChair01.xml");
+	// Load last used shapes:
+	QSettings settingsFile(QSettings::IniFormat, QSettings::UserScope, "GrUVi", "experiment");
+	QString shapeLeft = settingsFile.value("shapeLeft", "C:/Temp/dataset/ChairBasic1/SimpleChair1.xml").toString();
+	QString shapeRight = settingsFile.value("shapeRight", "C:/Temp/dataset/ChairBasic2/shortChair01.xml").toString();
+	settingsFile.sync();
 
-	graphs.front()->loadLandmarks("front.landmarks");
-	graphs.back()->loadLandmarks("back.landmarks");
+	graphs << new Structure::ShapeGraph(shapeLeft);
+	graphs << new Structure::ShapeGraph(shapeRight);
+
+	//graphs.front()->loadLandmarks("front.landmarks");
+	//graphs.back()->loadLandmarks("back.landmarks");
 
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);
-
-	//GraphCorresponder gcorr( graphs.front(), graphs.back() );
-	//QSharedPointer<Scheduler> scheduler ( new Scheduler );
-	//QSharedPointer<TopoBlender> blender = QSharedPointer<TopoBlender>( new TopoBlender(&gcorr, scheduler.data()) );
-	//scheduler->executeAll();
 
     // Setup viewer
     {
@@ -345,6 +348,24 @@ void experiment::create()
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Shape"), "", tr("Shape File (*.xml)"));
 		if (!filename.size()) return;
 		graphs << new Structure::ShapeGraph(filename);
+		drawArea()->update();
+
+		// Save last used shapes:
+		if (graphs.size() == 2){
+			QSettings settingsFile(QSettings::IniFormat, QSettings::UserScope, "GrUVi", "experiment");
+			settingsFile.setValue("shapeLeft", graphs.front()->property["name"].toString());
+			settingsFile.setValue("shapeRight", graphs.back()->property["name"].toString());
+			settingsFile.sync();
+		}
+	});
+	connect(pw->ui->resetShapes, &QPushButton::released, [&]{
+		drawArea()->clear();
+		graphs.clear();
+		QSettings settingsFile(QSettings::IniFormat, QSettings::UserScope, "GrUVi", "experiment");
+		QString shapeLeft = settingsFile.value("shapeLeft").toString();
+		QString shapeRight = settingsFile.value("shapeRight").toString();
+		graphs << new Structure::ShapeGraph(shapeLeft);
+		graphs << new Structure::ShapeGraph(shapeRight);
 		drawArea()->update();
 	});
 	connect(pw->ui->searchBest, &QPushButton::released, [&]{

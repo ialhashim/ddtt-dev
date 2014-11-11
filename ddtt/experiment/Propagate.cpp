@@ -1,35 +1,104 @@
 #include "Propagate.h"
 #include "StructureGraph.h"
 #include "GenericGraph.h"
+Q_DECLARE_METATYPE(Vector3);
+
+struct ProximityConstraint{
+	Vector3 d;
+	Structure::Node *from, *to;
+	Structure::Link *link;
+	ProximityConstraint(Structure::Node *from = nullptr, Structure::Link *link = nullptr) :from(from), link(link){
+		if (!from || !link) return;
+		to = link->otherNode(from->id);
+		d = link->property[from->id].value<Vector3>();
+	}
+	inline Vector3 start(){ return link->position(from->id); }
+	inline Vector3 delta(){ return d; }
+	inline Eigen::Vector4d coord(){ return link->getCoord(to->id).front(); }
+};
+
+void Propagate::prepareForProximity(Structure::Graph * graph)
+{
+	for (auto & edge : graph->edges){
+		auto p1 = edge->position(edge->n1->id), p2 = edge->position(edge->n2->id);
+		edge->property[edge->n1->id].setValue(Vector3(p2 - p1));
+		edge->property[edge->n2->id].setValue(Vector3(p1 - p2));
+	}
+}
 
 void Propagate::propagateProximity(const QStringList &fixedNodes, Structure::Graph *graph)
 {
-	GenericGraphs::Graph<size_t, double> g;
-	for (auto n : graph->nodes) g.AddVertex(n->property["index"].toULongLong());
+	// Constraints per part
+	QMap < QString, QVector< ProximityConstraint > > constraints;
 
-	auto fixedSource = g.vertices.size();
-	g.AddVertex(fixedSource);
-	g.initAttributes();
-
-	for (auto edge : graph->edges){
-		size_t nid1 = edge->n1->property["index"].toULongLong();
-		size_t nid2 = edge->n2->property["index"].toULongLong();
-		g.AddEdge(nid1, nid2, 1, edge->property["uid"].toInt());
-
-		g.vertices_prop[nid1]["id"] = edge->n1->id;
-		g.vertices_prop[nid2]["id"] = edge->n2->id;
-
-		if (fixedNodes.contains(edge->n1->id)) g.AddEdge(fixedSource, nid1, 0);
-		if (fixedNodes.contains(edge->n2->id)) g.AddEdge(fixedSource, nid1, 0);
+	// Initialize propagation state
+	for (auto n : graph->nodes){
+		n->property["propagated"].setValue( false );
+		n->property["fixed"].setValue( fixedNodes.contains(n->id) );
 	}
 
-	// Spanning tree from all fixed nodes
-	auto propagationTree = g.BFS(fixedSource);
-	propagationTree.size();
+	/// Find propagation levels:
+	// First level:
+	QVector < QVector<Structure::Node*> > propagationLevel(1);
+	for (auto nid : fixedNodes) {
+		auto n = graph->getNode(nid);
+		n->property["propagated"].setValue(true);
+		propagationLevel.front().push_back(n);
+	}
+	// Remaining levels:
+	forever{
+		QVector<Structure::Node*> curLevel;
+		for (auto & nid : propagationLevel.back())
+		{
+			for (auto & edge : graph->getEdges(nid->id))
+			{
+				if (edge->n1->id == edge->n2->id) continue;
+				auto otherNode = edge->otherNode(nid->id);
+				if (otherNode->property["propagated"].toBool()) continue;
 
-	// Setup constraints based on case (1,2,3,..) and weather or not a part is fixed
+				if (!curLevel.contains(otherNode)) curLevel.push_back(otherNode);
 
-	// Fixed point stretching or translation
+				constraints[otherNode->id].push_front( ProximityConstraint(nid,edge) );
+			}
+		}
+
+		for (auto & nid : curLevel)	nid->property["propagated"].setValue(true);
+		if (curLevel.isEmpty())	break;
+		propagationLevel.push_back(curLevel);
+	};
+
+	// Apply constraints
+	propagationLevel.removeFirst(); // Fixed parts do not change
+	for (int i = 0; i < propagationLevel.size(); i++)
+	{
+		for (auto & n : propagationLevel[i])
+		{
+			assert(constraints[n->id].size());
+
+			if (constraints[n->id].size() == 1)
+			{
+				auto & c = constraints[n->id].front();
+				n->deformTo(c.coord(), c.start() + c.delta(), true);
+			}
+			else
+			{
+				auto & c_list = constraints[n->id];
+
+				if (constraints[n->id].size() == 2)
+				{
+					auto & ca = c_list.front();
+					auto & cb = c_list.back();
+
+					n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(),
+						cb.coord(), cb.start() + cb.delta());
+				}
+				else
+				{
+					
+				}
+			}
+		}
+	}
 }
 
 void Propagate::propagateSymmetry(const QStringList &fixedNodes, Structure::Graph *graph)

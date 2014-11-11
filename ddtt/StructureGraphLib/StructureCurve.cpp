@@ -443,7 +443,7 @@ Array1D_Vector3 Curve::decodeCurve(CurveEncoding cpCoords, Vector3 start, Vector
 
 void Curve::deformTo( const Vector4d & handle, const Vector3 & to, bool isRigid )
 {
-	Vector4d otherEndCoord = Vector4d((handle[0] > 0.5) ? 0 : 1);
+	Vector4d otherEndCoord = Vector4d((handle[0] > 0.5) ? 0 : 1,0,0,0);
 
 	Vector3 p = position( handle );
 

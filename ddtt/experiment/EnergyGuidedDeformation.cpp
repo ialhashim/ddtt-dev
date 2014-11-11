@@ -34,6 +34,9 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 		searchNodes << searchNode;
 	}
 
+	// Prepare graph
+	Propagate::prepareForProximity(shapeA);
+
 	while (!searchNodes.isEmpty())
 	{
 		auto & searchNode = searchNodes.pop();
