@@ -1,6 +1,8 @@
 #include "EnergyGuidedDeformation.h"
-#include "DeformToFit.h"
 #include <QStack>
+
+#include "DeformToFit.h"
+#include "Propagate.h"
 
 namespace Energy{
 	struct SearchPath{
@@ -37,12 +39,13 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 		auto & searchNode = searchNodes.pop();
 
 		// Deform part to its target
-		for (auto partID : searchNode.parts)
-		{
-			for (auto tpartID : searchNode.targets)
-			{
+		for (auto partID : searchNode.parts){
+			for (auto tpartID : searchNode.targets){
                 DeformToFit::registerAndDeformNodes(a->getNode(partID), b->getNode(tpartID));
 			}
 		}
+
+		// Propagate edit by applying structural constraints
+		Propagate::propagateProximity(searchNode.parts, shapeA);
 	}
 }

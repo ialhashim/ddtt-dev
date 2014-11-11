@@ -405,7 +405,7 @@ QVector<Node*> Graph::path( Node * from, Node * to )
 		idxNodeMap[idx] = n;
 		nodeIdxMap[n] = idx;
 		g.AddVertex(idx);
-	}
+    }
 
 	// Add edges
 	foreach(Link * e, edges)

@@ -147,6 +147,7 @@ namespace Structure{
 		starlab::PolygonSoup ps,ps2,ps3;
 		starlab::SphereSoup spheres, spheres2;
 		QMap< QString, void* > misc;
+        QVector<RenderObject::Base*> debug;
 
 		// Clean up
 		void clearDebug();

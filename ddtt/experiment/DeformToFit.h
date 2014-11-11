@@ -1,3 +1,5 @@
+#pragma once
+
 namespace Structure{ class Node; }
 
 class DeformToFit
