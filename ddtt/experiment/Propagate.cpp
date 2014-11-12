@@ -3,6 +3,8 @@
 #include "GenericGraph.h"
 Q_DECLARE_METATYPE(Vector3);
 
+#include "convexhull2d.h"
+
 struct ProximityConstraint{
 	Vector3 d;
 	Structure::Node *from, *to;
@@ -84,17 +86,35 @@ void Propagate::propagateProximity(const QStringList &fixedNodes, Structure::Gra
 			{
 				auto & c_list = constraints[n->id];
 
-				if (constraints[n->id].size() == 2)
+				if (c_list.size() == 2)
 				{
 					auto & ca = c_list.front();
 					auto & cb = c_list.back();
 
-					n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(),
-						cb.coord(), cb.start() + cb.delta());
+					n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
 				}
 				else
 				{
+					QMap < double, QPair<ProximityConstraint, ProximityConstraint> > furthestConstraints;
+
+					for (auto & ci : c_list)
+						for (auto & cj : c_list)
+							furthestConstraints[(ci.coord() - cj.coord()).norm()] = qMakePair(ci,cj);
+
+					auto selectedTwo = furthestConstraints.values().back();
+
+					auto & ca = selectedTwo.first;
+					auto & cb = selectedTwo.second;
+					n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
 					
+					/*
+					// Only consider outer most constraints
+					QVector<ProximityConstraint> filtered_constraints;
+					QVector<Eigen::Vector2d> coords;
+					for (auto & c : c_list) coords.push_back(Eigen::Vector2d(c.coord()[0], c.coord()[1]));
+					for (auto idx : convexhull2d_indices(coords)) filtered_constraints << c_list[idx];
+
+					filtered_constraints.size();*/
 				}
 			}
 		}
