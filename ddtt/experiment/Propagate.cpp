@@ -4,6 +4,7 @@
 Q_DECLARE_METATYPE(Vector3);
 
 #include "convexhull2d.h"
+#include "mean_value_coordinates.h"
 
 struct ProximityConstraint{
 	Vector3 d;
@@ -95,26 +96,47 @@ void Propagate::propagateProximity(const QStringList &fixedNodes, Structure::Gra
 				}
 				else
 				{
-					QMap < double, QPair<ProximityConstraint, ProximityConstraint> > furthestConstraints;
-
-					for (auto & ci : c_list)
-						for (auto & cj : c_list)
-							furthestConstraints[(ci.coord() - cj.coord()).norm()] = qMakePair(ci,cj);
-
-					auto selectedTwo = furthestConstraints.values().back();
-
-					auto & ca = selectedTwo.first;
-					auto & cb = selectedTwo.second;
-					n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
-					
-					/*
 					// Only consider outer most constraints
 					QVector<ProximityConstraint> filtered_constraints;
 					QVector<Eigen::Vector2d> coords;
 					for (auto & c : c_list) coords.push_back(Eigen::Vector2d(c.coord()[0], c.coord()[1]));
 					for (auto idx : convexhull2d_indices(coords)) filtered_constraints << c_list[idx];
 
-					filtered_constraints.size();*/
+					filtered_constraints.size();
+
+					// Build cage from convex hull of constraints
+					std::vector < Eigen::Vector2d > cage;
+					for (auto & c : filtered_constraints){
+						auto p = c.link->position(n->id);
+						cage.push_back(Eigen::Vector2d(p[0],p[1]));
+					}
+
+					// Compute weights for control points
+					std::vector< std::vector<double> > weights;
+					auto cpts = n->controlPoints();
+					for (auto cp : cpts) weights.push_back(MeanValueCoordinates<Eigen::Vector2d>::computeWeights(cp[0], cp[1], cage));
+
+					double test_z = 0;
+
+					// Modify cage to expected positions
+					for (size_t i = 0; i < cage.size(); i++){
+						auto p = filtered_constraints[i].start() + filtered_constraints[i].delta();
+						cage[i][0] = p[0];
+						cage[i][1] = p[1];
+
+						test_z = p[2];
+					}
+
+					// Compute new locations:
+					for (size_t i = 0; i < cpts.size(); i++){
+						auto p = MeanValueCoordinates<Eigen::Vector2d>::interpolate2d(weights[i], cage);
+						cpts[i][0] = p[0];
+						cpts[i][1] = p[1];
+
+						cpts[i][2] = test_z; // for now testing..
+					}
+
+					n->setControlPoints(cpts);
 				}
 			}
 		}
