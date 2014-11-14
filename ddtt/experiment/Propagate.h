@@ -1,12 +1,9 @@
 #pragma once
-#include <QStringList>
-namespace Structure{ class Graph; }
+
+#include "PropagateProximity.h"
 
 class Propagate
 {
 public:
-	static void prepareForProximity(Structure::Graph * graph);
-
-    static void propagateProximity(const QStringList & fixedNodes, Structure::Graph * graph);
     static void propagateSymmetry(const QStringList & fixedNodes, Structure::Graph * graph);
 };

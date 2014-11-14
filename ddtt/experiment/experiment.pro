@@ -22,7 +22,8 @@ HEADERS +=  experiment.h \
             DeformEnergy2.h \
             EnergyGuidedDeformation.h \
             DeformToFit.h \
-    Propagate.h
+    Propagate.h \
+    PropagateProximity.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
@@ -33,7 +34,8 @@ SOURCES +=  experiment.cpp \
             DeformEnergy2.cpp \
             EnergyGuidedDeformation.cpp \
             DeformToFit.cpp \
-    Propagate.cpp
+    Propagate.cpp \
+    PropagateProximity.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc

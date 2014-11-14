@@ -2,11 +2,9 @@
 #include <vector>
 
 // From: https://github.com/razh/coordinates
-template<class Point2D>
 struct MeanValueCoordinates
 {
 	typedef std::vector<double> Weights;
-	typedef std::vector<Point2D> Cage;
 
 	/**
 	* modulo with Euclidean division.
@@ -24,6 +22,7 @@ struct MeanValueCoordinates
 	* Implementation of the interpolation function from K. Hormann and
 	* M. S. Floater's Mean Value Coordinates for Arbitrary Planar Polygons.
 	*/
+	template<class Cage>
 	static inline Weights computeWeights(double x, double y, const Cage & vertices) {
 		int vertexCount = (int)vertices.size();
 
@@ -129,13 +128,14 @@ struct MeanValueCoordinates
 	/**
 	* Interpolates mean-value coordinate weights along vertices.
 	*/
-	static inline Point2D interpolate2d(const Weights & weights, const Cage & vertices) {
+	template<class Cage>
+	static inline std::pair<double,double> interpolate2d(const Weights & weights, const Cage & vertices) {
 		int vertexCount = (int)vertices.size();
 		double x = 0, y = 0;
 		for (int i = 0; i < vertexCount; i++) {
 			x += weights[i] * vertices[i][0];
 			y += weights[i] * vertices[i][1];
 		}
-		return Point2D(x, y);
+		return std::make_pair(x, y);
 	}
 };

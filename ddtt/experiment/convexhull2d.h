@@ -83,7 +83,7 @@ static inline std::vector<size_t> convexhull2d_indices(Container & c){
 	while (it != c.end()){
 		auto & cur = *it;
 		for (size_t i = 0; i < result.size(); i++){
-			if (equal_points(result[i], cur)){
+			if (equal_points(result[(int)i], cur)){
 				indices.push_back(it - c.begin());
 				break;
 			}

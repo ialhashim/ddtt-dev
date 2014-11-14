@@ -35,7 +35,7 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 	}
 
 	// Prepare graph
-	Propagate::prepareForProximity(shapeA);
+    PropagateProximity::prepareForProximity(shapeA);
 
 	while (!searchNodes.isEmpty())
 	{
@@ -49,6 +49,8 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 		}
 
 		// Propagate edit by applying structural constraints
-		Propagate::propagateProximity(searchNode.parts, shapeA);
+        PropagateProximity::propagateProximity(searchNode.parts, shapeA);
+
+		Propagate::propagateSymmetry(searchNode.parts, shapeA);
 	}
 }

@@ -72,7 +72,7 @@ void experiment::doEnergySearch()
 	// Show deformed
 	graphs.clear();
 	graphs << shapeA << shapeB;
-	for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
+	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
