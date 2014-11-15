@@ -5,5 +5,5 @@
 class Propagate
 {
 public:
-    static void propagateSymmetry(const QStringList & fixedNodes, Structure::Graph * graph);
+	static void propagateSymmetry(const QStringList & fixedNodes, Structure::ShapeGraph * graph);
 };

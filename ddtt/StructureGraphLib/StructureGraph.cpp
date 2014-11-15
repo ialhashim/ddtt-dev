@@ -2046,7 +2046,29 @@ void Graph::moveCenterTo( Vector3 newCenter, bool isKeepMeshes )
 			node->moveBy( delta );
 			if(node->type() == SHEET) ((Sheet*)node)->surface.quads.clear();
 		}
-	}
+    }
+}
+
+Array1D_Vector3 Graph::getAllControlPoints()
+{
+    Array1D_Vector3 result;
+    for(Structure::Node * n : nodes){
+        auto pts = n->controlPoints();
+        result.insert(result.end(), pts.begin(), pts.end());
+    }
+    return result;
+}
+
+void Graph::setAllControlPoints(Array1D_Vector3 all_points)
+{
+    int offset = 0;
+    for(Structure::Node * n : nodes){
+        int size = n->numCtrlPnts();
+        Array1D_Vector3 npts( all_points.begin() + offset, all_points.begin() + offset + size );
+        n->setControlPoints(npts);
+
+        offset += size;
+    }
 }
 
 Structure::Graph * Graph::actualGraph(Structure::Graph * fromGraph)

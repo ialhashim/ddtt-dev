@@ -24,6 +24,8 @@ ExperimentWidget * pw = NULL;
 #include "CorrespondenceSearch.h"
 CorrespondenceSearch * search = NULL;
 
+#include "Synthesizer.h"
+
 #include "EnergyGuidedDeformation.h"
 void experiment::doEnergySearch()
 {
@@ -73,6 +75,7 @@ void experiment::doEnergySearch()
 	graphs.clear();
 	graphs << shapeA << shapeB;
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
+	for (auto g : graphs) g->property["showMeshes"].setValue(false);
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
@@ -402,8 +405,9 @@ void experiment::decorate()
         glPushMatrix();
         glTranslated(startX,0,0);
 
-        g->draw();
+        g->draw(drawArea());
 		g->property["startX"].setValue(startX);
+		g->property["posX"].setValue(startX);
 
 		if (((ExperimentWidget*)widget)->ui->isShowLandmarks->isChecked())
 		{
@@ -468,6 +472,101 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 		drawArea()->saveStateToFile();
 	}
 
+	if (event->key() == Qt::Key_N)
+	{
+		for (auto g : graphs) g->property["showNames"].setValue(!g->property["showNames"].toBool());
+	}
+
+	if (event->key() == Qt::Key_M)
+	{
+		for (auto g : graphs)
+		{
+			for (auto n : g->nodes)
+			{
+				n->vis_property["meshColor"].setValue(n->vis_property["color"].value<QColor>());
+				n->vis_property["meshSolid"].setValue(true);
+			}
+
+			g->property["showMeshes"].setValue(!g->property["showMeshes"].toBool());
+			g->property["showNodes"].setValue(!g->property["showMeshes"].toBool());
+		}
+	}
+
+	if (event->key() == Qt::Key_E)
+	{
+		encodeGeometry();
+	}
+
+	if (event->key() == Qt::Key_D)
+	{
+		decodeGeometry();
+	}
+
+	if (event->key() == Qt::Key_Space)
+	{
+
+		for (auto g : graphs)
+		{
+			QTimer * timer = new QTimer;
+			connect(timer, &QTimer::timeout, [=]()
+			{
+				if (graphs.empty() || graphs.front()->animation.empty()) return;
+
+				static bool isForward = true;
+				static double t = 0;
+				static int index = 0;
+
+				auto source = graphs.front();
+
+				static double delta = 0.2;
+				t += isForward ? delta : -delta;
+
+				if (t >= 1.0 || t <= 0.0)
+				{
+					t = (t >= 1.0) ? 0.0 : 1.0;
+
+					index += isForward ? 1 : -1;
+
+					if (index >= source->animation.size() + 1)
+					{
+						t = 1;
+						isForward = false;
+						index = source->animation.size() - 1;
+					}
+
+					if (index < 0)
+					{
+						t = 0;
+						isForward = true;
+						index = 0;
+					}
+				}
+
+				auto ptsBefore = graphs.front()->animation[std::max(0,index-1)];
+				auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size()-1)];
+
+				Array1D_Vector3 ptsCurrent;
+				for (size_t i = 0; i < ptsBefore.size(); i++) ptsCurrent.push_back(AlphaBlend(t, ptsBefore[i], ptsAfter[i]));
+				graphs.front()->setAllControlPoints(ptsCurrent);
+
+				for (auto n : graphs.front()->nodes) if(n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
+
+				if (g->property["showMeshes"].toBool())
+				{
+					decodeGeometry();
+				}
+
+				drawArea()->update();
+
+				//mainWindow()->setStatusBarMessage(QString("index [%1], t=%2").arg(index).arg(t));
+			});
+			timer->start(25);
+
+			break;
+		}
+	}
+
+	drawArea()->update();
     return false;
 }
 
@@ -537,4 +636,87 @@ bool experiment::mousePressEvent(QMouseEvent *event)
 	}
 	
 	return false;
+}
+
+void experiment::encodeGeometry()
+{
+	for (auto g : graphs)
+	{
+		for (auto n : g->nodes)
+		{
+			auto mesh = g->getMesh(n->id);
+			if (!mesh) continue;
+			std::vector < Vector3f > points, normals;
+			auto mesh_points = mesh->vertex_coordinates(), mesh_normals = mesh->vertex_normals();
+			for (auto v : mesh->vertices()){
+				points.push_back(mesh_points[v].cast<float>());
+				normals.push_back(mesh_normals[v].cast<float>());
+			}
+
+			QVector<ParameterCoord> encoding;
+			if (n->type() == Structure::CURVE) encoding = Synthesizer::genPointCoordsCurve((Structure::Curve*)n, points, normals);
+			if (n->type() == Structure::SHEET) encoding = Synthesizer::genPointCoordsSheet((Structure::Sheet*)n, points, normals);
+			n->property["encoding"].setValue(encoding);
+		}
+
+		g->property["isGeometryEncoded"].setValue(true);
+
+		break; // only encode source
+	}
+}
+
+void experiment::decodeGeometry()
+{
+	if (!graphs.front()->property["isGeometryEncoded"].toBool()) encodeGeometry();
+
+	for (auto g : graphs)
+	{
+		for (auto n : g->nodes)
+		{
+			auto mesh = g->getMesh(n->id);
+			if (!mesh) continue;
+			auto mesh_points = mesh->vertex_coordinates();
+			QVector<ParameterCoord> encoding = n->property["encoding"].value< QVector<ParameterCoord> >();
+
+			// Generate consistent frames along curve
+			Array1D_Vector4d coords;
+			RMF rmf;
+			if (n->type() == Structure::CURVE) rmf = Synthesizer::consistentFrame((Structure::Curve*)n, coords);
+			int rmfCount = rmf.count();
+
+			for (int i = 0; i < encoding.size(); i++){
+				auto & sample = encoding[i];
+
+				Vector3d startPoint;
+				std::vector<Vector3d> frame;
+				n->get(Eigen::Vector4d(sample.u, sample.v, 0, 0), startPoint, frame);
+				Vector3f rayPos = Vector3f(startPoint[0], startPoint[1], startPoint[2]);
+
+				Vector3d _X, _Y, _Z;
+				if (n->type() == Structure::CURVE)
+				{
+					int idx = sample.u * (rmfCount - 1);
+					_X = rmf.U[idx].r; _Y = rmf.U[idx].s; _Z = rmf.U[idx].t;
+				}
+				else
+				{
+					_X = frame[0]; _Z = frame[2]; _Y = cross(_Z, _X);
+				}
+
+				// double float
+				Vector3f X(_X[0], _X[1], _X[2]), Y(_Y[0], _Y[1], _Y[2]), Z(_Z[0], _Z[1], _Z[2]);
+				Vector3f rayDir;
+				localSphericalToGlobal(X, Y, Z, sample.theta, sample.psi, rayDir);
+
+				// Reconstructed point
+				Vector3f isect = rayPos + (rayDir * sample.origOffset);
+				mesh_points[SurfaceMesh::Vertex(i)] = isect.cast<double>();
+			}
+
+			mesh->update_face_normals();
+			mesh->update_vertex_normals();
+		}
+
+		break; // only decode source
+	}
 }

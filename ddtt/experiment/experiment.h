@@ -44,4 +44,7 @@ public slots:
 	void postCorrespond();
 	void showCorrespond(int id);
 	void doEnergySearch();
+
+	void encodeGeometry();
+	void decodeGeometry();
 };

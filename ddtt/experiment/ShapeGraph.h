@@ -1,7 +1,17 @@
 #pragma once
 #include "StructureGraph.h"
 
-namespace Structure{
+namespace Structure
+{
+    // Structural relations between parts
+    struct Relation{
+        QStringList parts;
+        enum RelationType{ REFLECTIONAL, ROTATIONAL, TRANSLATION, SELF } type;
+        Vector3 axis, point;
+		Relation(Vector3 axis = Vector3(0, 0, 0), Vector3 point = Vector3(0, 0, 0), RelationType type = SELF) 
+			: axis(axis), point(point), type(type) {}
+    };
+
 	struct Landmark : public Eigen::Vector3d{
 		Landmark(size_t id = -1, const Eigen::Vector3d vec = Eigen::Vector3d(0, 0, 0)) :
 			id(id), Eigen::Vector3d(vec), constraint_id(-1){ u = v = -1; partid = "none"; }
@@ -31,6 +41,10 @@ namespace Structure{
 			this->landmarks = other.landmarks;
 		}
 		QVector<Landmarks> landmarks;
+		QVector<Relation> relations;
+		QVector<Array1D_Vector3> animation;
+
+		void saveKeyframe(){ animation.push_back(getAllControlPoints()); }
 
 		void saveLandmarks(QString filename){
 			QFile file(filename); file.open(QIODevice::WriteOnly);
@@ -364,3 +378,41 @@ struct NormalAnalysis{
 	void addNormal(const Eigen::Vector3d & n){ x.push_back(n.x()); y.push_back(n.y()); z.push_back(n.z()); }
 	double standardDeviation(){ return std::max(stdev(x), std::max(stdev(y), stdev(z))); }
 };
+
+template<class Vector3>
+std::pair<Vector3, Vector3> best_plane_from_points(const std::vector<Vector3> & c)
+{
+	// copy coordinates to  matrix in Eigen format
+	size_t num_atoms = c.size();
+	Eigen::Matrix< Vector3::Scalar, Eigen::Dynamic, Eigen::Dynamic > coord(3, num_atoms);
+	for (size_t i = 0; i < num_atoms; ++i) coord.col(i) = c[i];
+
+	// calculate centroid
+	Vector3 centroid(coord.row(0).mean(), coord.row(1).mean(), coord.row(2).mean());
+
+	// subtract centroid
+	coord.row(0).array() -= centroid(0); coord.row(1).array() -= centroid(1); coord.row(2).array() -= centroid(2);
+
+	// we only need the left-singular matrix here
+	//  http://math.stackexchange.com/questions/99299/best-fitting-plane-given-a-set-of-points
+	auto svd = coord.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV);
+	Vector3 plane_normal = svd.matrixU().rightCols<1>();
+	return std::make_pair(centroid, plane_normal);
+}
+
+template<class Vector3>
+std::pair < Vector3, Vector3 > best_line_from_points(const std::vector<Vector3> & c)
+{
+	// copy coordinates to  matrix in Eigen format
+	size_t num_atoms = c.size();
+	Eigen::Matrix< Vector3::Scalar, Eigen::Dynamic, Eigen::Dynamic > centers(num_atoms, 3);
+	for (size_t i = 0; i < num_atoms; ++i) centers.row(i) = c[i];
+
+	Vector3 origin = centers.colwise().mean();
+	Eigen::MatrixXd centered = centers.rowwise() - origin.transpose();
+	Eigen::MatrixXd cov = centered.adjoint() * centered;
+	Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(cov);
+	Vector3 axis = eig.eigenvectors().col(2).normalized();
+
+	return std::make_pair(origin, axis);
+}
