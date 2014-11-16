@@ -59,7 +59,7 @@ struct Link
 	Vector3 positionOther(QString nodeID);
 
 	// Visualization
-    void draw();
+    void draw(bool isShowLine = false);
 
     bool operator== ( const Link & other ) const{
         return id == other.id;

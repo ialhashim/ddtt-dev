@@ -1,5 +1,6 @@
 #include "StructureAnalysis.h"
 #include "ShapeGraph.h"
+#include "GenericGraph.h"
 
 void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebug)
 {
@@ -17,19 +18,24 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			// TODO: figure out the plane, or select the most similar to global reflectional
 		}
 
+		// Since fitted input might not always be perfect, we equalize parts geometry (resample) here
+		{
+			auto firstPart = shape->getNode(r.parts.front());
+			for (auto partID : r.parts)
+			{
+				auto smaller = firstPart;
+				auto larger = shape->getNode(partID);
+				if (smaller->numCtrlPnts() > larger->numCtrlPnts()) std::swap(smaller, larger);
+
+				smaller->equalizeControlPoints(larger);
+			}
+		}
+
 		if (g.size() == 2)
 		{
 			r.type = Structure::Relation::REFLECTIONAL;
 
 			auto partA = shape->getNode(g.front()), partB = shape->getNode(g.back());
-
-			// Since fitted input might not always be perfect, we equalize parts geometry (resample) here
-			{
-				if (partA->numCtrlPnts() < partB->numCtrlPnts())
-					partA->equalizeControlPoints(partB);
-				else
-					partB->equalizeControlPoints(partA);
-			}
 
 			auto plane = getReflectionalPlane(partA, partB);
 			r.point = plane.first;
@@ -42,7 +48,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		if (g.size() > 2)
 		{
 			// Compute distances from group centroid to parts
-			for (auto part : r.parts) centers.push_back( shape->getNode(part)->position(Eigen::Vector4d(0.5,0.5,0,0)) );
+			for (auto part : r.parts) centers.push_back( shape->getNode(part)->position(Eigen::Vector4d(0,0,0,0)) );
 
 			for (auto c : centers) centroid += c;
 			centroid /= centers.size();
@@ -68,6 +74,22 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			auto plane = best_plane_from_points(centers);
 			r.point = plane.first;
 			r.axis = plane.second;
+
+			// Sort parts by angle around axis
+			QStringList sorted;
+			QMap<QString, double> angles;
+			for (size_t i = 0; i < r.parts.size(); i++)
+			{
+				double angle = signedAngle(centers[0], centers[i], r.axis);
+				if (angle < 0) angle = (M_PI * 2) + angle;
+				angles[r.parts[i]] = angle;
+			}
+			for (auto pair : sortQMapByValue(angles)) sorted << pair.second;
+			r.parts = sorted;
+
+			// Vector from part's head to centroid
+			for (size_t i = 0; i < r.parts.size(); i++) 
+				r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0)));
 		}
 
 		// Add relation to shape:

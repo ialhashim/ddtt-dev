@@ -652,7 +652,7 @@ void Graph::draw( QGLViewer * drawArea )
 			if (e->n1->property.contains("isReady") && !e->n1->property["isReady"].toBool()) continue;
 			if (e->n2->property.contains("isReady") && !e->n2->property["isReady"].toBool()) continue;
 
-			e->draw();
+            e->draw(property["showEdgeLines"].toBool());
 		}
 	}
 

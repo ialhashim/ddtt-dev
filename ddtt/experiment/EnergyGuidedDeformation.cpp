@@ -70,7 +70,8 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 	// Prepare shape
     PropagateProximity::prepareForProximity(shapeA);
 
-	shapeA->animation.push_back(shapeA->getAllControlPoints()); // DEBUG
+	// Save initial configuration
+	shapeA->saveKeyframe();
 
 	while (!searchNodes.isEmpty())
 	{
@@ -84,6 +85,9 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 
 			Structure::ShapeGraph::correspondTwoNodes(partID, a, tpartID, b); // does this help? why?
 			DeformToFit::registerAndDeformNodes(a->getNode(partID), b->getNode(tpartID));
+
+			shapeA->saveKeyframe();
+			Propagate::propagateSymmetry(searchNode.parts, shapeA);
 		}
 
 		// Propagate edit by applying structural constraints

@@ -8,6 +8,7 @@ namespace Structure
         QStringList parts;
         enum RelationType{ REFLECTIONAL, ROTATIONAL, TRANSLATION, SELF } type;
         Vector3 axis, point;
+		Array1D_Vector3 deltas;
 		Relation(Vector3 axis = Vector3(0, 0, 0), Vector3 point = Vector3(0, 0, 0), RelationType type = SELF) 
 			: axis(axis), point(point), type(type) {}
     };

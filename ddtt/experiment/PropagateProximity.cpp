@@ -16,8 +16,10 @@ struct ProximityConstraint{
         d = link->property[from->id].value<Vector3>();
     }
     inline Vector3 start(){ return link->position(from->id); }
+	inline Vector3 start2(){ return link->getNode(from->id)->position(coords().back()); }
     inline Vector3 delta(){ return d; }
     inline Eigen::Vector4d coord(){ return link->getCoord(to->id).front(); }
+	inline Array1D_Vector4d coords(){ return link->getCoord(to->id); }
 };
 
 void PropagateProximity::prepareForProximity(Structure::Graph * graph)
@@ -79,9 +81,14 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
             assert(constraints[n->id].size());
 
             if (constraints[n->id].size() == 1)
-            {
-                auto & c = constraints[n->id].front();
-                n->deformTo(c.coord(), c.start() + c.delta(), true);
+			{
+				auto & c = constraints[n->id].front();
+
+				if (c.link->type == Structure::POINT_EDGE)
+					n->deformTo(c.coord(), c.start() + c.delta(), true);
+
+				if (c.link->type == Structure::LINE_EDGE)
+					n->deformTwoHandles(c.coords().front(), c.start() + c.delta(), c.coords().back(), c.start2() + c.delta());
             }
             else
             {

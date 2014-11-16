@@ -91,7 +91,7 @@ Node * Link::getNode( QString nodeID )
 	else return n2;
 }
 
-void Link::draw()
+void Link::draw(bool isShowLine)
 {
 	glDisable( GL_LIGHTING );
 	glEnable( GL_POINT_SMOOTH );
@@ -129,6 +129,19 @@ void Link::draw()
 		glPointSize(5);
 		glColor3d(1,1,1);glBegin(GL_POINTS);glVector3(linkPos[i]);glEnd();
 	}
+
+    if(isShowLine)
+    {
+        glColor3d(0,0,0);
+        glLineWidth(2);
+        glBegin(GL_LINES);
+        for(int i = 0; i < (int)linkPos.size() * 0.5; i++)
+        {
+            glVector3(linkPos[(i*2)]);
+            glVector3(linkPos[(i*2)+1]);
+        }
+        glEnd();
+    }
 
 	glEnable(GL_LIGHTING);
 }

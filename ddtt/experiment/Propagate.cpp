@@ -10,15 +10,72 @@ void Propagate::propagateSymmetry(const QStringList &fixedNodes, Structure::Shap
 		{
 			auto partA = graph->getNode(relation.parts.front()), partB = graph->getNode(relation.parts.back());
 			if (!fixedNodes.contains(partA->id)) std::swap(partA, partB);
-			auto plane = StructureAnalysis::getReflectionalPlane(partA, partB);
-
+			
 			// Apply reflection to control points of other part
 			Array1D_Vector3 cptsA = partA->controlPoints();
 			Array1D_Vector3 cptsB;
 
-			for (auto p : cptsA) cptsB.push_back( StructureAnalysis::pointReflection(p, plane.first, plane.second) );
+			Eigen::Vector4d c(0.5, 0.5, 0, 0);
+			Vector3 delta = partA->position(c) - partB->position(c);
+			double d = delta.norm() * 0.5;
+			double direction = delta.normalized().dot(relation.axis) > 0 ? -1 : 1;
+			Vector3 planePos = partA->position(c) + (relation.axis * d * direction);
+
+			for (auto p : cptsA) cptsB.push_back(StructureAnalysis::pointReflection(p, planePos, relation.axis));
 
 			partB->setControlPoints(cptsB);
+		}
+
+		if (relation.type == Structure::Relation::ROTATIONAL)
+		{
+			int n_fold = relation.parts.size();
+			double theta = 2.0 * M_PI / n_fold;
+
+			auto part = graph->getNode(relation.parts.front());
+			for (auto partID : relation.parts) if (fixedNodes.contains(partID)){ part = graph->getNode(partID); break; }
+
+			int idx = relation.parts.indexOf(part->id);
+			auto start = part->position(Eigen::Vector4d(0, 0, 0, 0));
+			Vector3 centroid = start + relation.deltas[idx];
+
+			auto cpts = part->controlPoints();
+
+			double angle = theta;
+
+			for (size_t i = idx; i < idx + relation.parts.size(); i++)
+			{
+				if (idx == i) continue;
+				size_t j = i % relation.parts.size();
+				auto part_j = graph->getNode(relation.parts[j]);
+
+				auto cur_cpts = cpts;
+				Eigen::AngleAxisd rotation(angle, relation.axis);
+				for (auto & p : cur_cpts) p = (rotation * (p-centroid)) + centroid;
+
+				part_j->setControlPoints(cur_cpts);
+
+				angle += theta;
+			}
+		}
+
+		if (relation.type == Structure::Relation::TRANSLATION)
+		{
+			auto part = graph->getNode(relation.parts.front());
+			for (auto partID : relation.parts) if (fixedNodes.contains(partID)){ part = graph->getNode(partID); break; }
+
+			auto cpts_local = part->controlPoints();
+			Vector3 centroid = part->position(Eigen::Vector4d(0.5,0.5,0,0));
+			for (auto & p : cpts_local) p -= centroid;
+
+			for (auto partID : relation.parts)
+			{
+				auto cur_part = graph->getNode(partID);
+				Vector3 centroid = cur_part->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
+				auto cur_cpts = cpts_local;
+				for (auto & p : cur_cpts) p += centroid;
+
+				cur_part->setControlPoints(cur_cpts);
+			}
 		}
 	}
 }

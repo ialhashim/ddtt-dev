@@ -77,6 +77,13 @@ void experiment::doEnergySearch()
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
 	for (auto g : graphs) g->property["showMeshes"].setValue(false);
 
+	if (!graphs.front()->animation.empty())
+	{
+		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
+		encodeGeometry();
+		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
+	}
+
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
 
@@ -475,6 +482,9 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 	if (event->key() == Qt::Key_N)
 	{
 		for (auto g : graphs) g->property["showNames"].setValue(!g->property["showNames"].toBool());
+
+		for (auto g : graphs) g->property["showEdgeLines"].setValue(!g->property["showEdgeLines"].toBool());
+		for (auto g : graphs) g->property["showEdges"].setValue(!g->property["showEdges"].toBool());
 	}
 
 	if (event->key() == Qt::Key_M)
@@ -667,7 +677,7 @@ void experiment::encodeGeometry()
 
 void experiment::decodeGeometry()
 {
-	if (!graphs.front()->property["isGeometryEncoded"].toBool()) encodeGeometry();
+	if (!graphs.front()->property["isGeometryEncoded"].toBool()) return;
 
 	for (auto g : graphs)
 	{
