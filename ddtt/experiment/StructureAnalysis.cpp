@@ -59,10 +59,10 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			double threshold = 0.02;
 			double sigma = stdev(dists);
 			if (sigma < threshold) r.type = Structure::Relation::ROTATIONAL;
-			else r.type = Structure::Relation::TRANSLATION;
+			else r.type = Structure::Relation::TRANSLATIONAL;
 		}
 
-		if (r.type == Structure::Relation::TRANSLATION)
+		if (r.type == Structure::Relation::TRANSLATIONAL)
 		{
 			auto line = best_line_from_points(centers);
 			r.point = line.first;
@@ -100,7 +100,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		{
 			shape->debug << starlab::PointSoup::drawPoint(r.point, 12, Qt::red);
 
-			if (r.type != Structure::Relation::TRANSLATION)
+			if (r.type != Structure::Relation::TRANSLATIONAL)
 			{
 				auto plane = new starlab::PlaneSoup(0.1, true, r.type == Structure::Relation::REFLECTIONAL ? Qt::red : Qt::green);
 				plane->addPlane(r.point, r.axis);

@@ -58,7 +58,7 @@ void Propagate::propagateSymmetry(const QStringList &fixedNodes, Structure::Shap
 			}
 		}
 
-		if (relation.type == Structure::Relation::TRANSLATION)
+		if (relation.type == Structure::Relation::TRANSLATIONAL)
 		{
 			auto part = graph->getNode(relation.parts.front());
 			for (auto partID : relation.parts) if (fixedNodes.contains(partID)){ part = graph->getNode(partID); break; }
