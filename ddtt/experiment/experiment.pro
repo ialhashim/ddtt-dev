@@ -20,11 +20,12 @@ HEADERS +=  experiment.h \
             CorrespondenceSearch.h \
             ShapeGraph.h \
             DeformEnergy2.h \
+            StructureAnalysis.h \
             EnergyGuidedDeformation.h \
             DeformToFit.h \
-    Propagate.h \
-    PropagateProximity.h \
-    StructureAnalysis.h
+            PropagateProximity.h \
+            PropagateSymmetry.h \
+            EvaluateCorrespondence.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
@@ -33,11 +34,12 @@ SOURCES +=  experiment.cpp \
             CorrespondenceGenerator.cpp \
             CorrespondenceSearch.cpp \
             DeformEnergy2.cpp \
+            StructureAnalysis.cpp \
             EnergyGuidedDeformation.cpp \
             DeformToFit.cpp \
-    Propagate.cpp \
-    PropagateProximity.cpp \
-    StructureAnalysis.cpp
+            PropagateProximity.cpp \
+            PropagateSymmetry.cpp \
+            EvaluateCorrespondence.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc

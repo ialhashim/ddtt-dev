@@ -1,9 +1,10 @@
 #include "EnergyGuidedDeformation.h"
 #include <QStack>
 
-#include "DeformToFit.h"
-#include "Propagate.h"
 #include "StructureAnalysis.h"
+#include "DeformToFit.h"
+#include "PropagateSymmetry.h"
+#include "PropagateProximity.h"
 #include "disjointset.h"
 
 namespace Energy{
@@ -88,18 +89,17 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 				Structure::ShapeGraph::correspondTwoNodes(partID, a, tpartID, b);
 
 			DeformToFit::registerAndDeformNodes(a->getNode(partID), b->getNode(tpartID));
-
 			shapeA->saveKeyframe();
-			Propagate::propagateSymmetry(searchNode.parts, shapeA);
+			PropagateSymmetry::propagate(searchNode.parts, shapeA);
+			shapeA->saveKeyframe();
 		}
 
 		// Propagate edit by applying structural constraints
+		PropagateProximity::propagate(searchNode.parts, shapeA);
 		shapeA->saveKeyframe();
-        PropagateProximity::propagateProximity(searchNode.parts, shapeA);
+		PropagateSymmetry::propagate(searchNode.parts, shapeA);
 		shapeA->saveKeyframe();
-		Propagate::propagateSymmetry(searchNode.parts, shapeA);
-		shapeA->saveKeyframe();
-		PropagateProximity::propagateProximity(searchNode.parts, shapeA);
+		PropagateProximity::propagate(searchNode.parts, shapeA);
 		shapeA->saveKeyframe();
 	}
 

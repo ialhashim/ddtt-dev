@@ -15,8 +15,8 @@ struct ProximityConstraint{
         to = link->otherNode(from->id);
         d = link->property[from->id].value<Vector3>();
     }
-    inline Vector3 start(){ return link->position(from->id); }
-	inline Vector3 start2(){ return link->getNode(from->id)->position(coords().back()); }
+	inline Vector3 start(){ return link->getNode(from->id)->position(link->getCoord(from->id).front()); }
+	inline Vector3 start2(){ return link->getNode(from->id)->position(link->getCoord(from->id).back()); }
     inline Vector3 delta(){ return d; }
     inline Eigen::Vector4d coord(){ return link->getCoord(to->id).front(); }
 	inline Array1D_Vector4d coords(){ return link->getCoord(to->id); }
@@ -31,7 +31,7 @@ void PropagateProximity::prepareForProximity(Structure::Graph * graph)
     }
 }
 
-void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
+void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
 {
     // Constraints per part
     QMap < QString, QVector< ProximityConstraint > > constraints;
@@ -88,7 +88,11 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
 					n->deformTo(c.coord(), c.start() + c.delta(), true);
 
 				if (c.link->type == Structure::LINE_EDGE)
-					n->deformTwoHandles(c.coords().front(), c.start() + c.delta(), c.coords().back(), c.start2() + c.delta());
+				{
+					Vector3 p1 = c.start() + c.delta();
+					Vector3 p2 = c.start2() + c.delta();
+					n->deformTwoHandles(c.coords().front(), p1, c.coords().back(), p2);
+				}
             }
             else
             {
@@ -129,15 +133,6 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
 						auto ordered_indices = chull2d::convex_hull_2d(cage);
 						for (auto idx : ordered_indices) ordered_constraints << filtered_constraints[idx];
 						filtered_constraints = ordered_constraints;
-
-						// DEBUG: cage
-						if (false){
-							auto ps = new starlab::PolygonSoup;
-							QVector<starlab::QVector3> pts;
-							for (auto p : ordered_indices) pts << cage[p];
-							ps->addPoly(pts);
-							graph->debug << ps;
-						}
 					}
 
 					if (filtered_constraints.size() == 2)
@@ -163,6 +158,15 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
 					if (cage_plane_dot < 0) best_plane.second *= 1;
 					Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
 					for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
+
+					// DEBUG: cage
+					if (false){
+						auto ps = new starlab::PolygonSoup;
+						QVector<starlab::QVector3> pts;
+						for (auto p : cage) pts << p;
+						ps->addPoly(pts);
+						graph->debug << ps;
+					}
 
                     // Compute weights and 'heights' for control points
                     auto cpts = n->controlPoints();

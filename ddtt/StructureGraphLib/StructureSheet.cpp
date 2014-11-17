@@ -588,6 +588,7 @@ void Sheet::deformTwoHandles( Vector4d& handleA, Vector3 newPosA, Vector4d& hand
 
 	Vector3d oldX = (oldB - oldA).normalized();
 	Vector3d oldY = orthogonalVector(oldX);
+	if (oldX[0] > 0.9 && oldY[2] > 0.9) std::swap(oldY[1], oldY[2]);
 	Vector3d oldZ = cross(oldX, oldY);
 	SheetEncoding SE = encodeSheet(this, newPosA, oldX, oldY, oldZ);
 

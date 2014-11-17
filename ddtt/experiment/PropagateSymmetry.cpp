@@ -1,8 +1,8 @@
-#include "Propagate.h"
+#include "PropagateSymmetry.h"
 #include "ShapeGraph.h"
 #include "StructureAnalysis.h"
 
-void Propagate::propagateSymmetry(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
+void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
 {
 	for (auto & relation : graph->relations)
 	{
