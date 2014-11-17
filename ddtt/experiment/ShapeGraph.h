@@ -43,9 +43,16 @@ namespace Structure
 		}
 		QVector<Landmarks> landmarks;
 		QVector<Relation> relations;
-		QVector<Array1D_Vector3> animation;
 
-		void saveKeyframe(){ animation.push_back(getAllControlPoints()); }
+		// Visualize shape changes:
+		int animation_index;
+		QVector<Array1D_Vector3> animation;
+		QVector< QVector<RenderObject::Base*> > animation_debug;
+		void saveKeyframe(){ animation_index = animation.size(); animation.push_back(getAllControlPoints()); animation_debug << QVector<RenderObject::Base*>(); }
+		void pushKeyframeDebug(RenderObject::Base* d){
+			if (!animation_debug.size()) animation_debug << QVector<RenderObject::Base*>(); 
+			animation_debug.back() << d;
+		}
 
 		void saveLandmarks(QString filename){
 			QFile file(filename); file.open(QIODevice::WriteOnly);

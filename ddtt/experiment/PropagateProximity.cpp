@@ -102,14 +102,51 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
                     n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
                 }
                 else
-                {
+				{
                     // Only consider outer most constraints
                     QVector<ProximityConstraint> filtered_constraints;
-                    QVector<Eigen::Vector2d> coords;
+                    std::vector<Eigen::Vector2d> coords;
                     for (auto & c : c_list) coords.push_back(Eigen::Vector2d(c.coord()[0], c.coord()[1]));
-                    for (auto idx : convexhull2d_indices(coords)) filtered_constraints << c_list[idx];
+					for (auto idx : chull2d::convex_hull_2d(coords)) filtered_constraints << c_list[idx];
 
-                    filtered_constraints.size();
+					bool isFixedAround = true;
+					for (auto & c : c_list) isFixedAround &= fixedNodes.contains(c.from->id);
+					if (isFixedAround)
+					{
+						filtered_constraints = c_list;                    
+						
+						std::vector < Eigen::Vector3d > cage;
+						for (auto & c : filtered_constraints) cage.push_back(c.link->position(n->id));
+
+						// Rotate cage towards z-axis around center of constraints
+						auto best_plane = best_plane_from_points(cage);
+						double cage_plane_dot = best_plane.second.dot(Vector3::UnitZ());
+						if (cage_plane_dot < 0) best_plane.second *= 1;
+						Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
+						for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
+
+						QVector<ProximityConstraint> ordered_constraints;
+						auto ordered_indices = chull2d::convex_hull_2d(cage);
+						for (auto idx : ordered_indices) ordered_constraints << filtered_constraints[idx];
+						filtered_constraints = ordered_constraints;
+
+						// DEBUG: cage
+						if (false){
+							auto ps = new starlab::PolygonSoup;
+							QVector<starlab::QVector3> pts;
+							for (auto p : ordered_indices) pts << cage[p];
+							ps->addPoly(pts);
+							graph->debug << ps;
+						}
+					}
+
+					if (filtered_constraints.size() == 2)
+					{
+						auto & ca = c_list.front();
+						auto & cb = c_list.back();
+						n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
+						continue;
+					}
 
                     // Build cage from convex hull of constraints
                     std::vector < Eigen::Vector3d > cage;
@@ -122,8 +159,10 @@ void PropagateProximity::propagateProximity(const QStringList &fixedNodes, Struc
 
                     // Rotate cage towards z-axis around center of constraints
                     auto best_plane = best_plane_from_points(cage);
-                    Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
-                    for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
+					double cage_plane_dot = best_plane.second.dot(Vector3::UnitZ());
+					if (cage_plane_dot < 0) best_plane.second *= 1;
+					Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
+					for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
 
                     // Compute weights and 'heights' for control points
                     auto cpts = n->controlPoints();

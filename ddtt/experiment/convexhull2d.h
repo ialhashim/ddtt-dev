@@ -1,94 +1,79 @@
 #pragma once
-#include <deque>
 
-template<class Point>
-inline bool equal_points(const Point& a, const Point& b, double eps = 1e-16){
-	return abs(a[0] - b[0]) < eps && abs(a[1] - b[1]) < eps;
-};
-
-// Melkman's algorithm for finding convex hull of 2D points
-// From CGAL
-template <class Point, class InputIterator, class OutputIterator>
-static inline OutputIterator convexhull2d(InputIterator first, InputIterator last, OutputIterator result)
+// From: http://www.algorithmist.com/index.php/Monotone_Chain_Convex_Hull.cpp
+namespace chull2d
 {
-	// Subroutine
-	auto left_turn = [&](const Point& a, const Point& b, const Point& c){
-		return ((b[0] - a[0])*(c[1] - a[1]) - (c[0] - a[0])*(b[1] - a[1]) > 0);
+	typedef double coord_t;         // coordinate type
+	typedef double coord2_t;  // must be big enough to hold 2*max(|coordinate|)^2
+	struct Point {
+		coord_t x, y;
+		bool operator <(const Point &p) const {
+			return x < p.x || (x == p.x && y < p.y);
+		}
 	};
 
-	std::deque<Point> Q;
-	if (first == last) return result;								// 0 elements
-	Point p = *first;
-	if (++first == last) { *result = p; ++result; return result; }	// 1 element
-	Point q = *first;
-	if (++first == last) {											// 2 elements
-		*result = p; ++result;
-		if (!equal_points(p, q)){ *result = q; ++result; }
+	// 2D cross product of OA and OB vectors, i.e. z-component of their 3D cross product.
+	// Returns a positive value, if OAB makes a counter-clockwise turn,
+	// negative for clockwise turn, and zero if the points are collinear.
+	coord2_t cross(const Point &O, const Point &A, const Point &B)
+	{
+		return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x);
+	}
+
+	template <typename T>
+	std::vector<size_t> ordered(std::vector<T> const& values) {
+		std::vector<size_t> indices(values.size());
+		std::iota(begin(indices), end(indices), static_cast<size_t>(0));
+		std::sort( begin(indices), end(indices), [&](size_t a, size_t b) { return values[a] < values[b]; }
+		);
+		return indices;
+	}
+
+	// Returns a list of points on the convex hull in counter-clockwise order.
+	// Note: the last point in the returned list is the same as the first one.
+	std::vector<Point> convex_hull(std::vector<Point> P, std::vector<int>* indices = NULL)
+	{
+		int n = P.size(), k = 0;
+		std::vector<Point> H(2 * n);
+		indices->resize(2 * n);
+
+		// Sort points lexicographically
+		auto pmap = ordered(P);
+		std::sort(P.begin(), P.end());
+
+		// Build lower hull
+		for (int i = 0; i < n; ++i) {
+			while (k >= 2 && cross(H[k - 2], H[k - 1], P[i]) <= 0) k--;
+			indices->at(k) = pmap[i];
+			H[k++] = P[i];
+		}
+
+		// Build upper hull
+		for (int i = n - 2, t = k + 1; i >= 0; i--) {
+			while (k >= t && cross(H[k - 2], H[k - 1], P[i]) <= 0) k--;
+			indices->at(k) = pmap[i];
+			H[k++] = P[i];
+		}
+
+		H.resize(k - 1);
+		indices->resize(k - 1);
+		return H;
+	}
+
+	template<class Point2D>
+	std::vector<int> convex_hull_2d(const std::vector<Point2D> & pts)
+	{
+		std::vector<Point> points;
+		for (auto p : pts)
+		{
+			Point v; 
+			v.x = p[0]; 
+			v.y = p[1];
+			points.push_back(v);
+		}
+
+		std::vector<int> result;
+		auto ch = convex_hull(points, &result);
 		return result;
 	}
-	Q.push_back(p);
-
-	Point r;
-	while (first != last){
-		r = *first;
-		// visited input sequence =  p,..., q, r
-		if (left_turn(p, q, r)) { Q.push_back(q);  break; }
-		if (left_turn(q, p, r)) { Q.push_front(q); break; }
-		q = r;
-		++first;
-	}
-
-	Point current = q;
-	if (first != last)           // non-collinear point r exists
-	{
-		current = r;
-		// current, Q.front(), ..., Q.back()
-		// ccw convex hull of visited points
-		Point s;
-		while (++first != last)
-		{
-			r = *first;
-			if (left_turn(current, r, Q.front()) || left_turn(Q.back(), r, current))
-			{
-				s = current;
-				while (!Q.empty() && !left_turn(r, s, Q.front())) { s = Q.front(); Q.pop_front(); }
-				Q.push_front(s);
-				s = current;
-				while (!Q.empty() && !left_turn(s, r, Q.back())) { s = Q.back(); Q.pop_back(); }
-				Q.push_back(s);
-				current = r;
-			}
-		}
-	}
-
-	Q.push_back(current);
-	std::copy(Q.begin(), Q.end(), result);
-	return result;
-}
-
-template < class Container >
-static inline Container convexhull2d(Container & c){
-	Container result;
-	convexhull2d<Container::value_type>(c.begin(), c.end(), std::back_inserter(result));
-	return result;
-}
-
-// Warning: only use for small number of points
-template < class Container >
-static inline std::vector<size_t> convexhull2d_indices(Container & c){
-	std::vector<size_t> indices;
-	Container result;
-	convexhull2d<Container::value_type>(c.begin(), c.end(), std::back_inserter(result));
-	auto it = c.begin();
-	while (it != c.end()){
-		auto & cur = *it;
-		for (size_t i = 0; i < result.size(); i++){
-			if (equal_points(result[(int)i], cur)){
-				indices.push_back(it - c.begin());
-				break;
-			}
-		}
-		it++;
-	}
-	return indices;
 }

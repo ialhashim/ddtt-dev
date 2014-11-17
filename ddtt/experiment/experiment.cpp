@@ -436,6 +436,16 @@ void experiment::decorate()
 			//ss.draw();
 		}
 
+		// Debug deformation:
+		{
+			if (!g->animation_debug.isEmpty())
+			{
+				if (!g->animation_debug.front().isEmpty())
+					for (auto d : g->animation_debug[g->animation_index])
+						d->draw(*drawArea());
+			}
+		}
+
         glPopMatrix();
 
 		// Spacing between models:
@@ -514,66 +524,64 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 
 	if (event->key() == Qt::Key_Space)
 	{
+		if (graphs.empty() || graphs.front()->animation.empty()) return false;
 
-		for (auto g : graphs)
+		QTimer * timer = new QTimer;
+		connect(timer, &QTimer::timeout, [&]()
 		{
-			QTimer * timer = new QTimer;
-			connect(timer, &QTimer::timeout, [=]()
+			if (graphs.empty() || graphs.front()->animation.empty()) return;
+
+			static bool isForward = true;
+			static double t = 0;
+			static int index = 0;
+
+			auto source = graphs.front();
+
+			static double delta = 0.2;
+			t += isForward ? delta : -delta;
+
+			if (t >= 1.0 || t <= 0.0)
 			{
-				if (graphs.empty() || graphs.front()->animation.empty()) return;
+				t = (t >= 1.0) ? 0.0 : 1.0;
 
-				static bool isForward = true;
-				static double t = 0;
-				static int index = 0;
+				index += isForward ? 1 : -1;
 
-				auto source = graphs.front();
-
-				static double delta = 0.2;
-				t += isForward ? delta : -delta;
-
-				if (t >= 1.0 || t <= 0.0)
+				if (index >= source->animation.size() + 1)
 				{
-					t = (t >= 1.0) ? 0.0 : 1.0;
-
-					index += isForward ? 1 : -1;
-
-					if (index >= source->animation.size() + 1)
-					{
-						t = 1;
-						isForward = false;
-						index = source->animation.size() - 1;
-					}
-
-					if (index < 0)
-					{
-						t = 0;
-						isForward = true;
-						index = 0;
-					}
+					t = 1;
+					isForward = false;
+					index = source->animation.size() - 1;
 				}
 
-				auto ptsBefore = graphs.front()->animation[std::max(0,index-1)];
-				auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size()-1)];
-
-				Array1D_Vector3 ptsCurrent;
-				for (size_t i = 0; i < ptsBefore.size(); i++) ptsCurrent.push_back(AlphaBlend(t, ptsBefore[i], ptsAfter[i]));
-				graphs.front()->setAllControlPoints(ptsCurrent);
-
-				for (auto n : graphs.front()->nodes) if(n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
-
-				if (g->property["showMeshes"].toBool())
+				if (index < 0)
 				{
-					decodeGeometry();
+					t = 0;
+					isForward = true;
+					index = 0;
 				}
+			}
 
-				drawArea()->update();
+			auto ptsBefore = graphs.front()->animation[std::max(0,index-1)];
+			auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size()-1)];
 
-				//mainWindow()->setStatusBarMessage(QString("index [%1], t=%2").arg(index).arg(t));
-			});
-			timer->start(25);
+			Array1D_Vector3 ptsCurrent;
+			for (size_t i = 0; i < ptsBefore.size(); i++) ptsCurrent.push_back(AlphaBlend(t, ptsBefore[i], ptsAfter[i]));
+			graphs.front()->setAllControlPoints(ptsCurrent);
 
-			break;
-		}
+			for (auto n : graphs.front()->nodes) if(n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
+
+			if (graphs.front()->property["showMeshes"].toBool())
+			{
+				decodeGeometry();
+			}
+
+			graphs.front()->animation_index = index;
+
+			drawArea()->update();
+
+			//mainWindow()->setStatusBarMessage(QString("index [%1], t=%2").arg(index).arg(t));
+		});
+		timer->start(25);
 	}
 
 	drawArea()->update();

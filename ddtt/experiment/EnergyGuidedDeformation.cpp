@@ -83,7 +83,10 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 			auto partID = searchNode.parts[i];
 			auto tpartID = searchNode.targets[i];
 
-			Structure::ShapeGraph::correspondTwoNodes(partID, a, tpartID, b); // does this help? why?
+			// does this help? why?
+			if (a->getNode(partID)->type() == Structure::SHEET && a->getNode(partID)->type() == b->getNode(tpartID)->type())
+				Structure::ShapeGraph::correspondTwoNodes(partID, a, tpartID, b);
+
 			DeformToFit::registerAndDeformNodes(a->getNode(partID), b->getNode(tpartID));
 
 			shapeA->saveKeyframe();
@@ -96,5 +99,9 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 		shapeA->saveKeyframe();
 		Propagate::propagateSymmetry(searchNode.parts, shapeA);
 		shapeA->saveKeyframe();
+		PropagateProximity::propagateProximity(searchNode.parts, shapeA);
+		shapeA->saveKeyframe();
 	}
+
+	shapeA->saveKeyframe();
 }

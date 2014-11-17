@@ -22,11 +22,14 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		{
 			auto firstPart = shape->getNode(r.parts.front());
 			for (auto partID : r.parts)
+				if (shape->getNode(partID)->numCtrlPnts() > firstPart->numCtrlPnts())
+					firstPart = shape->getNode(partID);
+
+			for (auto partID : r.parts)
 			{
 				auto smaller = firstPart;
 				auto larger = shape->getNode(partID);
 				if (smaller->numCtrlPnts() > larger->numCtrlPnts()) std::swap(smaller, larger);
-
 				smaller->equalizeControlPoints(larger);
 			}
 		}
@@ -55,41 +58,57 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			Array1D_Real dists;
 			for (auto c : centers) dists.push_back((c-centroid).norm());
 
-			// Rotational relations have consistent distance
-			double threshold = 0.02;
-			double sigma = stdev(dists);
-			if (sigma < threshold) r.type = Structure::Relation::ROTATIONAL;
-			else r.type = Structure::Relation::TRANSLATIONAL;
-		}
-
-		if (r.type == Structure::Relation::TRANSLATIONAL)
-		{
-			auto line = best_line_from_points(centers);
-			r.point = line.first;
-			r.axis = line.second;
-		}
-
-		if (r.type == Structure::Relation::ROTATIONAL)
-		{
-			auto plane = best_plane_from_points(centers);
-			r.point = plane.first;
-			r.axis = plane.second;
-
-			// Sort parts by angle around axis
-			QStringList sorted;
-			QMap<QString, double> angles;
-			for (size_t i = 0; i < r.parts.size(); i++)
+			// Median absolute deviation (MAD) 
+			double avg_dist = std::accumulate(dists.begin(), dists.end(), 0.0) / dists.size();
+			QVector<double> absolute_deviations;
+			for (auto dist : dists) absolute_deviations << abs(dist - avg_dist);
+			std::sort(absolute_deviations.begin(), absolute_deviations.end());
+			double mad = 0;
+			if (absolute_deviations.size() % 2 == 1)
+				mad = absolute_deviations[(absolute_deviations.size() - 1) / 2];
+			else
 			{
-				double angle = signedAngle(centers[0], centers[i], r.axis);
-				if (angle < 0) angle = (M_PI * 2) + angle;
-				angles[r.parts[i]] = angle;
+				auto a = absolute_deviations[(absolute_deviations.size() / 2) - 1];
+				auto b = absolute_deviations[(absolute_deviations.size() / 2)];
+				mad = (a + b) / 2;
 			}
-			for (auto pair : sortQMapByValue(angles)) sorted << pair.second;
-			r.parts = sorted;
 
-			// Vector from part's head to centroid
-			for (size_t i = 0; i < r.parts.size(); i++) 
-				r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0)));
+			// Rotational relations have consistent distance
+			double threshold = avg_dist * 0.4;
+			if (mad < threshold) 
+				r.type = Structure::Relation::ROTATIONAL;
+			else 
+				r.type = Structure::Relation::TRANSLATIONAL;
+
+			if (r.type == Structure::Relation::TRANSLATIONAL)
+			{
+				auto line = best_line_from_points(centers);
+				r.point = line.first;
+				r.axis = line.second;
+			}
+
+			if (r.type == Structure::Relation::ROTATIONAL)
+			{
+				auto plane = best_plane_from_points(centers);
+				r.point = plane.first;
+				r.axis = plane.second;
+
+				// Sort parts by angle around axis
+				QStringList sorted;
+				QMap<QString, double> angles;
+				for (size_t i = 0; i < r.parts.size(); i++)
+				{
+					double angle = signedAngle(centers[0], centers[i], r.axis);
+					if (angle < 0) angle = (M_PI * 2) + angle;
+					angles[r.parts[i]] = angle;
+				}
+				for (auto pair : sortQMapByValue(angles)) sorted << pair.second;
+				r.parts = sorted;
+
+				// Vector from part's head to centroid
+				for (size_t i = 0; i < r.parts.size(); i++)
+					r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0)));
+			}
 		}
 
 		// Add relation to shape:
