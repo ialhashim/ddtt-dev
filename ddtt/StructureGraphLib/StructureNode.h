@@ -71,6 +71,10 @@ struct Node
 	// Geometric properties
 	virtual Scalar area() = 0;
 
+    inline Vector3 startPoint(){ return position(Eigen::Vector4d(0,0,0,0));  }
+    inline Vector3 endPoint(){ return position(Eigen::Vector4d(1,1,0,0)); }
+    inline Vector3 diagonal(){ return endPoint() - startPoint() ; }
+
 	Array1D_Vector3 geometricDiff( Structure::Node * other ){
 		Array1D_Vector3 cp1 = controlPoints(), cp2 = other->controlPoints(), result = cp1;
 		for(int i = 0; i < (int)cp1.size(); i++){

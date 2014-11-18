@@ -27,6 +27,9 @@ CorrespondenceSearch * search = NULL;
 #include "Synthesizer.h"
 
 #include "EnergyGuidedDeformation.h"
+
+Q_DECLARE_METATYPE(Vector3);
+
 void experiment::doEnergySearch()
 {
 	QElapsedTimer timer; timer.start();
@@ -437,12 +440,33 @@ void experiment::decorate()
 		}
 
 		// Debug deformation:
+		if (g == graphs.front())
 		{
 			if (!g->animation_debug.isEmpty())
 			{
 				if (!g->animation_debug.front().isEmpty())
 					for (auto d : g->animation_debug[g->animation_index])
 						d->draw(*drawArea());
+			}
+
+			if (g->property["showNames"].toBool())
+			{
+				for (auto n : g->nodes)
+				{
+					Vector3 diagonal = n->diagonal(), start = n->startPoint(), end = n->endPoint();
+					Vector3 midPoint = 0.5 * (start + end);
+
+					starlab::LineSegments ls(4);
+					ls.addLine(start, Vector3(n->startPoint() + diagonal), Qt::yellow);
+					ls.draw();
+
+					Vector3 orig_diagonal = n->property["orig_diagonal"].value<Vector3>();
+					Vector3 orig_diagonal_start = midPoint - (orig_diagonal * 0.5);
+
+					starlab::LineSegments ls2(4);
+					ls2.addLine(orig_diagonal_start, Vector3(orig_diagonal_start + orig_diagonal), Qt::green);
+					ls2.draw();
+				}
 			}
 		}
 

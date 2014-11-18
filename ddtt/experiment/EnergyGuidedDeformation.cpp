@@ -5,6 +5,7 @@
 #include "DeformToFit.h"
 #include "PropagateSymmetry.h"
 #include "PropagateProximity.h"
+#include "EvaluateCorrespondence.h"
 #include "disjointset.h"
 
 namespace Energy{
@@ -70,6 +71,9 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 
 	// Prepare shape
     PropagateProximity::prepareForProximity(shapeA);
+	EvaluateCorrespondence::prepare(shapeA);
+
+	EvaluateCorrespondence::evaluate(QStringList(), shapeA);
 
 	// Save initial configuration
 	shapeA->saveKeyframe();
