@@ -497,8 +497,15 @@ void Curve::deformTwoHandles( Vector4d& handleA, Vector3 newPosA, Vector4d& hand
 	Vector3d oldB = position(handleB);
 
 	// Numerical checks
-	double oldDiff = (oldA-oldB).norm(); if(oldDiff < DECODE_ZERO_THRESHOLD) return;
-	double diff = (newPosA-newPosB).norm();	if(diff < DECODE_ZERO_THRESHOLD) return;
+    double oldDiff = (oldA-oldB).norm();
+    double diff = (newPosA-newPosB).norm();
+
+    // Degrade to deform with single handle
+    if(oldDiff < DECODE_ZERO_THRESHOLD || diff < DECODE_ZERO_THRESHOLD)
+    {
+        deformTo(handleA, newPosA, true);
+        return;
+    }
 
 	setControlPoints( decodeCurve( encodeCurve(this, oldA, oldB), newPosA, newPosB ) );
 }

@@ -27,6 +27,7 @@ CorrespondenceSearch * search = NULL;
 #include "Synthesizer.h"
 
 #include "EnergyGuidedDeformation.h"
+#include "EvaluateCorrespondence.h"
 
 Q_DECLARE_METATYPE(Vector3);
 
