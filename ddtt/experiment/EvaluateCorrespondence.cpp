@@ -16,22 +16,6 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::Link * l)
 	return spokes;
 }
 
-Array1D_Vector3 EvaluateCorrespondence::spokesFromShape(Structure::ShapeGraph * shape)
-{
-	Array1D_Vector3 allspokes;
-	QMap<QString, bool> seen;
-	for (auto l : shape->edges)
-	{
-		// Ignore duplicate edges
-		QString key = (l->n1->id < l->n2->id) ? (l->n1->id + l->n2->id) : (l->n2->id + l->n1->id);
-		if (seen[key]) continue;
-		seen[key] = true;
-
-		for (auto s : EvaluateCorrespondence::spokesFromLink(l)) allspokes.push_back(s);
-	}
-	return allspokes;
-}
-
 void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 {
 	double smallest_length = DBL_MAX;
@@ -71,11 +55,34 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	shape->property["corrEvalReady"].setValue(true);
 }
 
-void EvaluateCorrespondence::evaluate(QStringList fixedNodes, Structure::ShapeGraph *shape)
+double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 {
-	for (auto n : shape->nodes)
-	{
-		Array2D_Vector4d samples_coords = n->property["samples_coords"].value<Array2D_Vector4d>();
+	QVector<double> feature_vector;
 
+	// Ignore duplicate edges
+	QMap<QString, bool> seen;
+
+	// Binary properties:
+	for (auto l : shape->edges)
+	{
+		QString key = (l->n1->id < l->n2->id) ? (l->n1->id + l->n2->id) : (l->n2->id + l->n1->id);
+		if (seen[key]) continue;
+		seen[key] = true;
+
+		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
+		auto current = EvaluateCorrespondence::spokesFromLink(l);
+
+		for (size_t i = 0; i < original.size(); i++)
+		{
+			double v = original[i].normalized().dot(current[i].normalized());
+			feature_vector << v;
+		}
 	}
+
+	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(feature_vector.size());
+
+	Eigen::VectorXd v(feature_vector.size());
+	for (size_t d = 0; d < feature_vector.size(); d++) v[d] = feature_vector[d];
+
+	return v.norm() / original_v.norm();
 }

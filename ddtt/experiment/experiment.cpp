@@ -30,6 +30,8 @@ CorrespondenceSearch * search = NULL;
 #include "EvaluateCorrespondence.h"
 
 Q_DECLARE_METATYPE(Vector3);
+Q_DECLARE_METATYPE(Array1D_Vector3);
+Q_DECLARE_METATYPE(Array2D_Vector4d);
 
 void experiment::doEnergySearch()
 {
@@ -88,7 +90,8 @@ void experiment::doEnergySearch()
 		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
 	}
 
-	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
+	double cost = EvaluateCorrespondence::evaluate(graphs.front());
+	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timer.elapsed()).arg(cost));
 }
 
 void experiment::doCorrespondSearch()
@@ -97,7 +100,7 @@ void experiment::doCorrespondSearch()
 
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
-	
+
 	QMatrix4x4 mat;
 
 	if (pw->ui->isAnisotropy->isChecked())
@@ -107,7 +110,7 @@ void experiment::doCorrespondSearch()
 
 		Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
 		mat.scale(s.x(), s.y(), s.z());
-		shapeB->transform(mat,true);
+		shapeB->transform(mat, true);
 
 		// Show
 		//graphs.removeLast();
@@ -123,7 +126,7 @@ void experiment::doCorrespondSearch()
 
 void experiment::showCorrespond(int idx)
 {
-	if (graphs.empty() || !search || search->paths.empty() || idx > search->paths.size()-1) return;
+	if (graphs.empty() || !search || search->paths.empty() || idx > search->paths.size() - 1) return;
 
 	drawArea()->clear();
 
@@ -205,7 +208,7 @@ void experiment::postCorrespond()
 	bool isVisualize = pw->ui->isVisualize->isChecked();
 
 	if (pw->ui->isShowParts->isChecked())
-		showCorrespond( search->bestCorrespondence );
+		showCorrespond(search->bestCorrespondence);
 
 	pw->ui->pathsList->clear();
 
@@ -235,24 +238,24 @@ void experiment::postCorrespond()
 
 void experiment::doCorrespond()
 {
-    QElapsedTimer timer; timer.start();
+	QElapsedTimer timer; timer.start();
 
-    QVector<QStringList> landmarks_front;
-    QVector<QStringList> landmarks_back;
+	QVector<QStringList> landmarks_front;
+	QVector<QStringList> landmarks_back;
 
-    for(auto landmark : graphs.front()->landmarks){
-        QStringList m;
-        for(auto l : landmark) m << l.partid;
-        landmarks_front << m;
-    }
+	for (auto landmark : graphs.front()->landmarks){
+		QStringList m;
+		for (auto l : landmark) m << l.partid;
+		landmarks_front << m;
+	}
 
-    for(auto landmark : graphs.back()->landmarks){
-        QStringList m;
-        for(auto l : landmark) m << l.partid;
-        landmarks_back << m;
-    }
+	for (auto landmark : graphs.back()->landmarks){
+		QStringList m;
+		for (auto l : landmark) m << l.partid;
+		landmarks_back << m;
+	}
 
-    DeformEnergy2 d( graphs.front(), graphs.back(), landmarks_front, landmarks_back, true );
+	DeformEnergy2 d(graphs.front(), graphs.back(), landmarks_front, landmarks_back, true);
 
 	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
 
@@ -270,7 +273,7 @@ void experiment::doCorrespond()
 		pw->ui->pathsList->addItem(item);
 	}
 
-    mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
+	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
 
 void experiment::doCorrespond2()
@@ -279,16 +282,16 @@ void experiment::doCorrespond2()
 
 	int num_solver_iterations = ((ExperimentWidget*)widget)->ui->numIterations->value();
 
-	Deformer d( graphs.front(), graphs.back(), num_solver_iterations );
+	Deformer d(graphs.front(), graphs.back(), num_solver_iterations);
 
-	for(auto debug : d.debug)drawArea()->addRenderObject( debug );
+	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
 
 void experiment::create()
 {
-    // Prepare UI
+	// Prepare UI
 	if (widget) return;
 
 	// Load last used shapes:
@@ -306,28 +309,28 @@ void experiment::create()
 	graphs.front()->setColorAll(Qt::blue);
 	graphs.back()->setColorAll(Qt::green);
 
-    // Setup viewer
-    {
-        //drawArea()->setAxisIsDrawn(true);
-        drawArea()->camera()->setType(qglviewer::Camera::ORTHOGRAPHIC);
+	// Setup viewer
+	{
+		//drawArea()->setAxisIsDrawn(true);
+		drawArea()->camera()->setType(qglviewer::Camera::ORTHOGRAPHIC);
 
-        double worldRadius = 1;
-        drawArea()->camera()->setUpVector(qglviewer::Vec(0,0,1));
-        drawArea()->camera()->setPosition(qglviewer::Vec(-0.36,-2.2,1.3));
+		double worldRadius = 1;
+		drawArea()->camera()->setUpVector(qglviewer::Vec(0, 0, 1));
+		drawArea()->camera()->setPosition(qglviewer::Vec(-0.36, -2.2, 1.3));
 		auto center = qglviewer::Vec(0.5, 0, 0.5);
 		drawArea()->setSceneCenter(center);
-        drawArea()->camera()->lookAt(center);
-        drawArea()->camera()->setSceneRadius( worldRadius );
-        drawArea()->camera()->showEntireScene();
-    }
+		drawArea()->camera()->lookAt(center);
+		drawArea()->camera()->setSceneRadius(worldRadius);
+		drawArea()->camera()->showEntireScene();
+	}
 
-    ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
-    pw = new ExperimentWidget();
-    widget = pw;
+	ModePluginDockWidget * dockwidget = new ModePluginDockWidget("Particles", mainWindow());
+	pw = new ExperimentWidget();
+	widget = pw;
 
-    dockwidget->setWidget( widget );
-    mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
-    
+	dockwidget->setWidget(widget);
+	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
+
 	// UI:
 	connect(pw->ui->saveLandmarks, &QPushButton::released, [&]{
 		graphs.front()->saveLandmarks("front.landmarks");
@@ -408,15 +411,15 @@ void experiment::decorate()
 {
 	if (!isReady) return;
 
-    double startX = 0;
+	double startX = 0;
 	for (size_t i = 0; i < graphs.size(); i++)
-    {
+	{
 		auto & g = graphs[i];
 
-        glPushMatrix();
-        glTranslated(startX,0,0);
+		glPushMatrix();
+		glTranslated(startX, 0, 0);
 
-        g->draw(drawArea());
+		g->draw(drawArea());
 		g->property["startX"].setValue(startX);
 		g->property["posX"].setValue(startX);
 
@@ -431,7 +434,7 @@ void experiment::decorate()
 				glBegin(GL_POINTS);
 				auto c = colors[r++];
 				glColor3d(c.redF(), c.greenF(), c.blueF());
-				for(auto & landmark : l) glVertex3dv(landmark.data());
+				for (auto & landmark : l) glVertex3dv(landmark.data());
 				glEnd();
 
 				//for (auto & landmark : l) ss.addSphere(landmark, 0.02, colors[r]);
@@ -457,21 +460,59 @@ void experiment::decorate()
 					Vector3 diagonal = n->diagonal(), start = n->startPoint(), end = n->endPoint();
 					Vector3 midPoint = 0.5 * (start + end);
 
-					starlab::LineSegments ls(4);
-					ls.addLine(start, Vector3(n->startPoint() + diagonal), Qt::yellow);
-					ls.draw();
-
 					Vector3 orig_diagonal = n->property["orig_diagonal"].value<Vector3>();
 					Vector3 orig_diagonal_start = midPoint - (orig_diagonal * 0.5);
 
-					starlab::LineSegments ls2(4);
-					ls2.addLine(orig_diagonal_start, Vector3(orig_diagonal_start + orig_diagonal), Qt::green);
-					ls2.draw();
+					starlab::LineSegments ls(4);
+					double v = (diagonal.normalized().dot(orig_diagonal.normalized()));
+					ls.addLine(start, Vector3(n->startPoint() + diagonal), starlab::qtJetColor(v, -1, 1));
+					ls.draw();
 				}
+			}
+
+			// Spokes
+			if (g->property["showSpokes"].toBool())
+			{
+				// Original spokes
+				Array1D_Vector3 orig_spokes;
+				for (auto l : g->edges)
+					for (auto s : l->property["orig_spokes"].value<Array1D_Vector3>())
+						orig_spokes.push_back(s);
+
+				int si = 0;
+				starlab::LineSegments ls;
+				Array1D_Vector3 allspokes;
+				QMap<QString, bool> seen;
+				for (auto l : g->edges)
+				{
+					// Ignore duplicate edges
+					QString key = (l->n1->id < l->n2->id) ? (l->n1->id + l->n2->id) : (l->n2->id + l->n1->id);
+					if (seen[key]) continue;
+					seen[key] = true;
+
+					auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
+					auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
+
+					// all combinations
+					for (auto rowi : samples1){
+						for (auto ci : rowi){
+							for (auto rowj : samples2) {
+								for (auto cj : rowj){
+									auto a = l->n1->position(ci), b = l->n2->position(cj);
+									Vector3 cur_spoke = a - b;
+									double v = orig_spokes[si++].normalized().dot(cur_spoke.normalized());
+									ls.addLine(a, b, starlab::qtJetColor(1.0 - v));
+								}
+							}
+						}
+					}
+				}
+
+				ls.draw();
 			}
 		}
 
-        glPopMatrix();
+		glPopMatrix();
 
 		// Spacing between models:
 		if (i + 1 < graphs.size()){
@@ -493,7 +534,8 @@ void experiment::decorate()
 			double g2_width = g2->property["width"].toDouble();
 
 			startX += (g1_width * 0.3) + g2_width + 0.05;
-		}else{
+		}
+		else{
 			Eigen::AlignedBox3d bbox = g->bbox();
 			for (auto n : g->nodes){
 				auto m = g->getMesh(n->id);
@@ -503,12 +545,12 @@ void experiment::decorate()
 			}
 			g->property["width"].setValue(bbox.sizes().x());
 		}
-    }
+	}
 }
 
 bool experiment::keyPressEvent(QKeyEvent * event)
 {
-	if (event->key() == Qt::Key_P) 
+	if (event->key() == Qt::Key_P)
 	{
 		drawArea()->setStateFileName("cameraSettings.xml");
 		drawArea()->saveStateToFile();
@@ -520,6 +562,11 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 
 		for (auto g : graphs) g->property["showEdgeLines"].setValue(!g->property["showEdgeLines"].toBool());
 		for (auto g : graphs) g->property["showEdges"].setValue(!g->property["showEdges"].toBool());
+	}
+
+	if (event->key() == Qt::Key_K)
+	{
+		for (auto g : graphs) g->property["showSpokes"].setValue(!g->property["showSpokes"].toBool());
 	}
 
 	if (event->key() == Qt::Key_M)
@@ -562,7 +609,7 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 
 			auto source = graphs.front();
 
-			static double delta = 0.2;
+			double delta = pw->ui->speed->value();
 			t += isForward ? delta : -delta;
 
 			if (t >= 1.0 || t <= 0.0)
@@ -586,14 +633,14 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 				}
 			}
 
-			auto ptsBefore = graphs.front()->animation[std::max(0,index-1)];
-			auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size()-1)];
+			auto ptsBefore = graphs.front()->animation[std::max(0, index - 1)];
+			auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size() - 1)];
 
 			Array1D_Vector3 ptsCurrent;
 			for (size_t i = 0; i < ptsBefore.size(); i++) ptsCurrent.push_back(AlphaBlend(t, ptsBefore[i], ptsAfter[i]));
 			graphs.front()->setAllControlPoints(ptsCurrent);
 
-			for (auto n : graphs.front()->nodes) if(n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
+			for (auto n : graphs.front()->nodes) if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 
 			if (graphs.front()->property["showMeshes"].toBool())
 			{
@@ -610,12 +657,12 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 	}
 
 	drawArea()->update();
-    return false;
+	return false;
 }
 
 bool experiment::mouseMoveEvent(QMouseEvent *)
 {
-    return false;
+	return false;
 }
 
 bool experiment::mousePressEvent(QMouseEvent *event)
@@ -677,7 +724,7 @@ bool experiment::mousePressEvent(QMouseEvent *event)
 
 		drawArea()->update();
 	}
-	
+
 	return false;
 }
 

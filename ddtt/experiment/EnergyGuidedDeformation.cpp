@@ -73,8 +73,6 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
     PropagateProximity::prepareForProximity(shapeA);
 	EvaluateCorrespondence::prepare(shapeA);
 
-	EvaluateCorrespondence::evaluate(QStringList(), shapeA);
-
 	// Save initial configuration
 	shapeA->saveKeyframe();
 
