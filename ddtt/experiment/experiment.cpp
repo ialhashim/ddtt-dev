@@ -72,6 +72,8 @@ void experiment::doEnergySearch()
 	}
 
 	EnergyGuidedDeformation egd(shapeA, shapeB, landmarks_front, landmarks_back, true);
+	shapeA = egd.a;
+	shapeB = egd.b;
 
 	for (auto debug : egd.debug) drawArea()->addRenderObject(debug);
 	for (auto debug : shapeA->debug) drawArea()->addRenderObject(debug);

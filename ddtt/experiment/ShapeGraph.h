@@ -40,6 +40,11 @@ namespace Structure
 		ShapeGraph(QString path) : Graph(path){}
 		ShapeGraph(const ShapeGraph& other) : Graph(other){
 			this->landmarks = other.landmarks;
+			this->relations = other.relations;
+
+			this->animation = other.animation;
+			this->animation_index = other.animation_index;
+			this->animation_debug = other.animation_debug;
 		}
 		QVector<Landmarks> landmarks;
 		QVector<Relation> relations;

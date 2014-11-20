@@ -18,8 +18,13 @@ namespace Energy{
 
 EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
                                                  const QVector<QStringList> &a_landmarks, const QVector<QStringList> &b_landmarks,
-                                                 bool debugging) : a(shapeA), b(shapeB)
+                                                 bool debugging)
 {
+	shapeA = new Structure::ShapeGraph(*shapeA);
+	shapeB = new Structure::ShapeGraph(*shapeB);
+	this->a = shapeA;
+	this->b = shapeB;
+
 	// Analyze groups
 	StructureAnalysis::analyzeGroups(shapeA, false);
 
@@ -39,8 +44,8 @@ EnergyGuidedDeformation::EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, 
 		auto matchInNumber = [&](QStringList & i, QStringList & j){
 			if (i.size() == j.size()) return;
 			assert(i.size() == 1 || j.size() == 1);
-			if (i.size() == 1)	for (int x = 0; x < j.size() - i.size(); x++) i << i.front();
-			else				for (int x = 0; x < i.size() - j.size(); x++) j << j.front();
+			if (i.size() == 1)	for (int x = 0; x <= j.size() - i.size(); x++) i << i.front();
+			else				for (int x = 0; x <= i.size() - j.size(); x++) j << j.front();
 		};
 		for (auto idx : group){
 			auto p = a_landmarks[idx], q = b_landmarks[idx];
