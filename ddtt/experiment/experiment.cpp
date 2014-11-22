@@ -29,10 +29,6 @@ CorrespondenceSearch * search = NULL;
 #include "EnergyGuidedDeformation.h"
 #include "EvaluateCorrespondence.h"
 
-Q_DECLARE_METATYPE(Vector3);
-Q_DECLARE_METATYPE(Array1D_Vector3);
-Q_DECLARE_METATYPE(Array2D_Vector4d);
-
 void experiment::doEnergySearch()
 {
 	QElapsedTimer timer; timer.start();
@@ -71,11 +67,21 @@ void experiment::doEnergySearch()
 		landmarks_back << m;
 	}
 
-	EnergyGuidedDeformation egd(shapeA, shapeB, landmarks_front, landmarks_back, true);
-	shapeA = egd.a;
-	shapeB = egd.b;
+	Energy::GuidedDeformation egd;
 
-	for (auto debug : egd.debug) drawArea()->addRenderObject(debug);
+	// Create a search path
+	Energy::AssignmentsStack assignments;
+	for (size_t i = 0; i < landmarks_front.size(); i++) assignments.push(qMakePair(landmarks_front[i], landmarks_back[i]));
+	Energy::SearchPath path(shapeA, shapeB, QStringList(), assignments);
+	egd.search_paths << path;
+
+	// Explore path
+	egd.searchAll();
+
+	auto & selected_path = egd.search_paths.front();
+
+	shapeA = selected_path.shapeA;
+	shapeB = selected_path.shapeB;
 
 	// Show deformed
 	graphs.clear();
@@ -484,14 +490,8 @@ void experiment::decorate()
 				int si = 0;
 				starlab::LineSegments ls;
 				Array1D_Vector3 allspokes;
-				QMap<QString, bool> seen;
 				for (auto l : g->edges)
 				{
-					// Ignore duplicate edges
-					QString key = (l->n1->id < l->n2->id) ? (l->n1->id + l->n2->id) : (l->n2->id + l->n1->id);
-					if (seen[key]) continue;
-					seen[key] = true;
-
 					auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
 					auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
 

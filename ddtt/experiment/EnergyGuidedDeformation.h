@@ -1,19 +1,39 @@
 #pragma once
+#include <QStack>
 
 #include "ShapeGraph.h"
 #include "RenderObjectExt.h"
 
-class EnergyGuidedDeformation
+namespace Energy
 {
-public:
-    EnergyGuidedDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
-                               const QVector<QStringList> &a_landmarks, const QVector<QStringList> &b_landmarks,
-                               bool debugging);
-	Structure::ShapeGraph *a, *b;
+	static QString null_part = "NULL_PART";
+	typedef QStack< QPair<QStringList, QStringList> > AssignmentsStack;
 
-	// Utility:
+	struct SearchPath{
+		Structure::ShapeGraph *shapeA, *shapeB;
+		QStringList fixed;
+		AssignmentsStack assignments;
+		QStringList unassigned;
+		QVector<SearchPath> children;
+		double cost;
 
-    // Debug:
-    bool debugging;
-    QVector<RenderObject::Base*> debug;
-};
+		SearchPath(Structure::ShapeGraph * shapeA = NULL, Structure::ShapeGraph * shapeB = NULL, const QStringList & fixed = QStringList(),
+			const AssignmentsStack & assignments = AssignmentsStack(), const QStringList & unassigned = QStringList(),
+			double cost = 0) : shapeA(shapeA), shapeB(shapeB), fixed(fixed), assignments(assignments), unassigned(unassigned), cost(cost){}
+
+		bool operator<(const SearchPath & path){ return cost < path.cost; }
+	};
+
+	struct GuidedDeformation{
+		QVector<SearchPath> search_paths;
+
+		void searchAll();		
+		void explore(SearchPath & path);
+
+		// Utility:
+		static void topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
+			QStringList & la, QStringList & lb);
+		static void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
+			const QStringList & la, const QStringList & lb, const QStringList & fixed);
+	};
+}
