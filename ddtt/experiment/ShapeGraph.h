@@ -345,7 +345,7 @@ namespace Structure
 				cpnts.push_back(graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front());
 			}
 
-			// Requirment for NURBS is minimum 4 rows
+			// Requirement for NURBS is minimum 4 rows
 			if (cpnts.size() < 4){
 				if (cpnts.size() == 2)
 				{
@@ -364,7 +364,7 @@ namespace Structure
 					cpnts.insert(cpnts.begin() + 3, m2);
 				}
 			}
-			NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(cpnts);
+			NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(transpose(cpnts));
 			Structure::Sheet * newSheet = new Structure::Sheet(sheet, nodeIDs.join(","));
 
 			return graph->addNode(newSheet)->id;

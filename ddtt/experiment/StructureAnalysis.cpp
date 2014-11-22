@@ -164,3 +164,8 @@ SurfaceMesh::Vector3 StructureAnalysis::pointReflection(const Vector3 & p, const
 	Vector3 v = planeNormal * d;
 	return p - (v * 2);
 }
+
+void StructureAnalysis::removeFromGroups(Structure::ShapeGraph * shape, Structure::Node * node)
+{
+	for (auto & r : shape->relations) r.parts.removeAll(node->id);
+}

@@ -34,6 +34,18 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	for (auto n : shape->nodes)
 	{
 		Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
+
+		// Special case: degenerate sheet
+		if (n->type() == Structure::SHEET && samples_coords.empty()){
+			double step = 0.25;
+			for (double u = 0; u <= 1.0; u += step){
+				Array1D_Vector4d row;
+				for (double v = 0; v <= 1.0; v += step)
+					row.push_back(Eigen::Vector4d(u,v,0,0));
+				samples_coords.push_back(row);
+			}
+		}
+
 		n->property["samples_coords"].setValue(samples_coords);
 
 		n->property["orig_diagonal"].setValue(n->diagonal());

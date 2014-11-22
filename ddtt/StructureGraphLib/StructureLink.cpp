@@ -76,7 +76,22 @@ void Link::replace(QString oldNodeID, Node *newNode, Array1D_Vector4d newCoord)
 	QString oldID = id;
 	id =  QString("%1 : %2").arg(n1->id).arg(n2->id);
 
-	qDebug() << QString("Link replace [%1] to [%2]").arg(oldID, id);
+    qDebug() << QString("Link replace [%1] to [%2]").arg(oldID, id);
+}
+
+void Link::replaceForced(QString oldNodeID, Node *newNode, Array1D_Vector4d newCoord)
+{
+    if(n1->id != oldNodeID && n2->id != oldNodeID) return;
+    if(!newNode) return;
+    if(n1->id == oldNodeID){
+        n1 = newNode;
+        coord[0] = newCoord;
+    } else if(n2->id == oldNodeID){
+        n2 = newNode;
+        coord[1] = newCoord;
+    }
+    // Change my ID
+    id =  QString("%1 : %2").arg(n1->id).arg(n2->id);
 }
 
 Node * Link::otherNode( QString nodeID )

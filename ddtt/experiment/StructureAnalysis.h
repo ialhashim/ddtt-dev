@@ -4,7 +4,8 @@
 class StructureAnalysis
 {
 public:
-    static void analyzeGroups(Structure::ShapeGraph * shape, bool isDebug = false);
+	static void analyzeGroups(Structure::ShapeGraph * shape, bool isDebug = false);
+	static void removeFromGroups(Structure::ShapeGraph * shape, Structure::Node * node);
 
 	// Utility:
 	static std::pair<Vector3, Vector3> getReflectionalPlane(Structure::Node * n1, Structure::Node * n2);

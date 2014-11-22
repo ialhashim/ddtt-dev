@@ -113,11 +113,15 @@ void DeformToFit::registerAndDeformNodes(Structure::Node * snode, Structure::Nod
 			tsurface.translate(-translation);
 			
 			// Minimize rotation
-			Vector3 tdiagonal = tsurface.P(1, 1) - tsurface.P(0,0);
-			Vector3 sdiagonal = ssurface.P(1, 1) - ssurface.P(0,0);
-			if (tdiagonal.normalized().dot(sdiagonal.normalized()) < 0) tdiagonal *= -1;
+			Vector3 tpos, tu, tv, tnormal;
+			tsurface.GetFrame(0.5, 0.5, tpos, tu, tv, tnormal);
+			Vector3 spos, su, sv, snormal;
+			ssurface.GetFrame(0.5, 0.5, spos, su, sv, snormal);
 
-			Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(sdiagonal.normalized(), tdiagonal.normalized());
+			if (snormal.dot(tnormal) < 0) 
+				tnormal *= -1;
+
+			Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(snormal, tnormal);
 			for (auto & row : tsurface.mCtrlPoint) for (auto & p : row) p = (q.inverse() * (p - scenter)) + scenter;
 
 			QMap < double, QVector<double> > dists;

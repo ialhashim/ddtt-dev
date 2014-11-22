@@ -46,6 +46,7 @@ struct Link
 
 	// Modify
 	void replace(QString oldNodeID, Node *newNode, Array1D_Vector4d newCoord);
+    void replaceForced(QString oldNodeID, Node *newNode, Array1D_Vector4d newCoord);
 
 	// Constructors
     Link(Node * node1, Node * node2, LinkCoords coord_n1, LinkCoords coord_n2, QString link_type, QString ID);

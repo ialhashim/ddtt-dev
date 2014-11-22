@@ -76,8 +76,6 @@ void experiment::doEnergySearch()
 	shapeB = egd.b;
 
 	for (auto debug : egd.debug) drawArea()->addRenderObject(debug);
-	for (auto debug : shapeA->debug) drawArea()->addRenderObject(debug);
-	for (auto debug : shapeB->debug) drawArea()->addRenderObject(debug);
 
 	// Show deformed
 	graphs.clear();
@@ -445,6 +443,8 @@ void experiment::decorate()
 			//ss.draw();
 		}
 
+		for (auto debug : g->debug) debug->draw(*drawArea());
+
 		// Debug deformation:
 		if (g == graphs.front())
 		{
@@ -541,9 +541,13 @@ void experiment::decorate()
 			Eigen::AlignedBox3d bbox = g->bbox();
 			for (auto n : g->nodes){
 				auto m = g->getMesh(n->id);
-				if (!m) g->property["width"].setValue(bbox.sizes().x());
-				m->updateBoundingBox();
-				bbox.extend(m->bbox());
+				if (!m)
+					g->property["width"].setValue(bbox.sizes().x());
+				else
+				{
+					m->updateBoundingBox();
+					bbox.extend(m->bbox());
+				}
 			}
 			g->property["width"].setValue(bbox.sizes().x());
 		}

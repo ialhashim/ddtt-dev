@@ -6,9 +6,12 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 {
 	for (auto & relation : graph->relations)
 	{
+		if (relation.parts.isEmpty()) continue;
+
 		if (relation.type == Structure::Relation::REFLECTIONAL)
 		{
 			auto partA = graph->getNode(relation.parts.front()), partB = graph->getNode(relation.parts.back());
+			if (partA == partB) continue;
 			if (!fixedNodes.contains(partA->id)) std::swap(partA, partB);
 			
 			// Apply reflection to control points of other part
@@ -29,6 +32,8 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 		if (relation.type == Structure::Relation::ROTATIONAL)
 		{
 			int n_fold = relation.parts.size();
+			if (n_fold < 2) continue;
+
 			double theta = 2.0 * M_PI / n_fold;
 
 			auto part = graph->getNode(relation.parts.front());
@@ -60,6 +65,7 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 
 		if (relation.type == Structure::Relation::TRANSLATIONAL)
 		{
+			if (relation.parts.size() < 2) continue;
 			auto part = graph->getNode(relation.parts.front());
 			for (auto partID : relation.parts) if (fixedNodes.contains(partID)){ part = graph->getNode(partID); break; }
 

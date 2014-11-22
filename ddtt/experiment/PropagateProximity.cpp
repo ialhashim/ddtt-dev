@@ -72,17 +72,24 @@ void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::Sha
         propagationLevel.push_back(curLevel);
     };
 
+	// Fixed parts do not change
+	propagationLevel.removeFirst(); 
+
     // Apply constraints
-    propagationLevel.removeFirst(); // Fixed parts do not change
     for (int i = 0; i < propagationLevel.size(); i++)
     {
         for (auto & n : propagationLevel[i])
         {
-            assert(constraints[n->id].size());
+			// Experimental: allow sliding
+			if (n->property["isMerged"].toBool()) continue;
 
-            if (constraints[n->id].size() == 1)
+			QVector<ProximityConstraint> current_constraints;
+			for (auto c : constraints[n->id]) current_constraints << c;
+			if (current_constraints.isEmpty()) continue;
+
+            if (current_constraints.size() == 1)
 			{
-				auto & c = constraints[n->id].front();
+				auto & c = current_constraints.front();
 
 				if (c.link->type == Structure::POINT_EDGE)
 					n->deformTo(c.coord(), c.start() + c.delta(), true);
@@ -96,12 +103,15 @@ void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::Sha
             }
             else
             {
-                auto & c_list = constraints[n->id];
+                auto & c_list = current_constraints;
 
                 if (c_list.size() == 2)
                 {
                     auto & ca = c_list.front();
                     auto & cb = c_list.back();
+
+					if (ca.from->property["isMerged"].toBool() && cb.from->property["isMerged"].toBool()) 
+						continue;
 
                     n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
                 }
