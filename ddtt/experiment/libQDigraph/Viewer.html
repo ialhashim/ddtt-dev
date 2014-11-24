@@ -53,13 +53,15 @@ body { font: 300 14px 'Helvetica Neue', Helvetica; }
 
 		// Helper functions:
 		function addNodeToGraph(g, label_text, class_text){
-			g.setNode(g.nodes().length, {
+			var new_idx = g.nodes().length;
+			g.setNode(new_idx, {
 				labelType: "html",
 				label: label_text,
 				rx: 4,
 				ry: 4,
 				class: class_text
 			  });
+			return new_idx;
 		}
 		function addEdgeToGraph(g, nid1, nid2){
 			g.setEdge(nid1,nid2);
@@ -89,7 +91,7 @@ body { font: 300 14px 'Helvetica Neue', Helvetica; }
 			
 			// Selection event
 			$('.node').off();
-			$('.node').click(function () { var index = $(this).attr('index'); console.log(index); Viewer.addLogItem(index); });
+			$('.node').click(function () { var index = $(this).attr('index'); console.log(index); Viewer.addLogItem(index); Viewer.nodeSelected(parseInt(index)); });
 		};
 </script>
 

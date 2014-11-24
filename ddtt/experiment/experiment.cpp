@@ -29,9 +29,55 @@ CorrespondenceSearch * search = NULL;
 #include "EnergyGuidedDeformation.h"
 #include "EvaluateCorrespondence.h"
 
+#include "Viewer.h"
+
+Energy::GuidedDeformation * egd = NULL;
+Viewer * v = NULL;
+Q_DECLARE_METATYPE(Structure::ShapeGraph*);
+experiment * exprmnt = NULL;
+
+void visualizeTree(Viewer * v, int parent_idx, Energy::SearchPath & path)
+{
+	if (path.unassigned.isEmpty()) return;
+
+	// Visualize me
+	auto pathToHtml = [](Energy::SearchPath & p){
+		QStringList html;
+
+		for (auto a : p.assignments)
+		{
+			html << QString("<span class=source>%1</span>").arg(a.first.join("-"));
+			html << "<br/>";
+			html << QString("<span class=target>%1</span>").arg(a.second.join("-"));
+		}
+
+		html << "<br/>";
+		html << "<span class=cost>" + QString::number(p.cost) + "</span>";
+
+		//html << "<span>" + p.current.join("-") + "</span>";
+		//html << "<span>fixed:" + p.fixed.join("-") + "</span><br/>";
+		//html << "<span>unassigned:" + p.unassigned.join("-") + "</span><br/>";
+		return html.join("");
+	};
+
+	int idx = v->addNode(pathToHtml(path));
+	v->addEdge(parent_idx, idx);
+
+	v->nodeProperties[idx]["shape"].setValue(path.shapeA);
+
+	// Recurse over children
+	for (auto & child : path.children)
+	{
+		visualizeTree(v, idx, child);
+	}
+}
+
 void experiment::doEnergySearch()
 {
 	QElapsedTimer timer; timer.start();
+
+	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
+	for (auto g : graphs) g->property["showMeshes"].setValue(false);
 
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
@@ -67,18 +113,42 @@ void experiment::doEnergySearch()
 		landmarks_back << m;
 	}
 
-	Energy::GuidedDeformation egd;
+	egd = new Energy::GuidedDeformation;
 
 	// Create a search path
-	Energy::AssignmentsStack assignments;
-	for (size_t i = 0; i < landmarks_front.size(); i++) assignments.push(qMakePair(landmarks_front[i], landmarks_back[i]));
+	Energy::Assignments assignments;
+	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
 	Energy::SearchPath path(shapeA, shapeB, QStringList(), assignments);
-	egd.search_paths << path;
+	egd->search_paths << path;
 
 	// Explore path
-	egd.searchAll();
+	egd->searchAll();
 
-	auto & selected_path = egd.search_paths.front();
+	// Visualize search graph
+	{
+		exprmnt = this;
+
+		v = new Viewer;
+		v->show();
+
+		connect(v->wv, &QWebView::loadFinished, [&](){
+			v->addCSS(".source{color:red} .target{color:blue} .cost{color:gray}");
+
+			v->addNode("root");
+			visualizeTree(v, 0, egd->search_paths.front());
+			v->updateGraph();
+
+			connect(v, &Viewer::nodeSelected, [&](int nid){
+				auto shape = v->nodeProperties[nid]["shape"].value<Structure::ShapeGraph*>();
+				if (!shape) return;
+
+				exprmnt->graphs.replace(0, shape);
+				exprmnt->drawArea()->update();
+			});
+		});
+	}
+
+	auto & selected_path = egd->search_paths.front();
 
 	shapeA = selected_path.shapeA;
 	shapeB = selected_path.shapeB;
@@ -86,8 +156,6 @@ void experiment::doEnergySearch()
 	// Show deformed
 	graphs.clear();
 	graphs << shapeA << shapeB;
-	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
-	for (auto g : graphs) g->property["showMeshes"].setValue(false);
 
 	if (!graphs.front()->animation.empty())
 	{

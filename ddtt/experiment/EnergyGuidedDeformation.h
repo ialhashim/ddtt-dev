@@ -7,18 +7,18 @@
 namespace Energy
 {
 	static QString null_part = "NULL_PART";
-	typedef QStack< QPair<QStringList, QStringList> > AssignmentsStack;
+	typedef QVector< QPair<QStringList, QStringList> > Assignments;
 
 	struct SearchPath{
 		Structure::ShapeGraph *shapeA, *shapeB;
-		QStringList fixed;
-		AssignmentsStack assignments;
-		QStringList unassigned;
+		QStringList fixed, current, unassigned;
+		Assignments assignments;
 		QVector<SearchPath> children;
+		QMap<QString, QString> mapping;
 		double cost;
 
 		SearchPath(Structure::ShapeGraph * shapeA = NULL, Structure::ShapeGraph * shapeB = NULL, const QStringList & fixed = QStringList(),
-			const AssignmentsStack & assignments = AssignmentsStack(), const QStringList & unassigned = QStringList(),
+			const Assignments & assignments = Assignments(), const QStringList & unassigned = QStringList(),
 			double cost = 0) : shapeA(shapeA), shapeB(shapeB), fixed(fixed), assignments(assignments), unassigned(unassigned), cost(cost){}
 
 		QStringList fixedOnTarget(){ QStringList result; for (auto a : assignments) for (auto p : a.second) result << p; return result; }

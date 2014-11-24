@@ -56,3 +56,8 @@ INCLUDEPATH += ../StructureGraphLib
 LIBS += -L$$PWD/libShapeOp/$$CFG/lib -llibShapeOp
 INCLUDEPATH += ./libShapeOp
 DEFINES += SHAPEOP_EXPORT
+
+# QDigraph library
+QT += webkitwidgets
+LIBS += -L$$PWD/libQDigraph/$$CFG/lib -lQDigraphLib
+INCLUDEPATH += ./libQDigraph

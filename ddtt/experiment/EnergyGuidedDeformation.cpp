@@ -30,28 +30,28 @@ void Energy::GuidedDeformation::searchAll()
 	}
 }
 
-void Energy::GuidedDeformation::explore( SearchPath & path )
+void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 {
 	if (path.assignments.empty() && path.unassigned.empty()) return;
 
-	// Keep track of newly fixed parts
-	QStringList newly_fixed;
-
 	// Go over and apply previously suggested assignments:
-	while (!path.assignments.isEmpty())
+	for (auto ap : path.assignments)
 	{
 		// Get assignment pair <source, target>
-		auto ap = path.assignments.pop();
 		auto la = ap.first, lb = ap.second;
 
 		// Apply any needed topological operations
 		GuidedDeformation::topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
 
 		// Assigned parts will be fixed
-		for (auto partID : ap.first) newly_fixed << partID;
+		for (auto partID : ap.first) path.current << partID;
 
 		// Deform the assigned
-		GuidedDeformation::applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed);
+		GuidedDeformation::applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
+
+		// Track established correspondence
+		for (size_t i = 0; i < la.size(); i++)
+			path.mapping[la[i]] = lb[i];
 	}
 
 	// Evaluate distortion of shape
@@ -64,7 +64,7 @@ void Energy::GuidedDeformation::explore( SearchPath & path )
 	{
 		// Collect set of next candidates to be assigned
 		QVector<Structure::Relation> candidatesA;
-		for (auto partID : newly_fixed)
+		for (auto partID : path.current)
 		{
 			for (auto edge : path.shapeA->getEdges(partID)){
 				auto other = edge->otherNode(partID);
@@ -74,6 +74,9 @@ void Energy::GuidedDeformation::explore( SearchPath & path )
 				if (!candidatesA.contains(r)) candidatesA << r;
 			}
 		}
+
+		if (candidatesA.empty() && !path.unassigned.isEmpty())
+			candidatesA << path.shapeA->relationOf(path.unassigned.front());
 
 		// Suggest for each candidate
 		for (auto relationA : candidatesA)
@@ -131,10 +134,10 @@ void Energy::GuidedDeformation::explore( SearchPath & path )
 					QStringList canadidate_unassigned = path.unassigned;
 					for (auto p : la) canadidate_unassigned.removeAll(p);
 
-					AssignmentsStack assignment;
-					assignment.push(qMakePair(la,lb));
+					Assignments assignment;
+					assignment << qMakePair(la,lb);
 
-					SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + newly_fixed, assignment, canadidate_unassigned);
+					SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned);
 
 					path.children.push_back(child);
 				}
