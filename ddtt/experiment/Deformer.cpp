@@ -118,6 +118,8 @@ void Deformer::shapeNodesToConstraints(Structure::ShapeGraph * a,
 	const QVector< Vector3 > & allPnts,
 	QVector < QPair<int, int> > & pointRelations)
 {
+	Q_UNUSED(allPnts);
+
 	// Collect relationships between points
 	for (auto n : a->nodes)
 	{

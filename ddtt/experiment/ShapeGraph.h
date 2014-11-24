@@ -1,6 +1,10 @@
 #pragma once
 #include "StructureGraph.h"
 
+// 64 bit
+#pragma warning (disable : 4267)
+#pragma warning (disable : 4018)
+
 namespace Structure
 {
     // Structural relations between parts
@@ -11,6 +15,7 @@ namespace Structure
 		Array1D_Vector3 deltas;
 		Relation(Vector3 axis = Vector3(0, 0, 0), Vector3 point = Vector3(0, 0, 0), RelationType type = SELF) 
 			: axis(axis), point(point), type(type) {}
+		bool operator==(const Relation & other){ return this->parts == other.parts; }
     };
 
 	struct Landmark : public Eigen::Vector3d{
@@ -47,7 +52,19 @@ namespace Structure
 			this->animation_debug = other.animation_debug;
 		}
 		QVector<Landmarks> landmarks;
+
+		// Part relations and grouping
 		QVector<Relation> relations;
+		Eigen::AlignedBox3d relationBBox(const Relation & r){
+			Eigen::AlignedBox3d box;
+			for (auto nid : r.parts) box.extend(robustBBox(nid));
+			return box;
+		}
+		Relation relationOf(const QString & partID){ 
+			Relation non; 
+			for (auto & r : relations) if (r.parts.contains(partID)) return r; 
+			return non; 
+		}
 
 		// Visualize shape changes:
 		int animation_index;
@@ -101,7 +118,7 @@ namespace Structure
 			}
 			else
 			{
-				Structure::Curve * sourceCurve, * targetCurve;
+				Structure::Curve * sourceCurve;
 				Structure::Graph * target = tgt;
 
 				Structure::Node * snode = (sn->type() == Structure::SHEET) ? sn : tn;

@@ -9,6 +9,8 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
                              const QVector<QStringList> &a_landmarks, const QVector<QStringList> &b_landmarks,
 							 bool debugging) : a(shapeA), b(shapeB)
 {
+	Q_UNUSED(debugging);
+
 	// Perform topological operations needed for sheet-curves correspondence case:
 	mappedPartsA = a_landmarks; mappedPartsB = b_landmarks;
 	for (size_t i = 0; i < mappedPartsA.size(); i++)
@@ -36,7 +38,6 @@ DeformEnergy2::DeformEnergy2(Structure::ShapeGraph *shapeA, Structure::ShapeGrap
 			QStringList * landmarks = (isOneA) ? &lb : &la;
 
 			QString newnode = Structure::ShapeGraph::convertCurvesToSheet(graph, *landmarks, sideCoordinates);
-			Structure::Node * newNode = graph->getNode(newnode);
 
 			landmarks->clear();
 			landmarks->push_back(newnode);
@@ -359,6 +360,7 @@ double DeformEnergy2::computeSymmetry(const QStringList & A)
 
 double DeformEnergy2::computeGeometry(const QStringList & A)
 {
+	Q_UNUSED(A);
 	return 0;
 }
 

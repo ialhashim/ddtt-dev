@@ -6,6 +6,14 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 {
 	shape->relations.clear();
 
+	QStringList nodesIDs;
+	Structure::NodeGroups tmpA;
+	for (auto n : shape->nodes) nodesIDs << n->id;
+	for (auto g : shape->groups) for (auto nid : g) nodesIDs.removeAll(nid);
+	for (auto nid : nodesIDs) tmpA.push_back(QVector<QString>() << nid);
+	for (auto g : shape->groups) tmpA.push_back(g);
+	shape->groups = tmpA;
+
 	for (auto g : shape->groups)
 	{
 		Structure::Relation r;

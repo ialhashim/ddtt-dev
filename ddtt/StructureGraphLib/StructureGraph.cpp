@@ -130,6 +130,35 @@ Eigen::AlignedBox3d Graph::bbox(bool isSkipUnready)
     return box;
 }
 
+AlignedBox3d Graph::robustBBox(QString nodeID, double eps)
+{
+    AlignedBox3d box;
+    auto n = getNode(nodeID);
+    box.extend(n->bbox());
+
+    // Add some delta to in case of flat node
+    Vector3 diagonal = box.diagonal();
+    if(diagonal.minCoeff() <= 0.0)
+    {
+        auto minc = box.min(), maxc = box.max();
+        Vector3 delta = Vector3(1,1,1) * eps;
+        minc -= delta;
+        maxc += delta;
+        box.extend(minc);
+        box.extend(maxc);
+    }
+
+    return box;
+}
+
+AlignedBox3d Graph::robustBBox()
+{
+    AlignedBox3d box;
+    for(auto n : nodes) box.extend(robustBBox(n->id));
+    return box;
+}
+
+
 Node *Graph::addNode(Node * n)
 {
     assert(getNode( n->id ) == NULL);
@@ -1371,7 +1400,7 @@ SurfaceMesh::Vector3 Graph::nodeIntersection( Node * n1, Node * n2 )
 	//foreach(Vector3 w, p1) debugPoints2.push_back(w);
 	//foreach(Vector3 w, p2) debugPoints3.push_back(w);
 
-	//return (c1 + c2) / 2.0;
+    //return (c1 + c2) / 2.0;
 }
 
 int Graph::valence( Node * n )

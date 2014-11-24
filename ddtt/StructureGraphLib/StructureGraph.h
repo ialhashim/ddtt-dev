@@ -92,6 +92,8 @@ namespace Structure{
 		QList<Link*> furthermostEdges( QString nodeID );
 		Vector3 position( QString nodeID, Vector4d& coord );
 		Vector3 nodeIntersection( Node * n1, Node * n2 );
+        Eigen::AlignedBox3d robustBBox();
+        Eigen::AlignedBox3d robustBBox(QString nodeID, double eps = 1e-6);
 
 		// Input / Output
 		void saveToFile(QString fileName, bool isOutParts = true) const;

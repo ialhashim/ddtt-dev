@@ -280,8 +280,6 @@ double DeformEnergy::deform( Structure::Node * inputNodeA, Structure::Node * inp
 	QVector< QVector< Quad > > quads(numSides);
 	QVector< Array2D_Vector3 > rectangles(numSides);
 
-	int num_quads = quads_pnts.front().size();
-
 	int num_control_points = sideCoordinates.front().size();
 
 	for (int si = 0; si < numSides; si++)

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Structure{ class Node; }
+namespace Structure{ struct Node; }
 
 class DeformToFit
 {
