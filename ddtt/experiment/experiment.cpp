@@ -681,6 +681,13 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 			static double t = 0;
 			static int index = 0;
 
+			static Structure::ShapeGraph * prev = NULL;
+			if (prev != graphs.front()){
+				t = 0;
+				index = 0;
+				prev = graphs.front();
+			}
+
 			auto source = graphs.front();
 
 			double delta = pw->ui->speed->value();
