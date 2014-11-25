@@ -7,10 +7,12 @@
 
 namespace Structure
 {
+	static QString null_part = "NULLPART";
+
     // Structural relations between parts
     struct Relation{
         QStringList parts;
-        enum RelationType{ REFLECTIONAL, ROTATIONAL, TRANSLATIONAL, SELF } type;
+        enum RelationType{ REFLECTIONAL, ROTATIONAL, TRANSLATIONAL, SELF, NULLRELATION } type;
         Vector3 axis, point;
 		Array1D_Vector3 deltas;
 		Relation(Vector3 axis = Vector3(0, 0, 0), Vector3 point = Vector3(0, 0, 0), RelationType type = SELF) 

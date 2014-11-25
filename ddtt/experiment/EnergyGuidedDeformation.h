@@ -10,12 +10,12 @@ namespace Energy
 	typedef QVector< QPair<QStringList, QStringList> > Assignments;
 
 	struct SearchPath{
-		Structure::ShapeGraph *shapeA, *shapeB;
+		QVector<SearchPath> children;
+		double cost;
 		QStringList fixed, current, unassigned;
 		Assignments assignments;
-		QVector<SearchPath> children;
 		QMap<QString, QString> mapping;
-		double cost;
+		Structure::ShapeGraph *shapeA, *shapeB;
 
 		SearchPath(Structure::ShapeGraph * shapeA = NULL, Structure::ShapeGraph * shapeB = NULL, const QStringList & fixed = QStringList(),
 			const Assignments & assignments = Assignments(), const QStringList & unassigned = QStringList(),

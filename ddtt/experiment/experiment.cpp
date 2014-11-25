@@ -34,41 +34,39 @@ CorrespondenceSearch * search = NULL;
 Energy::GuidedDeformation * egd = NULL;
 Viewer * v = NULL;
 Q_DECLARE_METATYPE(Structure::ShapeGraph*);
+Q_DECLARE_METATYPE(Energy::SearchPath*);
 experiment * exprmnt = NULL;
 
-void visualizeTree(Viewer * v, int parent_idx, Energy::SearchPath & path)
+QString pathToHtml(Energy::SearchPath & p)
 {
-	if (path.unassigned.isEmpty()) return;
+	QStringList html;
 
-	// Visualize me
-	auto pathToHtml = [](Energy::SearchPath & p){
-		QStringList html;
-
-		for (auto a : p.assignments)
-		{
-			html << QString("<span class=source>%1</span>").arg(a.first.join("-"));
-			html << "<br/>";
-			html << QString("<span class=target>%1</span>").arg(a.second.join("-"));
-		}
-
+	for (auto a : p.assignments)
+	{
+		html << QString("<span class=source>%1</span>").arg(a.first.join("-"));
 		html << "<br/>";
-		html << "<span class=cost>" + QString::number(p.cost) + "</span>";
+		html << QString("<span class=target>%1</span>").arg(a.second.join("-"));
+	}
 
-		//html << "<span>" + p.current.join("-") + "</span>";
-		//html << "<span>fixed:" + p.fixed.join("-") + "</span><br/>";
-		//html << "<span>unassigned:" + p.unassigned.join("-") + "</span><br/>";
-		return html.join("");
-	};
+	html << "<br/>";
+	html << "<span class=cost>" + QString::number(p.cost) + "</span>";
+	html << "<span class=children>(" + QString::number(p.children.size()) + ")</span>";
 
-	int idx = v->addNode(pathToHtml(path));
-	v->addEdge(parent_idx, idx);
+	//html << "<span>" + p.current.join("-") + "</span>";
+	//html << "<span>fixed:" + p.fixed.join("-") + "</span><br/>";
+	//html << "<span>unassigned:" + p.unassigned.join("-") + "</span><br/>";
+	return html.join("");
+};
 
-	v->nodeProperties[idx]["shape"].setValue(path.shapeA);
-
-	// Recurse over children
+void expandBranch(Viewer * v, int parent_idx, Energy::SearchPath & path)
+{
+	// Expand children
 	for (auto & child : path.children)
 	{
-		visualizeTree(v, idx, child);
+		int child_idx = v->addNode(pathToHtml(child));
+		v->addEdge(parent_idx, child_idx);
+
+		v->nodeProperties[child_idx]["path"].setValue(&child);
 	}
 }
 
@@ -121,8 +119,10 @@ void experiment::doEnergySearch()
 	Energy::SearchPath path(shapeA, shapeB, QStringList(), assignments);
 	egd->search_paths << path;
 
+
 	// Explore path
 	egd->searchAll();
+
 
 	// Visualize search graph
 	{
@@ -132,15 +132,28 @@ void experiment::doEnergySearch()
 		v->show();
 
 		connect(v->wv, &QWebView::loadFinished, [&](){
-			v->addCSS(".source{color:red} .target{color:blue} .cost{color:gray}");
+			v->addCSS(".source{color:red} .target{color:blue} .cost{color:gray} .children{color:gray}");
 
-			v->addNode("root");
-			visualizeTree(v, 0, egd->search_paths.front());
+			auto & path = egd->search_paths.front();
+			int idx = v->addNode(pathToHtml(path));
+			v->nodeProperties[idx]["path"].setValue(&path);
+
 			v->updateGraph();
 
 			connect(v, &Viewer::nodeSelected, [&](int nid){
-				auto shape = v->nodeProperties[nid]["shape"].value<Structure::ShapeGraph*>();
+				auto path = v->nodeProperties[nid]["path"].value<Energy::SearchPath*>();
+				if (!path) return;
+				auto shape = path->shapeA;
 				if (!shape) return;
+
+				// Expand children
+				if (!v->nodeProperties[nid]["expanded"].toBool())
+				{
+					expandBranch(v, nid, *path);
+					v->updateGraph();
+
+					v->nodeProperties[nid]["expanded"].setValue(true);
+				}
 
 				exprmnt->graphs.replace(0, shape);
 				exprmnt->drawArea()->update();

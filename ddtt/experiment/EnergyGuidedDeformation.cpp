@@ -40,6 +40,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 		// Get assignment pair <source, target>
 		auto la = ap.first, lb = ap.second;
 
+		assert(la.size() && lb.size());
+
 		// Apply any needed topological operations
 		GuidedDeformation::topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
 
@@ -57,8 +59,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 	// Evaluate distortion of shape
 	path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
 
-	double candidate_threshold = 0.2;
-	double cost_threshold = 0.2;
+	double candidate_threshold = 0.3;
+	double cost_threshold = 0.3;
 
 	// Suggest for current unassigned:
 	{
@@ -75,6 +77,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 			}
 		}
 
+		// Start process from remaining unassigned parts when needed
 		if (candidatesA.empty() && !path.unassigned.isEmpty())
 			candidatesA << path.shapeA->relationOf(path.unassigned.front());
 
@@ -86,9 +89,61 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 			auto rboxA = path.shapeA->relationBBox(relationA);
 			Vector3 rboxCenterA = (rboxA.center() - boxA.min()).array() / boxA.sizes().array();
 
+			Structure::Relation null_relation;
+			null_relation.type = Structure::Relation::NULLRELATION;
+			null_relation.parts.push_back( Structure::null_part );
+
 			// Find candidate target groups
-			for (auto & relationB : path.shapeB->relations)
+			for (auto & relationB : path.shapeB->relations + (QVector<Structure::Relation>() << null_relation))
 			{
+				// Special case: many-to-null:
+				if (relationB.type == Structure::Relation::NULLRELATION)
+				{
+					// Make copy and match up
+					Structure::ShapeGraph shapeA(*path.shapeA);
+					QStringList la, lb;
+					for (auto p : relationA.parts) lb << Structure::null_part;
+
+					// Collapse part geometry to single point
+					for (auto p : relationA.parts){
+						auto n = shapeA.getNode(p);
+						auto cpts = n->controlPoints();
+						auto centroid = n->position(Eigen::Vector4d(1, 0, 0, 0));
+						for (auto & p : cpts) p = centroid;
+						n->setControlPoints(cpts);
+
+						n->property["isAssignedNull"].setValue(true);
+					}
+
+					// Evaluate
+					double cost = EvaluateCorrespondence::evaluate(&shapeA);
+
+					// Consider
+					{
+						auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
+						auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
+
+						la = relationA.parts;
+						QStringList canadidate_unassigned = path.unassigned;
+						for (auto p : la)
+						{
+							canadidate_unassigned.removeAll(p);
+							modifiedShapeA->getNode(p)->property["isAssignedNull"].setValue(true);
+						}
+
+						Assignments assignment;
+						assignment << qMakePair(la, lb);
+
+						assert(la.size() && lb.size());
+
+						SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, cost);
+
+						path.children.push_back(child);
+					}
+
+					continue;
+				}
+
 				auto rboxB = path.shapeB->relationBBox(relationB);
 				Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
 				auto dist = (rboxCenterA - rboxCenterB).norm();
@@ -98,31 +153,40 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 			
 				// Try and evaluate suggestion
 				double cost = 0;
-				QStringList la, lb;
+				QStringList la = relationA.parts, lb = relationB.parts;
 
-				// Find best matching between two sets
-				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
-				for (auto partID : relationA.parts)
+				// Case: many-to-many, find best matching between two sets
+				if (la.size() != 1 && lb.size() != 1)
 				{
-					Vector3 partCenterA = (path.shapeA->getNode(partID)->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
-
-					QMap<double, QString> dists;
-					for (auto tpartID : relationB.parts)
+					Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+					for (size_t i = 0; i < relationA.parts.size(); i++)
 					{
-						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
-						dists[(partCenterA - partCenterB).norm()] = tpartID;
-					}
+						auto partID = relationA.parts[i];
+						Vector3 partCenterA = (path.shapeA->getNode(partID)->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
 
-					la << partID;
-					lb << dists.values().front();
+						QMap<double, QString> dists;
+						for (auto tpartID : relationB.parts)
+						{
+							Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+							dists[(partCenterA - partCenterB).norm()] = tpartID;
+						}
+
+						lb[i] = dists.values().front();
+					}
+				}
+				else
+				{
+					la = relationA.parts;
+					lb = relationB.parts;
 				}
 
 				// Make copies
 				Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
 
 				// Evaluate
-				GuidedDeformation::topologicalOpeartions(&shapeA, &shapeB, la, lb);
-				GuidedDeformation::applyDeformation(&shapeA, &shapeB, la, lb, path.fixed);
+				auto copy_la = la, copy_lb = lb;
+				GuidedDeformation::topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
+				GuidedDeformation::applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
 				cost = EvaluateCorrespondence::evaluate(&shapeA);
 				
 				// Consider ones we like
@@ -136,6 +200,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 
 					Assignments assignment;
 					assignment << qMakePair(la,lb);
+
+					assert(la.size() && lb.size());
 
 					SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned);
 
@@ -153,6 +219,12 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
 	QStringList & la, QStringList & lb)
 {
+	// Special case: many-to-null
+	if (lb.contains(Structure::null_part))
+	{
+		return;
+	}
+
 	// Case: curve to sheet (unrolling)
 	if (la.size() == lb.size() && la.size() == 1
 		&& shapeA->getNode(la.front())->type() == Structure::CURVE
@@ -262,7 +334,10 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
 	const QStringList & la, const QStringList & lb, const QStringList & fixed)
-{
+{	
+	// Special case: many-to-null
+	if (lb.contains(Structure::null_part)) return;
+
 	// Save initial configuration
 	shapeA->saveKeyframe();
 

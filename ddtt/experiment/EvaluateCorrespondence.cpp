@@ -59,18 +59,22 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 {
 	QVector<double> feature_vector;
 
-	// Ignore duplicate edges
-	QMap<QString, bool> seen;
-
 	// Binary properties:
 	for (auto l : shape->edges)
 	{
 		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current = EvaluateCorrespondence::spokesFromLink(l);
 
+		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() ||
+							  l->n2->property["isAssignedNull"].toBool();
+
 		for (size_t i = 0; i < original.size(); i++)
 		{
 			double v = original[i].normalized().dot(current[i].normalized());
+
+			if (isAssignedNull) 
+				v = 0;
+
 			feature_vector << v;
 		}
 	}
