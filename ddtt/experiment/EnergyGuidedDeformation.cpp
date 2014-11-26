@@ -52,8 +52,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 		GuidedDeformation::applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
 
 		// Track established correspondence
-		for (size_t i = 0; i < la.size(); i++)
-			path.mapping[la[i]] = lb[i];
+		for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
 	}
 
 	// Evaluate distortion of shape
@@ -136,7 +135,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 
 						assert(la.size() && lb.size());
 
-						SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, cost);
+						SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping, cost);
 
 						path.children.push_back(child);
 					}
@@ -159,6 +158,9 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 				if (la.size() != 1 && lb.size() != 1)
 				{
 					Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+					
+					lb.clear();
+
 					for (size_t i = 0; i < relationA.parts.size(); i++)
 					{
 						auto partID = relationA.parts[i];
@@ -171,7 +173,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 							dists[(partCenterA - partCenterB).norm()] = tpartID;
 						}
 
-						lb[i] = dists.values().front();
+						lb << dists.values().front();
 					}
 				}
 				else
@@ -203,7 +205,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 
 					assert(la.size() && lb.size());
 
-					SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned);
+					SearchPath child(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
 
 					path.children.push_back(child);
 				}
@@ -214,6 +216,18 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & path )
 	// Explore each suggestion:
 	for (auto & child : path.children)
 		explore(child);
+}
+
+QVector<Energy::SearchPath*> Energy::GuidedDeformation::solutions()
+{
+	auto t = Energy::SearchPath::exploreAsTree(search_paths);
+
+	QVector<Energy::SearchPath*> result;
+	for (auto leaf = t.begin_leaf(); leaf != t.end_leaf(); leaf++)
+		if((*leaf)->unassigned.isEmpty()) 
+			result.push_back(*leaf);
+
+	return result;
 }
 
 void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,

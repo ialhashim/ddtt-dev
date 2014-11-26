@@ -72,8 +72,10 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 		{
 			double v = original[i].normalized().dot(current[i].normalized());
 
-			if (isAssignedNull) 
-				v = 0;
+			if (isAssignedNull) v = 0;
+
+			// Penalize bad values e.g. nan
+			if (!std::isfinite(v)) v = 0;
 
 			feature_vector << v;
 		}

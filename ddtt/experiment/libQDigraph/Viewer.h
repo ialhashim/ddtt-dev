@@ -33,10 +33,12 @@ public slots:
 	void addCSS(QString style_code);
 
     void doTestGraph();
+    void doExpand();
 
 signals:
     void addLogItem(QString msg);
     void nodeSelected(int nid);
+    void goingToExpand();
 };
 
 #endif // VIEWER_H

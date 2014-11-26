@@ -19,6 +19,9 @@ Viewer::Viewer(QWidget *parent) : QWidget(parent), ui(new Ui::Viewer)
 
 	// Demo:
 	connect(ui->testGraph, SIGNAL(clicked()), SLOT(doTestGraph()));
+
+    // Special buttons:
+    connect(ui->expandButton, SIGNAL(clicked()), SLOT(doExpand()));
 }
 
 void Viewer::doTestGraph()
@@ -63,6 +66,11 @@ void Viewer::doTestGraph()
     });
 
     updateGraph();
+}
+
+void Viewer::doExpand()
+{
+    emit(goingToExpand());
 }
 
 Viewer::~Viewer()

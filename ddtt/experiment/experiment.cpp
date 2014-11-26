@@ -26,7 +26,6 @@ CorrespondenceSearch * search = NULL;
 
 #include "Synthesizer.h"
 
-#include "EnergyGuidedDeformation.h"
 #include "EvaluateCorrespondence.h"
 
 #include "Viewer.h"
@@ -36,6 +35,7 @@ Viewer * v = NULL;
 Q_DECLARE_METATYPE(Structure::ShapeGraph*);
 Q_DECLARE_METATYPE(Energy::SearchPath*);
 experiment * exprmnt = NULL;
+Energy::SearchPath * selected_path;
 
 QString pathToHtml(Energy::SearchPath & p)
 {
@@ -70,9 +70,59 @@ void expandBranch(Viewer * v, int parent_idx, Energy::SearchPath & path)
 	}
 }
 
+void experiment::setSearchPath( Energy::SearchPath * path )
+{
+	// Show deformed
+	graphs.clear();
+	graphs << path->shapeA << path->shapeB;
+
+	if (!graphs.front()->animation.empty())
+	{
+		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
+		encodeGeometry();
+		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
+	}
+
+	// Grey out
+	for (auto n : graphs.front()->nodes){
+		graphs.front()->setColorFor(n->id, QColor(255, 255, 255, 10));
+		n->vis_property["meshSolid"].setValue(false);
+	}
+	for (auto n : graphs.back()->nodes){
+		graphs.back()->setColorFor(n->id, QColor(255, 255, 255, 10));
+		n->vis_property["meshSolid"].setValue(false);
+	}
+
+	// Assign colors based on target
+	int ci = 0;
+	for (auto & relation : graphs.back()->relations)
+	{
+		QColor color = colors[ci++];
+		for (auto nid : relation.parts)
+		{
+			graphs.back()->setColorFor(nid, color);
+			graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true);
+		}
+	}
+
+	// Color matching source
+	for (auto spart : selected_path->mapping.keys())
+	{
+		auto tpart = selected_path->mapping[spart];
+		if (tpart == Structure::null_part) continue;
+
+		auto color = graphs.back()->getNode(tpart)->vis_property["meshColor"].value<QColor>();
+
+		graphs.front()->setColorFor(spart, color);
+		graphs.front()->getNode(spart)->vis_property["meshSolid"].setValue(true);
+	}
+}
+
 void experiment::doEnergySearch()
 {
 	QElapsedTimer timer; timer.start();
+
+	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
 	for (auto g : graphs) g->property["showMeshes"].setValue(false);
@@ -145,6 +195,7 @@ void experiment::doEnergySearch()
 				if (!path) return;
 				auto shape = path->shapeA;
 				if (!shape) return;
+				path->property["nid"].setValue(nid);
 
 				// Expand children
 				if (!v->nodeProperties[nid]["expanded"].toBool())
@@ -155,27 +206,51 @@ void experiment::doEnergySearch()
 					v->nodeProperties[nid]["expanded"].setValue(true);
 				}
 
-				exprmnt->graphs.replace(0, shape);
+				exprmnt->setSearchPath(path);
 				exprmnt->drawArea()->update();
 			});
 		});
+
+		connect(v, &Viewer::goingToExpand, [&](){
+			auto t = Energy::SearchPath::exploreAsTree(egd->search_paths);
+
+			// Search for selected solution:
+			auto itr = t.begin();
+			for (; itr != t.end(); itr++) if (*itr == selected_path) break;
+
+			// Find ancestors
+			tree < Energy::SearchPath::SearchNode >::iterator current = itr;
+			QVector <Energy::SearchPath*> toExpand;
+			while (current != 0){
+				toExpand.push_front(*current);
+				current = t.parent(current);
+			}
+
+			int nid = toExpand.front()->property["nid"].value<int>();
+
+			for (auto element : toExpand)
+			{
+				int child_nid = v->addNode(pathToHtml(*element));
+				v->addEdge(nid, child_nid);
+				v->nodeProperties[child_nid]["path"].setValue(element);
+
+				nid = child_nid;
+			}
+
+			v->updateGraph();
+		});
 	}
 
-	auto & selected_path = egd->search_paths.front();
+	// Select least cost path
+	QList < QPair<double, Energy::SearchPath*> > solutions;
+	auto all_solutions = egd->solutions();
+	for (auto s : all_solutions) solutions << qMakePair(s->cost, s);
+	qSort(solutions.begin(), solutions.end());
+	selected_path = solutions.front().second;
 
-	shapeA = selected_path.shapeA;
-	shapeB = selected_path.shapeB;
+	setSearchPath( selected_path );
 
-	// Show deformed
-	graphs.clear();
-	graphs << shapeA << shapeB;
-
-	if (!graphs.front()->animation.empty())
-	{
-		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
-		encodeGeometry();
-		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
-	}
+	QApplication::restoreOverrideCursor();
 
 	double cost = EvaluateCorrespondence::evaluate(graphs.front());
 	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timer.elapsed()).arg(cost));
@@ -704,25 +779,17 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 			auto source = graphs.front();
 
 			double delta = pw->ui->speed->value();
-			t += isForward ? delta : -delta;
+			t += delta;
 
 			if (t >= 1.0 || t <= 0.0)
 			{
 				t = (t >= 1.0) ? 0.0 : 1.0;
 
-				index += isForward ? 1 : -1;
+				index += 1;
 
 				if (index >= source->animation.size() + 1)
 				{
-					t = 1;
-					isForward = false;
-					index = source->animation.size() - 1;
-				}
-
-				if (index < 0)
-				{
 					t = 0;
-					isForward = true;
 					index = 0;
 				}
 			}

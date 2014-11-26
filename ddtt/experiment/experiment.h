@@ -5,6 +5,7 @@
 
 #include "StructureGraph.h"
 #include "ShapeGraph.h"
+#include "EnergyGuidedDeformation.h"
 
 class experiment: public SurfaceMeshModePlugin{
     Q_OBJECT
@@ -32,7 +33,8 @@ public:
 	void doCorrespond();
 	void doCorrespond2();
 
-	void doCorrespondSearch();
+	void doCorrespondSearch();	
+	void setSearchPath(Energy::SearchPath * path);
 
 	experiment() : widget(NULL), dockwidget(NULL), isReady(false) {}
     QWidget * widget;
