@@ -1,4 +1,5 @@
 #include <deque>
+#include <stack>
 
 #include "EnergyGuidedDeformation.h"
 
@@ -10,6 +11,21 @@
 
 void Energy::GuidedDeformation::searchAll()
 {
+	// Compression:
+	{
+		for (auto n : search_paths.front().shapeA->nodes){
+			auto i = (byte)idxPartMapA.size();
+			idxPartMapA[i] = n->id;
+			partIdxMapA[n->id] = i;
+		}
+
+		for (auto n : search_paths.front().shapeB->nodes){
+			auto i = (byte)idxPartMapB.size();
+			idxPartMapB[i] = n->id;
+			partIdxMapB[n->id] = i;
+		}
+	}
+
 	for (auto & root : search_paths)
 	{
 		// Make copies
@@ -36,14 +52,14 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 {
 	if (root.assignments.empty() && root.unassigned.empty()) return;
 
-	std::deque < Energy::SearchPath* > queue;
-	queue.push_back(&root);
+	std::stack < Energy::SearchPath* > path_stack;
+	path_stack.push(&root);
 	bool isRoot = true;
 
-	while (!queue.empty())
+	while (!path_stack.empty())
 	{
-		auto & path = *queue.front();
-		queue.pop_front();
+		auto & path = *path_stack.top();
+		path_stack.pop();
 
 		// Go over and apply previously suggested assignments:
 		for (auto ap : path.assignments)
@@ -54,13 +70,13 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 			assert(la.size() && lb.size());
 
 			// Apply any needed topological operations
-			GuidedDeformation::topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
+			topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
 
 			// Assigned parts will be fixed
 			for (auto partID : ap.first) path.current << partID;
 
 			// Deform the assigned
-			GuidedDeformation::applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current, isRoot);
+			applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current, isRoot);
 
 			// Track established correspondence
 			for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
@@ -69,8 +85,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 		// Evaluate distortion of shape
 		path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
 
-		double candidate_threshold = 0.3;
-		double cost_threshold = 0.3;
+		double candidate_threshold = 0.2;
+		double cost_threshold = 0.2;
 
 		// Suggest for current unassigned:
 		{
@@ -89,7 +105,13 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 
 			// Start process from remaining unassigned parts when needed
 			if (candidatesA.empty() && !path.unassigned.isEmpty())
+			{
+				//for (auto partID : path.unassigned){
+				//	auto r = path.shapeA->relationOf(partID);
+				//	if (!candidatesA.contains(r)) candidatesA << r;
+				//}
 				candidatesA << path.shapeA->relationOf(path.unassigned.front());
+			}
 
 			// Suggest for each candidate
 			for (auto relationA : candidatesA)
@@ -198,8 +220,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 
 					// Evaluate
 					auto copy_la = la, copy_lb = lb;
-					GuidedDeformation::topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-					GuidedDeformation::applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
+					topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
+					applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
 					cost = EvaluateCorrespondence::evaluate(&shapeA);
 
 					double diff_cost = abs(cost - path.cost);
@@ -228,10 +250,16 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 
 		// Explore each suggestion:
 		for (auto & child : path.children)
-			queue.push_back( &child );
+			path_stack.push(&child);
 
+		// Memory saving:
 		if (isRoot) isRoot = false;
-		else{ delete path.shapeA; delete path.shapeB; path.shapeA = path.shapeB = NULL; }
+		else
+		{ 
+			delete path.shapeA; 
+			delete path.shapeB; 
+			path.shapeA = path.shapeB = NULL;
+		}
 	}
 }
 
@@ -292,18 +320,14 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		StructureAnalysis::removeFromGroups(shapeA, snode);
 
 		delete snode;
-	}
 
-	// Case: one sheet - many curves
-	if (la.size() == 1 && lb.size() > 1
-		&& shapeA->getNode(la.front())->type() == Structure::SHEET
-		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
-	{
-		QString newnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
-		shapeB->getNode(newnode);
-
-		lb.clear();
-		lb << newnode;
+		// Compression:
+		if (!partIdxMapA.contains(snode_sheet->id))
+		{
+			auto i = (byte)idxPartMapA.size();
+			idxPartMapA[i] = snode_sheet->id;
+			partIdxMapA[snode_sheet->id] = i;
+		}
 	}
 
 	// Case: many curves - one sheet
@@ -349,6 +373,33 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		}
 
 		shapeA->removeNode(sheetid);
+
+		// Compression:
+		if (!partIdxMapA.contains(snode_sheet->id))
+		{
+			auto i = (byte)idxPartMapA.size();
+			idxPartMapA[i] = snode_sheet->id;
+			partIdxMapA[snode_sheet->id] = i;
+		}
+	}
+
+	// Case: one sheet - many curves
+	if (la.size() == 1 && lb.size() > 1
+		&& shapeA->getNode(la.front())->type() == Structure::SHEET
+		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
+	{
+		QString newnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
+
+		lb.clear();
+		lb << newnode;
+
+		// Compression:
+		if (!partIdxMapB.contains(newnode))
+		{
+			auto i = (byte)idxPartMapB.size();
+			idxPartMapB[i] = newnode;
+			partIdxMapB[newnode] = i;
+		}
 	}
 
 	// Case: many curves - one curve
@@ -363,9 +414,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		{
 			auto snode = shapeA->getNode(partID);
 			StructureAnalysis::removeFromGroups(shapeA, snode);
-
 			snode->property["isMerged"].setValue(true);
-
 			lb << tnodeID;
 		}
 	}
@@ -382,9 +431,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		{
 			auto snode = shapeA->getNode(partID);
 			StructureAnalysis::removeFromGroups(shapeA, snode);
-
 			snode->property["isMerged"].setValue(true);
-
 			lb << tnodeID;
 		}
 	}
@@ -430,11 +477,59 @@ void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath
 		{
 			// Get assignment pair <source, target>
 			auto la = ap.first, lb = ap.second;
-			GuidedDeformation::topologicalOpeartions(shapeA, shapeB, la, lb);
-			GuidedDeformation::applyDeformation(shapeA, shapeB, la, lb, p->fixed + p->current, true);
+			topologicalOpeartions(shapeA, shapeB, la, lb);
+			applyDeformation(shapeA, shapeB, la, lb, p->fixed + p->current, true);
 
 			p->shapeA = shapeA;
 			p->shapeB = shapeB;
 		}
 	}
+}
+
+void Energy::SearchPath::compress(const QMap<QString, PartIndex> & mapA, const QMap<QString, PartIndex> & mapB)
+{
+	assert(_assignments.empty());
+
+	// Convert part IDs from strings to small numbers
+	for (auto & a : assignments){
+		QVector < SearchPath::PartIndex > mappedA, mappedB;
+		for (auto p : a.first) mappedA << mapA[p];
+		for (auto p : a.second) mappedB << mapB[p];
+		_assignments.push_back(qMakePair(mappedA, mappedB));
+	}
+
+	for (auto & p : fixed) _fixed.push_back(mapA[p]);
+	for (auto & p : current) _current.push_back(mapA[p]);
+	for (auto & p : unassigned) _unassigned.push_back(mapA[p]);
+	for (auto & k : mapping.keys()) _mapping[mapA[k]] = mapB[mapping[k]];
+
+	// Clean up
+	assignments.clear();
+	fixed.clear();
+	current.clear();
+	unassigned.clear();
+	mapping.clear();
+}
+
+void Energy::SearchPath::decompress(const QMap<PartIndex, QString> & mapA, const QMap<PartIndex, QString> & mapB)
+{
+	// Reconstruct part IDs from small numbers
+	for (auto a : _assignments){
+		QStringList mappedA, mappedB;
+		for (auto p : a.first) mappedA << mapA[p];
+		for (auto p : a.second) mappedB << mapB[p];
+		assignments.push_back(qMakePair(mappedA, mappedB));
+	}
+
+	for (auto & p : _fixed) fixed.push_back(mapA[p]);
+	for (auto & p : _current) current.push_back(mapA[p]);
+	for (auto & p : _unassigned) unassigned.push_back(mapA[p]);
+	for (auto & k : _mapping.keys()) mapping[mapA[k]] = mapB[_mapping[k]];
+
+	// Clean up
+	_assignments.clear();
+	_fixed.clear();
+	_current.clear();
+	_unassigned.clear();
+	_mapping.clear();
 }

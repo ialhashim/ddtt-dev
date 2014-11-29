@@ -113,7 +113,16 @@ void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::Sha
 					if (ca.from->property["isMerged"].toBool() && cb.from->property["isMerged"].toBool()) 
 						continue;
 
-                    n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
+					auto coord_a = ca.coord();
+					auto coord_b = cb.coord();
+
+					double dist = (coord_a - coord_b).norm();
+					double threshold = 0.2;
+
+					if (dist < threshold)
+						n->deformTo(coord_a, ca.start() + ca.delta(), true);
+					else
+						n->deformTwoHandles(coord_a, ca.start() + ca.delta(), coord_b, cb.start() + cb.delta());
                 }
                 else
 				{

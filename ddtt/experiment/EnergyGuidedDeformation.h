@@ -73,6 +73,14 @@ namespace Energy
 
 			return entire_path;
 		}
+
+		// Smaller memory footprint
+		typedef byte PartIndex;
+		QVector< QPair<QVector<PartIndex>, QVector<PartIndex> > > _assignments;
+		QVector< PartIndex > _fixed, _current, _unassigned;
+		QMap < PartIndex, PartIndex > _mapping;
+		void compress(const QMap<QString, PartIndex> & mapA, const QMap<QString, PartIndex> & mapB);
+		void decompress(const QMap<PartIndex, QString> & mapA, const QMap<PartIndex, QString> & mapB);
 	};
 
 	struct GuidedDeformation{
@@ -84,12 +92,16 @@ namespace Energy
 		QVector<Energy::SearchPath*> solutions();
 		QVector<Energy::SearchPath*> parents();
 
-		static void applySearchPath(const QVector<Energy::SearchPath*> & path);
+		void applySearchPath(const QVector<Energy::SearchPath*> & path);
 
 		// Utility:
-		static void topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
+		void topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
 			QStringList & la, QStringList & lb);
-		static void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
+		void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
 			const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes = false);
+
+		// Compression:
+		QMap<SearchPath::PartIndex, QString> idxPartMapA, idxPartMapB;
+		QMap<QString, SearchPath::PartIndex> partIdxMapA, partIdxMapB;
 	};
 }

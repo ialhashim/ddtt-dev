@@ -196,6 +196,12 @@ void experiment::doEnergySearch()
 			connect(v, &Viewer::nodeSelected, [&](int nid){
 				auto path = v->nodeProperties[nid]["path"].value<Energy::SearchPath*>();
 				if (!path) return;
+
+				auto entire_path = Energy::SearchPath::getEntirePath(path, egd->search_paths);
+				egd->applySearchPath(entire_path);
+				selected_path = path;
+				exprmnt->setSearchPath(selected_path);
+
 				auto shape = path->shapeA;
 				if (!shape) return;
 				path->property["nid"].setValue(nid);
@@ -208,9 +214,6 @@ void experiment::doEnergySearch()
 
 					v->nodeProperties[nid]["expanded"].setValue(true);
 				}
-
-				selected_path = path;
-				exprmnt->setSearchPath(path);
 
 				exprmnt->drawArea()->update();
 			});
@@ -241,7 +244,7 @@ void experiment::doEnergySearch()
 	qSort(solutions.begin(), solutions.end());
 	
 	auto entire_path = Energy::SearchPath::getEntirePath(solutions.front().second, egd->search_paths);
-	Energy::GuidedDeformation::applySearchPath(entire_path);
+	egd->applySearchPath( entire_path );
 	selected_path = entire_path.back();
 	setSearchPath( selected_path );
 
