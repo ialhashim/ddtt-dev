@@ -81,10 +81,7 @@ void Curve::get( const Vector4d& coordinates, Vector3 & pos, std::vector<Vector3
 
 SurfaceMesh::Vector3 Curve::position( const Vector4d& coordinates )
 {
-    std::vector<Vector3d> nf = noFrame();
-    Vector3 p(0,0,0); 
-	get(coordinates, p, nf);
-	return p;
+    return curve.GetPosition(coordinates[0]);
 }
 
 Vector4d Curve::approxCoordinates( const Vector3 & pos )

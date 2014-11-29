@@ -54,6 +54,7 @@ struct Sheet : public Node
 
 	// Geometric properties
 	Scalar area();
+    SurfaceMesh::Scalar avgEdgeLength();
 
 	// Encode and decode
 	static SheetEncoding encodeSheet( Sheet * sheet, Vector3 origin, Vector3 X, Vector3 Y, Vector3 Z );
@@ -63,7 +64,7 @@ struct Sheet : public Node
 
     // Visualization
     void draw(bool isShowCtrlPts = false, bool isColorOverride = false);
-	void drawWithNames(int nID, int pointIDRange);
+    void drawWithNames(int nID, int pointIDRange);
 };
 
 }

@@ -56,6 +56,23 @@ namespace Energy
 			}
 			return t;
 		}
+		static QVector <Energy::SearchPath*> getEntirePath(SearchPath * selected_path, QVector<SearchPath> & paths){
+			auto t = SearchPath::exploreAsTree(paths);
+
+			// Search for selected solution:
+			auto itr = t.begin();
+			for (; itr != t.end(); itr++) if (*itr == selected_path) break;
+
+			// Find ancestors
+			tree < Energy::SearchPath::SearchNode >::iterator current = itr;
+			QVector <Energy::SearchPath*> entire_path;
+			while (current != 0){
+				entire_path.push_front(*current);
+				current = t.parent(current);
+			}
+
+			return entire_path;
+		}
 	};
 
 	struct GuidedDeformation{
@@ -67,10 +84,12 @@ namespace Energy
 		QVector<Energy::SearchPath*> solutions();
 		QVector<Energy::SearchPath*> parents();
 
+		static void applySearchPath(const QVector<Energy::SearchPath*> & path);
+
 		// Utility:
 		static void topologicalOpeartions(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
 			QStringList & la, QStringList & lb);
 		static void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
-			const QStringList & la, const QStringList & lb, const QStringList & fixed);
+			const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes = false);
 	};
 }

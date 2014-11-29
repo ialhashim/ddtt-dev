@@ -76,13 +76,6 @@ void experiment::setSearchPath( Energy::SearchPath * path )
 	graphs.clear();
 	graphs << path->shapeA << path->shapeB;
 
-	if (!graphs.front()->animation.empty())
-	{
-		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
-		encodeGeometry();
-		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
-	}
-
 	// Grey out
 	for (auto n : graphs.front()->nodes){
 		graphs.front()->setColorFor(n->id, QColor(255, 255, 255, 10));
@@ -116,12 +109,18 @@ void experiment::setSearchPath( Energy::SearchPath * path )
 		graphs.front()->setColorFor(spart, color);
 		graphs.front()->getNode(spart)->vis_property["meshSolid"].setValue(true);
 	}
+
+	// For visualization
+	if (!graphs.front()->animation.empty())
+	{
+		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
+		encodeGeometry();
+		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
+	}
 }
 
 void experiment::doEnergySearch()
 {
-	QElapsedTimer timer; timer.start();
-
 	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
 
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
@@ -161,6 +160,8 @@ void experiment::doEnergySearch()
 		landmarks_back << m;
 	}
 
+	QElapsedTimer timer; timer.start();
+
 	egd = new Energy::GuidedDeformation;
 
 	// Create a search path
@@ -173,6 +174,8 @@ void experiment::doEnergySearch()
 	// Explore path
 	egd->searchAll();
 
+
+	auto timeElapsed = timer.elapsed();
 
 	// Visualize search graph
 	{
@@ -206,25 +209,15 @@ void experiment::doEnergySearch()
 					v->nodeProperties[nid]["expanded"].setValue(true);
 				}
 
+				selected_path = path;
 				exprmnt->setSearchPath(path);
+
 				exprmnt->drawArea()->update();
 			});
 		});
 
 		connect(v, &Viewer::goingToExpand, [&](){
-			auto t = Energy::SearchPath::exploreAsTree(egd->search_paths);
-
-			// Search for selected solution:
-			auto itr = t.begin();
-			for (; itr != t.end(); itr++) if (*itr == selected_path) break;
-
-			// Find ancestors
-			tree < Energy::SearchPath::SearchNode >::iterator current = itr;
-			QVector <Energy::SearchPath*> toExpand;
-			while (current != 0){
-				toExpand.push_front(*current);
-				current = t.parent(current);
-			}
+			auto toExpand = Energy::SearchPath::getEntirePath(selected_path, egd->search_paths);
 
 			int nid = toExpand.front()->property["nid"].value<int>();
 
@@ -246,14 +239,16 @@ void experiment::doEnergySearch()
 	auto all_solutions = egd->solutions();
 	for (auto s : all_solutions) solutions << qMakePair(s->cost, s);
 	qSort(solutions.begin(), solutions.end());
-	selected_path = solutions.front().second;
-
+	
+	auto entire_path = Energy::SearchPath::getEntirePath(solutions.front().second, egd->search_paths);
+	Energy::GuidedDeformation::applySearchPath(entire_path);
+	selected_path = entire_path.back();
 	setSearchPath( selected_path );
 
 	QApplication::restoreOverrideCursor();
 
 	double cost = EvaluateCorrespondence::evaluate(graphs.front());
-	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timer.elapsed()).arg(cost));
+	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
 }
 
 void experiment::doCorrespondSearch()
@@ -522,6 +517,14 @@ void experiment::create()
 	connect(pw->ui->swapButton, &QPushButton::released, [&]{
 		std::swap(graphs.front(), graphs.back());
 		drawArea()->update();
+
+		// Save last used shapes:
+		if (graphs.size() == 2){
+			QSettings settingsFile(QSettings::IniFormat, QSettings::UserScope, "GrUVi", "experiment");
+			settingsFile.setValue("shapeLeft", graphs.front()->property["name"].toString());
+			settingsFile.setValue("shapeRight", graphs.back()->property["name"].toString());
+			settingsFile.sync();
+		}
 	});
 	connect(pw->ui->loadShapes, &QPushButton::released, [&]{
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Shape"), "", tr("Shape File (*.xml)"));
@@ -893,6 +896,8 @@ void experiment::encodeGeometry()
 {
 	for (auto g : graphs)
 	{
+		if (g->property["isGeometryEncoded"].toBool()) continue;
+
 		for (auto n : g->nodes)
 		{
 			auto mesh = g->getMesh(n->id);

@@ -117,9 +117,7 @@ void Sheet::get( const Vector4d& coordinates, Vector3 & pos, std::vector<Vector3
 
 SurfaceMesh::Vector3 Sheet::position( const Vector4d& coordinates )
 {
-    std::vector<Vector3> nf = noFrame();
-    Vector3 p(0,0,0); get(coordinates,p, nf);
-	return p;
+    return surface.P(coordinates[0],coordinates[1]);
 }
 
 Vector4d Sheet::approxCoordinates( const Vector3 & pos )
@@ -219,6 +217,28 @@ SurfaceMesh::Scalar Sheet::area()
 	}
 
 	return a;
+}
+
+SurfaceMesh::Scalar Sheet::avgEdgeLength()
+{
+    double sum = 0;
+    int count = 0;
+
+    for(size_t u = 0; u + 1 < surface.mNumUCtrlPoints; u++)
+    {
+        for(size_t v = 0; v + 1 < surface.mNumVCtrlPoints; v++)
+        {
+            double e1 = (surface.mCtrlPoint[u+1][v] - surface.mCtrlPoint[u][v]).norm();
+            double e2 = (surface.mCtrlPoint[u][v+1] - surface.mCtrlPoint[u][v]).norm();
+
+            sum += e1;
+            sum += e2;
+
+            count += 2;
+        }
+    }
+
+    return sum / count;
 }
 
 SurfaceMesh::Vector3 Sheet::center()
