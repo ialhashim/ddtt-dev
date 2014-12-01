@@ -85,6 +85,7 @@ namespace Energy
 
 	struct GuidedDeformation{
 		QVector<SearchPath> search_paths;
+		Structure::ShapeGraph *origShapeA, *origShapeB;
 
 		void searchAll();		
 		void explore(SearchPath & path);

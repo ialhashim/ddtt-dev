@@ -80,10 +80,12 @@ void experiment::setSearchPath( Energy::SearchPath * path )
 	for (auto n : graphs.front()->nodes){
 		graphs.front()->setColorFor(n->id, QColor(255, 255, 255, 10));
 		n->vis_property["meshSolid"].setValue(false);
+		if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 	}
 	for (auto n : graphs.back()->nodes){
 		graphs.back()->setColorFor(n->id, QColor(255, 255, 255, 10));
 		n->vis_property["meshSolid"].setValue(false);
+		if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 	}
 
 	// Assign colors based on target
@@ -618,9 +620,9 @@ void experiment::decorate()
 		{
 			if (!g->animation_debug.isEmpty())
 			{
-				if (!g->animation_debug.front().isEmpty())
-					for (auto d : g->animation_debug[g->animation_index])
-						d->draw(*drawArea());
+				int idx = std::min(g->animation_debug.size()-1, g->animation_index);
+				auto dbg = g->animation_debug[idx];
+				for (auto d : dbg) d->draw(*drawArea());
 			}
 
 			if (g->property["showNames"].toBool())
