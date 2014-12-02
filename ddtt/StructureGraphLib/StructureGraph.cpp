@@ -2078,25 +2078,26 @@ void Graph::moveCenterTo( Vector3 newCenter, bool isKeepMeshes )
     }
 }
 
-Array1D_Vector3 Graph::getAllControlPoints()
+Array2D_Vector3 Graph::getAllControlPoints()
 {
-    Array1D_Vector3 result;
+    Array2D_Vector3 result;
     for(Structure::Node * n : nodes){
-        auto pts = n->controlPoints();
-        result.insert(result.end(), pts.begin(), pts.end());
+        result.push_back(n->controlPoints());
     }
     return result;
 }
 
-void Graph::setAllControlPoints(Array1D_Vector3 all_points)
+void Graph::setAllControlPoints(Array2D_Vector3 all_points)
 {
-    int offset = 0;
-    for(Structure::Node * n : nodes){
-        int size = n->numCtrlPnts();
-        Array1D_Vector3 npts( all_points.begin() + offset, all_points.begin() + offset + size );
-        n->setControlPoints(npts);
+    int idx = 0;
+    for(Structure::Node * n : nodes)
+    {
+        auto expected = n->numCtrlPnts();
+        auto got = all_points[idx].size();
 
-        offset += size;
+        if(expected != got) continue; // skip invalid assignments
+
+        n->setControlPoints(all_points[idx++]);
     }
 }
 

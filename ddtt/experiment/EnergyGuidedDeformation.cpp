@@ -83,6 +83,9 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 			// Deform the assigned
 			applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
 
+			// Shape modifications
+			postDeformation(path.shapeA, path.fixed + path.current);
+
 			// Track established correspondence
 			for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
 		}
@@ -308,13 +311,13 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		return sheet->surface.timeAt(p, bestUV, minRange, maxRange, avgEdge, threshold);
 	};
 
-	// Special case: many-to-null
+	// NULL Special case: any-to-null
 	if (lb.contains(Structure::null_part))
 	{
 		return;
 	}
 
-	// Case: curve to sheet (unrolling)
+	// CONVERT Case: curve to sheet (unrolling)
 	if (la.size() == lb.size() && la.size() == 1
 		&& shapeA->getNode(la.front())->type() == Structure::CURVE
 		&& shapeB->getNode(lb.front())->type() == Structure::SHEET)
@@ -342,8 +345,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		// Remove from all relations
 		StructureAnalysis::removeFromGroups(shapeA, snode);
 
-		delete snode;
-
 		// Compression:
 		if (!partIdxMapA.contains(snode_sheet->id))
 		{
@@ -351,9 +352,11 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			idxPartMapA[i] = snode_sheet->id;
 			partIdxMapA[snode_sheet->id] = i;
 		}
+
+		delete snode;
 	}
 
-	// Case: many curves - one sheet
+	// MERGE Case: many curves - one sheet
 	if (la.size() > 1 && lb.size() == 1
 		&& shapeA->getNode(la.front())->type() == Structure::CURVE
 		&& shapeB->getNode(lb.front())->type() == Structure::SHEET)
@@ -406,7 +409,43 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		shapeA->removeNode(sheetid);
 	}
 
-	// Case: one sheet - many curves
+	// MERGE Case: many curves - one curve
+	if (la.size() > 1 && lb.size() == 1
+		&& shapeA->getNode(la.front())->type() == Structure::CURVE
+		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
+	{
+		auto tnodeID = lb.front();
+		lb.clear();
+
+		for (auto partID : la)
+		{
+			auto snode = shapeA->getNode(partID);
+			StructureAnalysis::removeFromGroups(shapeA, snode);
+			snode->property["isMerged"].setValue(true);
+			lb << tnodeID;
+		}
+	}
+
+	// MERGE Case: many sheets - one sheet
+	if (la.size() > 1 && lb.size() == 1
+		&& shapeA->getNode(la.front())->type() == Structure::SHEET
+		&& shapeB->getNode(lb.front())->type() == Structure::SHEET)
+	{
+		auto tnodeID = lb.front();
+		lb.clear();
+
+		bool isFirst = true;
+
+		for (auto partID : la)
+		{
+			auto snode = shapeA->getNode(partID);
+			StructureAnalysis::removeFromGroups(shapeA, snode);
+			if(partID != la.front()) snode->property["isMerged"].setValue(true);
+			lb << tnodeID;
+		}
+	}
+
+	// SPLIT Case: one sheet - many curves
 	if (la.size() == 1 && lb.size() > 1
 		&& shapeA->getNode(la.front())->type() == Structure::SHEET
 		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
@@ -425,37 +464,42 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		}
 	}
 
-	// Case: many curves - one curve
-	if (la.size() > 1 && lb.size() == 1
+	// SPLIT Case: one curve - many curves
+	bool one_many_curves = la.size() == 1 && lb.size() > 1
 		&& shapeA->getNode(la.front())->type() == Structure::CURVE
-		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
-	{
-		auto tnodeID = lb.front();
-		lb.clear();
+		&& shapeB->getNode(lb.front())->type() == Structure::CURVE;
 
-		for (auto partID : la)
-		{
-			auto snode = shapeA->getNode(partID);
-			StructureAnalysis::removeFromGroups(shapeA, snode);
-			snode->property["isMerged"].setValue(true);
-			lb << tnodeID;
-		}
-	}
-
-	// Case: many sheets - one sheet
-	if (la.size() > 1 && lb.size() == 1
+	// SPLIT Case: one sheet - many sheets
+	bool one_many_sheets = la.size() == 1 && lb.size() > 1
 		&& shapeA->getNode(la.front())->type() == Structure::SHEET
-		&& shapeB->getNode(lb.front())->type() == Structure::SHEET)
-	{
-		auto tnodeID = lb.front();
-		lb.clear();
+		&& shapeB->getNode(lb.front())->type() == Structure::SHEET;
 
-		for (auto partID : la)
+	// Perform split:
+	if (one_many_curves || one_many_sheets)
+	{
+		auto snode = shapeA->getNode(la.front());
+
+		QVector<Structure::Node *> new_nodes;
+		new_nodes << snode;
+		int count = 0;
+
+		for (auto partID : lb)
 		{
-			auto snode = shapeA->getNode(partID);
-			StructureAnalysis::removeFromGroups(shapeA, snode);
-			snode->property["isMerged"].setValue(true);
-			lb << tnodeID;
+			count++;
+			if (count == 1) continue; // skip first
+
+			auto new_snode = snode->clone();
+			new_snode->id += QString("@%1").arg(count);
+
+			shapeA->addNode(new_snode);
+			new_nodes << new_snode;
+		}
+
+		la.clear();
+
+		for (auto n : new_nodes){
+			n->property["isSplit"].setValue(true);
+			la << n->id;
 		}
 	}
 }
@@ -480,15 +524,15 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 			Structure::ShapeGraph::correspondTwoNodes(partID, shapeA, tpartID, shapeB);
 
 		DeformToFit::registerAndDeformNodes(shapeA->getNode(partID), shapeB->getNode(tpartID)); if (isSaveKeyframes) shapeA->saveKeyframe();
-		PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) shapeA->saveKeyframe();
 	}
+	PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) shapeA->saveKeyframe();
 
 	//if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(10, 10, "after deform_fit_propagate_sym", 12));
 
 	// Propagate edit by applying structural constraints
 	PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
-	PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
-	PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
+	//PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
+	//PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
 }
 
 void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath*> & path)
@@ -508,6 +552,18 @@ void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath
 			p->shapeA = shapeA;
 			p->shapeB = shapeB;
 		}
+	}
+}
+
+void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed)
+{
+	auto fixedSet = fixed.toSet();
+
+	for (auto & r : shape->relations)
+	{
+		if (r.parts.empty() || !r.parts.toSet().intersect(fixedSet).empty()) continue;
+
+		StructureAnalysis::updateRelation(shape, r);
 	}
 }
 

@@ -70,7 +70,7 @@ namespace Structure
 
 		// Visualize shape changes:
 		int animation_index;
-		QVector<Array1D_Vector3> animation;
+		QVector<Array2D_Vector3> animation;
 		QVector< QVector<RenderObject::Base*> > animation_debug;
 		void saveKeyframe(){ animation_index = animation.size(); animation.push_back(getAllControlPoints()); animation_debug << QVector<RenderObject::Base*>(); }
 		void pushKeyframeDebug(RenderObject::Base* d){

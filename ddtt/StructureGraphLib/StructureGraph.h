@@ -140,8 +140,8 @@ namespace Structure{
         void transform(QMatrix4x4 mat,bool isKeepMeshes = false);
 		void moveCenterTo( Vector3 newCenter, bool isKeepMeshes );
 
-        Array1D_Vector3 getAllControlPoints();
-        void setAllControlPoints(Array1D_Vector3 all_points);
+        Array2D_Vector3 getAllControlPoints();
+        void setAllControlPoints(Array2D_Vector3 all_points);
 
 		// Point Landmarks
 		QVector<POINT_ID> selectedControlPointsByColor(QColor color);

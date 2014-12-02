@@ -81,10 +81,19 @@ void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::Sha
         for (auto & n : propagationLevel[i])
         {
 			// Experimental: allow sliding
-			if (n->property["isMerged"].toBool()) continue;
+			if (n->property["isMerged"].toBool()) 
+				continue;
 
 			QVector<ProximityConstraint> current_constraints;
-			for (auto c : constraints[n->id]) current_constraints << c;
+			for (auto c : constraints[n->id])
+			{
+				// Experimental: allow sliding
+				if (c.from->property["isSplit"].toBool()) 	continue;
+				if (c.from->property["isMerged"].toBool())	continue;
+
+				current_constraints << c;
+			}
+
 			if (current_constraints.isEmpty()) continue;
 
             if (current_constraints.size() == 1)

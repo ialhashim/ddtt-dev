@@ -100,6 +100,7 @@ namespace Energy
 			QStringList & la, QStringList & lb);
 		void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
 			const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes = false);
+		void postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed);
 
 		// Compression:
 		QMap<SearchPath::PartIndex, QString> idxPartMapA, idxPartMapB;

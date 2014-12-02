@@ -115,9 +115,9 @@ void experiment::setSearchPath( Energy::SearchPath * path )
 	// For visualization
 	if (!graphs.front()->animation.empty())
 	{
-		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
-		encodeGeometry();
-		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
+		auto all_points = graphs.front()->animation.back();
+		int idx = 0;
+		for (Structure::Node * n : graphs.front()->nodes) n->setControlPoints(all_points[idx++]);
 	}
 }
 
@@ -130,6 +130,8 @@ void experiment::doEnergySearch()
 
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+
+	encodeGeometry();
 
 	QMatrix4x4 mat;
 
@@ -805,8 +807,19 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 			auto ptsBefore = graphs.front()->animation[std::max(0, index - 1)];
 			auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size() - 1)];
 
-			Array1D_Vector3 ptsCurrent;
-			for (size_t i = 0; i < ptsBefore.size(); i++) ptsCurrent.push_back(AlphaBlend(t, ptsBefore[i], ptsAfter[i]));
+			Array2D_Vector3 ptsCurrent;
+			for (size_t i = 0; i < ptsBefore.size(); i++)
+			{
+				Array1D_Vector3 pts_cur;
+				for (size_t j = 0; j < ptsBefore[i].size(); j++)
+				{
+					if (ptsBefore[i].size() != ptsAfter[i].size())
+						ptsBefore[i] = ptsAfter[i];
+
+					pts_cur.push_back(AlphaBlend(t, ptsBefore[i][j], ptsAfter[i][j]));
+				}
+				ptsCurrent.push_back(pts_cur);
+			}
 			graphs.front()->setAllControlPoints(ptsCurrent);
 
 			for (auto n : graphs.front()->nodes) if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
@@ -938,6 +951,8 @@ void experiment::decodeGeometry()
 			if (!mesh) continue;
 			auto mesh_points = mesh->vertex_coordinates();
 			QVector<ParameterCoord> encoding = n->property["encoding"].value< QVector<ParameterCoord> >();
+
+			if (encoding.empty()) continue;
 
 			// Generate consistent frames along curve
 			Array1D_Vector4d coords;

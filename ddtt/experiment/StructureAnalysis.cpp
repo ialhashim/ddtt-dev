@@ -177,3 +177,27 @@ void StructureAnalysis::removeFromGroups(Structure::ShapeGraph * shape, Structur
 {
 	for (auto & r : shape->relations) r.parts.removeAll(node->id);
 }
+
+void StructureAnalysis::updateRelation(Structure::ShapeGraph * shape, Structure::Relation & r)
+{
+	std::vector<Vector3> centers;
+	Vector3 centroid(0, 0, 0);
+
+	for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0, 0, 0, 0)));
+
+	if (r.type == Structure::Relation::REFLECTIONAL)
+	{
+
+	}
+
+	if (r.type == Structure::Relation::ROTATIONAL)
+	{
+		auto plane = best_plane_from_points(centers);
+		r.point = plane.first;
+		r.axis = plane.second;
+
+		// Vector from part's head to centroid
+		for (size_t i = 0; i < r.parts.size(); i++)
+			r.deltas[i] = centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0));
+	}
+}
