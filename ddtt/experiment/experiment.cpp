@@ -19,11 +19,9 @@ ExperimentWidget * pw = NULL;
 
 #include "DeformEnergy.h"
 #include "DeformEnergy2.h"
-
-#include "Deformer.h"
 #include "CorrespondenceSearch.h"
-CorrespondenceSearch * search = NULL;
-
+CorrespondenceSearch * mysearch = NULL;
+#include "Deformer.h"
 #include "Synthesizer.h"
 
 #include "EvaluateCorrespondence.h"
@@ -46,6 +44,7 @@ QString pathToHtml(Energy::SearchPath & p)
 		html << QString("<span class=source>%1</span>").arg(a.first.join("-"));
 		html << "<br/>";
 		html << QString("<span class=target>%1</span>").arg(a.second.join("-"));
+		if(p.assignments.size() > 1 && a != p.assignments.back()) html << "<br/>";
 	}
 
 	html << "<br/>";
@@ -70,7 +69,7 @@ void expandBranch(Viewer * v, int parent_idx, Energy::SearchPath & path)
 	}
 }
 
-void experiment::setSearchPath( Energy::SearchPath * path )
+void experiment::setSearchPath(Energy::SearchPath * path)
 {
 	// Show deformed
 	graphs.clear();
@@ -115,9 +114,9 @@ void experiment::setSearchPath( Energy::SearchPath * path )
 	// For visualization
 	if (!graphs.front()->animation.empty())
 	{
-		auto all_points = graphs.front()->animation.back();
-		int idx = 0;
-		for (Structure::Node * n : graphs.front()->nodes) n->setControlPoints(all_points[idx++]);
+		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
+		encodeGeometry();
+		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
 	}
 }
 
@@ -130,8 +129,6 @@ void experiment::doEnergySearch()
 
 	auto shapeA = new Structure::ShapeGraph(*graphs.front());
 	auto shapeB = new Structure::ShapeGraph(*graphs.back());
-
-	encodeGeometry();
 
 	QMatrix4x4 mat;
 
@@ -281,16 +278,16 @@ void experiment::doCorrespondSearch()
 		//graphs.push_back(shapeB);
 	}
 
-	search = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate(), pw->ui->isOtherEnergy->isChecked());
+	mysearch = new CorrespondenceSearch(shapeA, shapeB, CorrespondenceGenerator(shapeA, shapeB).generate(), pw->ui->isOtherEnergy->isChecked());
 
-	connect(search, SIGNAL(done()), SLOT(postCorrespond()));
+	connect(mysearch, SIGNAL(done()), SLOT(postCorrespond()));
 
-	search->start();
+	mysearch->start();
 }
 
 void experiment::showCorrespond(int idx)
 {
-	if (graphs.empty() || !search || search->paths.empty() || idx > search->paths.size() - 1) return;
+	if (graphs.empty() || !mysearch || mysearch->paths.empty() || idx > mysearch->paths.size() - 1) return;
 
 	drawArea()->clear();
 
@@ -303,8 +300,8 @@ void experiment::showCorrespond(int idx)
 		n->vis_property["meshSolid"].setValue(false);
 	}
 
-	auto nidA = search->paths[idx].first;
-	auto nidB = search->paths[idx].second;
+	auto nidA = mysearch->paths[idx].first;
+	auto nidB = mysearch->paths[idx].second;
 
 	QMap<QString, QStringList> mapback;
 
@@ -367,12 +364,12 @@ void experiment::postCorrespond()
 {
 	pw->ui->searchBest->setEnabled(true);
 
-	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(search->property["allSearchTime"].toInt()));
+	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(mysearch->property["allSearchTime"].toInt()));
 
 	bool isVisualize = pw->ui->isVisualize->isChecked();
 
 	if (pw->ui->isShowParts->isChecked())
-		showCorrespond(search->bestCorrespondence);
+		showCorrespond(mysearch->bestCorrespondence);
 
 	pw->ui->pathsList->clear();
 
@@ -380,16 +377,16 @@ void experiment::postCorrespond()
 	{
 		QSet<double> scoreSet;
 
-		for (size_t pi = 0; pi < search->pathScores.size(); pi++)
+		for (size_t pi = 0; pi < mysearch->pathScores.size(); pi++)
 		{
 			//if (scoreSet.contains(search->pathScores[pi])) continue; // avoid duplicated scores
-			scoreSet.insert(search->pathScores[pi]);
+			scoreSet.insert(mysearch->pathScores[pi]);
 
 			//Arg1: the number, Arg2: how many 0 you want?, Arg3: i don't know but only 10 can take negative numbers
 			QString number;
-			number.sprintf("%09.3f ", search->pathScores[pi]);
+			number.sprintf("%09.3f ", mysearch->pathScores[pi]);
 
-			for (auto key : search->pathDetails[pi].keys()) number += QString(",%1=%2").arg(key.left(4)).arg(search->pathDetails[pi][key].toDouble());
+			for (auto key : mysearch->pathDetails[pi].keys()) number += QString(",%1=%2").arg(key.left(4)).arg(mysearch->pathDetails[pi][key].toDouble());
 
 			auto item = new QListWidgetItem(number);
 			item->setData(Qt::UserRole, pi);
@@ -563,7 +560,7 @@ void experiment::create()
 		drawArea()->update();
 	});
 	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&]{
-		if (search){
+		if (mysearch){
 			int pid = pw->ui->pathsList->currentItem()->data(Qt::UserRole).toInt();
 			showCorrespond(pid);
 		}
@@ -807,19 +804,33 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 			auto ptsBefore = graphs.front()->animation[std::max(0, index - 1)];
 			auto ptsAfter = graphs.front()->animation[std::min(index, graphs.front()->animation.size() - 1)];
 
+			int activeNodes = graphs.front()->nodes.size();
 			Array2D_Vector3 ptsCurrent;
-			for (size_t i = 0; i < ptsBefore.size(); i++)
+			for (size_t i = 0; i < activeNodes; i++)
 			{
 				Array1D_Vector3 pts_cur;
-				for (size_t j = 0; j < ptsBefore[i].size(); j++)
-				{
-					if (ptsBefore[i].size() != ptsAfter[i].size())
-						ptsBefore[i] = ptsAfter[i];
 
-					pts_cur.push_back(AlphaBlend(t, ptsBefore[i][j], ptsAfter[i][j]));
+				if (i < ptsBefore.size())
+				{
+					for (size_t j = 0; j < ptsBefore[i].size(); j++)
+					{
+						if (ptsBefore[i].size() != ptsAfter[i].size())
+							ptsBefore[i] = ptsAfter[i];
+
+						pts_cur.push_back(AlphaBlend(t, ptsBefore[i][j], ptsAfter[i][j]));
+					}
+
+					ptsCurrent.push_back(pts_cur);
 				}
-				ptsCurrent.push_back(pts_cur);
+				else
+				{
+					auto n = graphs.front()->nodes[i];
+					pts_cur.resize(n->numCtrlPnts(), Vector3(0,0,0));
+
+					ptsCurrent.push_back(pts_cur);
+				}
 			}
+			
 			graphs.front()->setAllControlPoints(ptsCurrent);
 
 			for (auto n : graphs.front()->nodes) if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();

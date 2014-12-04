@@ -20,8 +20,8 @@
 #endif
 #else
 #endif
-static inline std::string exec(char* cmd) {
-	FILE* pipe = popen(cmd, "r");
+static inline std::string exec(std::string cmd) {
+    FILE* pipe = popen(cmd.c_str(), "r");
 	if (!pipe) return "ERROR";
 	char buffer[512];
 	std::string result = "";

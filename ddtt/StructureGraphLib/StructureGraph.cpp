@@ -2092,6 +2092,8 @@ void Graph::setAllControlPoints(Array2D_Vector3 all_points)
     int idx = 0;
     for(Structure::Node * n : nodes)
     {
+		if (idx > all_points.size() - 1) continue; // skip invalid assignments
+
         auto expected = n->numCtrlPnts();
         auto got = all_points[idx].size();
 

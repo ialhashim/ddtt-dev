@@ -1,9 +1,14 @@
 #include "EvaluateCorrespondence.h"
 
+#include "hausdorff.h"
+
 Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::Link * l)
 {
 	auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
 	auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
+
+	if (samples1.empty()) samples1 = EvaluateCorrespondence::sampleNode(l->n1, 0);
+	if (samples2.empty()) samples1 = EvaluateCorrespondence::sampleNode(l->n2, 0);
 
 	Array1D_Vector3 spokes;
 	for (auto rowi : samples1) for (auto ci : rowi)
@@ -13,7 +18,7 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::Link * l)
 	return spokes;
 }
 
-void EvaluateCorrespondence::sampleNode(Structure::Node * n, double resolution)
+Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::Node * n, double resolution)
 {
 	if (resolution == 0) resolution = n->area() / 3;
 
@@ -34,6 +39,8 @@ void EvaluateCorrespondence::sampleNode(Structure::Node * n, double resolution)
 
 	n->property["orig_diagonal"].setValue(n->diagonal());
 	n->property["orig_start"].setValue(n->startPoint());
+
+	return samples_coords;
 }
 
 void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
@@ -65,6 +72,12 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current = EvaluateCorrespondence::spokesFromLink(l);
 
+		// Scale by difference in closest distance of before / after
+		auto minDist = [](Array1D_Vector3& pts){double m = DBL_MAX; for (auto& p : pts) m = std::min(m, p.norm()); return m; };
+		double s_orig = minDist(original);
+		double s_curr = minDist(current);
+		double scale = std::min(s_orig,s_curr) / std::max(s_orig, s_curr);
+
 		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() ||
 							  l->n2->property["isAssignedNull"].toBool();
 
@@ -76,6 +89,9 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 
 			// Penalize bad values e.g. nan
 			if (!std::isfinite(v)) v = 0;
+
+			// Scaling
+			v *= scale;
 
 			feature_vector << v;
 		}
@@ -93,4 +109,49 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 	double cost = 1.0 - similarity;
 
 	return cost;
+}
+
+QMap<QString, NanoKdTree*> EvaluateCorrespondence::kdTreesNodes(Structure::ShapeGraph * shape)
+{
+	QMap < QString, NanoKdTree* > result;
+
+	auto buildKdTree = [](Structure::Node * n, const Array2D_Vector4d & coords){
+		auto t = new NanoKdTree;
+		for (auto row : coords) for(auto coord : row) t->addPoint(n->position(coord));
+		t->build();
+		return t;
+	};
+
+	for (auto n : shape->nodes)
+	{
+		auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
+		if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(n, 0);
+		result[n->id] = buildKdTree(n, coords);
+	}
+
+	return result;
+}
+
+QMap<QString, QMap<QString, double> > EvaluateCorrespondence::hausdroffDistance(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB)
+{
+	QMap<QString, QMap<QString, double> > result;
+
+	// Initialize search acceleration
+	auto trees_a = EvaluateCorrespondence::kdTreesNodes(shapeA);
+	auto trees_b = EvaluateCorrespondence::kdTreesNodes(shapeB);
+
+	for (auto nA : shapeA->nodes)
+	{
+		for (auto nB : shapeB->nodes)
+		{
+			double distance = hausdroff::distance(trees_a[nA->id], trees_b[nB->id]);
+			result[nA->id][nB->id] = distance;
+		}
+	}
+
+	// Clean up
+	for (auto t : trees_a) delete t;
+	for (auto t : trees_b) delete t;
+
+	return result;
 }

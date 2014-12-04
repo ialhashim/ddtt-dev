@@ -293,7 +293,7 @@ namespace kmeansFast
 		}       
 	}
 
-	void init_Mu( ExtMat &X, ExtMat &Mu, char* initname ) {		  
+    void init_Mu( ExtMat &X, ExtMat &Mu, string initname ) {
 		  if ( string( initname ) == "random" ) {
 				sampleRowsRandom( X, Mu );
 		  } else if ( string( initname ) == "plusplus" ) {
