@@ -28,6 +28,8 @@ CorrespondenceSearch * mysearch = NULL;
 
 #include "Viewer.h"
 
+#include "BatchProcess.h"
+
 Energy::GuidedDeformation * egd = NULL;
 Viewer * v = NULL;
 Q_DECLARE_METATYPE(Structure::ShapeGraph*);
@@ -239,8 +241,8 @@ void experiment::doEnergySearch()
 	}
 
 	// Select least cost path
-	QList < QPair<double, Energy::SearchPath*> > solutions;
 	auto all_solutions = egd->solutions();
+	QList < QPair<double, Energy::SearchPath*> > solutions;
 	for (auto s : all_solutions) solutions << qMakePair(s->cost, s);
 	qSort(solutions.begin(), solutions.end());
 	
@@ -252,7 +254,7 @@ void experiment::doEnergySearch()
 	QApplication::restoreOverrideCursor();
 
 	double cost = EvaluateCorrespondence::evaluate(graphs.front());
-	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
+	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - solutions %3").arg(timeElapsed).arg(cost).arg(solutions.size()));
 }
 
 void experiment::doCorrespondSearch()
@@ -566,11 +568,41 @@ void experiment::create()
 		}
 		drawArea()->update();
 	});
-
 	connect(pw->ui->doEnergyGuided, &QPushButton::released, [&]{
 		drawArea()->clear();
 		this->doEnergySearch();
 		drawArea()->update();
+	});
+	connect(pw->ui->loadJobs, &QPushButton::released, [&]{
+		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
+		QTimer::singleShot(0, [=] { 
+			BatchProcess * bp = new BatchProcess(filename);
+			bp->start();
+		});
+	});
+	connect(pw->ui->saveJob, &QPushButton::released, [&]{
+		if (graphs.size() < 2 || graphs.front()->landmarks.isEmpty()) return;
+		auto g1 = graphs.front(), g2 = graphs.back();
+
+		QString filename = QFileDialog::getSaveFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
+		QVariantMap job;
+		job["source"].setValue(g1->property["name"].toString());
+		job["target"].setValue(g2->property["name"].toString());
+
+		QVariantList assignments;
+		for (int i = 0; i < g1->landmarks.size(); i++)
+		{
+			QVariantMap a;
+			QStringList a1; for (auto l : g1->landmarks[i]) a1 << l.partid;
+			QStringList a2; for (auto l : g2->landmarks[i]) a2 << l.partid;
+			a["source"].setValue(a1);
+			a["target"].setValue(a2);
+
+			assignments.push_back(a);
+		}
+		job["assignments"].setValue(assignments);
+
+		BatchProcess::appendJob(job, filename);
 	});
 
 	this->isReady = true;

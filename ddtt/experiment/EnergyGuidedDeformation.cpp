@@ -96,8 +96,13 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 		// Evaluate distortion of shape
 		path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
 
-		double candidate_threshold = 0.4;
-		double cost_threshold = 0.4;
+		double candidate_threshold = 0.5;
+		double cost_threshold = 0.5;
+
+		// Perform full search if we can afford it
+		int shape_relations_threshold = 7;
+		auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
+		if (max_num_relations < shape_relations_threshold) candidate_threshold = cost_threshold = 2.0;
 
 		/// Suggest for next unassigned:
 		QVector<Structure::Relation> candidatesA;
@@ -220,10 +225,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 					n->property["isAssignedNull"].setValue(true);
 				}
 
-				// Evaluate
-				double cost = EvaluateCorrespondence::evaluate(&shapeA);
-
-				// Consider
+				// Evaluate and consider
+				//double cost = EvaluateCorrespondence::evaluate(&shapeA);
 				{
 					auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
 					auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
@@ -248,11 +251,11 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 			{
 				auto rboxB = path.shapeB->relationBBox(relationB);
 				Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
-
 				auto dist = (rboxCenterA - rboxCenterB).norm();
 
-				// Suggest or skip assignment
-				if (dist > candidate_threshold) continue;
+				// Skip assignment if spatially too far
+				if (dist > candidate_threshold) 
+					continue;
 
 				// Try and evaluate suggestion
 				double cost = 0;
@@ -290,30 +293,28 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 				Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
 
 				// Evaluate cost of applying deformation and propagation
+				auto copy_la = la, copy_lb = lb;
+				topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
+				applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
+				cost = EvaluateCorrespondence::evaluate(&shapeA);
+
+				double diff_cost = abs(cost - path.cost);
+
+				// Consider ones we like
+				if (diff_cost < cost_threshold)
 				{
-					auto copy_la = la, copy_lb = lb;
-					topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-					applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
-					cost = EvaluateCorrespondence::evaluate(&shapeA);
+					auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
+					auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
 
-					double diff_cost = abs(cost - path.cost);
+					QStringList canadidate_unassigned = path.unassigned;
+					for (auto p : la) canadidate_unassigned.removeAll(p);
 
-					// Consider ones we like
-					if (diff_cost < cost_threshold)
-					{
-						auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
-						auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
+					Assignments assignment;
+					assignment << qMakePair(la, lb);
 
-						QStringList canadidate_unassigned = path.unassigned;
-						for (auto p : la) canadidate_unassigned.removeAll(p);
+					assert(la.size() && lb.size());
 
-						Assignments assignment;
-						assignment << qMakePair(la, lb);
-
-						assert(la.size() && lb.size());
-
-						suggested_children[r] = SearchPath(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
-					}
+					suggested_children[r] = SearchPath(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
 				}
 			}
 		}

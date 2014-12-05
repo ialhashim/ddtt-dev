@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>176</width>
+    <width>257</width>
     <height>622</height>
    </rect>
   </property>
@@ -14,40 +14,6 @@
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="1" column="1">
-    <widget class="QPushButton" name="resetShapes">
-     <property name="text">
-      <string>Reset</string>
-     </property>
-    </widget>
-   </item>
-   <item row="9" column="0" colspan="2">
-    <widget class="QCheckBox" name="isShowLandmarks">
-     <property name="text">
-      <string>Show landmarks</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QPushButton" name="loadShapes">
-     <property name="text">
-      <string>Load shape..</string>
-     </property>
-    </widget>
-   </item>
-   <item row="14" column="0">
-    <widget class="QCheckBox" name="isShowParts">
-     <property name="text">
-      <string>Show parts</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
    <item row="11" column="0" colspan="2">
     <spacer name="verticalSpacer_2">
      <property name="orientation">
@@ -61,18 +27,22 @@
      </property>
     </spacer>
    </item>
-   <item row="3" column="0" colspan="2">
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
+   <item row="14" column="0">
+    <widget class="QCheckBox" name="isShowParts">
+     <property name="text">
+      <string>Show parts</string>
      </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
+     <property name="checked">
+      <bool>true</bool>
      </property>
-    </spacer>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QPushButton" name="resetShapes">
+     <property name="text">
+      <string>Reset</string>
+     </property>
+    </widget>
    </item>
    <item row="16" column="0" colspan="2">
     <widget class="QPushButton" name="executeButton">
@@ -88,12 +58,32 @@
      </property>
     </widget>
    </item>
-   <item row="19" column="1">
-    <widget class="QPushButton" name="doEnergyGuided">
+   <item row="15" column="0">
+    <widget class="QLabel" name="label">
      <property name="text">
-      <string>Energy</string>
+      <string>Num. iterations</string>
      </property>
     </widget>
+   </item>
+   <item row="0" column="1">
+    <widget class="QPushButton" name="loadShapes">
+     <property name="text">
+      <string>Load shape..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0" colspan="2">
+    <spacer name="verticalSpacer">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
    </item>
    <item row="15" column="1">
     <widget class="QSpinBox" name="numIterations">
@@ -108,48 +98,34 @@
      </property>
     </widget>
    </item>
-   <item row="15" column="0">
-    <widget class="QLabel" name="label">
+   <item row="19" column="1">
+    <widget class="QPushButton" name="doEnergyGuided">
      <property name="text">
-      <string>Num. iterations</string>
+      <string>Energy</string>
      </property>
     </widget>
    </item>
-   <item row="12" column="0" colspan="2">
-    <widget class="QListWidget" name="pathsList">
-     <property name="sortingEnabled">
+   <item row="9" column="0" colspan="2">
+    <widget class="QCheckBox" name="isShowLandmarks">
+     <property name="text">
+      <string>Show landmarks</string>
+     </property>
+     <property name="checked">
       <bool>true</bool>
      </property>
     </widget>
    </item>
-   <item row="13" column="0" colspan="2">
-    <widget class="QCheckBox" name="isVisualize">
-     <property name="text">
-      <string>Visualize</string>
-     </property>
-    </widget>
-   </item>
-   <item row="20" column="1">
+   <item row="22" column="1">
     <widget class="QPushButton" name="searchBest">
      <property name="text">
       <string>Search..</string>
      </property>
     </widget>
    </item>
-   <item row="17" column="0" colspan="2">
-    <widget class="QCheckBox" name="isAnisotropy">
+   <item row="7" column="0" colspan="2">
+    <widget class="QPushButton" name="clearLandmarks">
      <property name="text">
-      <string>Anisotropy</string>
-     </property>
-     <property name="checked">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="18" column="0" colspan="2">
-    <widget class="QCheckBox" name="isOtherEnergy">
-     <property name="text">
-      <string>Use other energy</string>
+      <string>Clear landmarks</string>
      </property>
     </widget>
    </item>
@@ -157,6 +133,13 @@
     <widget class="QPushButton" name="loadLandmarks">
      <property name="text">
       <string>Load landmarks..</string>
+     </property>
+    </widget>
+   </item>
+   <item row="18" column="0" colspan="2">
+    <widget class="QCheckBox" name="isOtherEnergy">
+     <property name="text">
+      <string>Use other energy</string>
      </property>
     </widget>
    </item>
@@ -174,17 +157,13 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="0" colspan="2">
-    <widget class="QPushButton" name="clearLandmarks">
+   <item row="17" column="0" colspan="2">
+    <widget class="QCheckBox" name="isAnisotropy">
      <property name="text">
-      <string>Clear landmarks</string>
+      <string>Anisotropy</string>
      </property>
-    </widget>
-   </item>
-   <item row="1" column="0">
-    <widget class="QPushButton" name="swapButton">
-     <property name="text">
-      <string>Swap shapes</string>
+     <property name="checked">
+      <bool>false</bool>
      </property>
     </widget>
    </item>
@@ -203,6 +182,45 @@
       <double>0.200000000000000</double>
      </property>
     </widget>
+   </item>
+   <item row="1" column="0">
+    <widget class="QPushButton" name="swapButton">
+     <property name="text">
+      <string>Swap shapes</string>
+     </property>
+    </widget>
+   </item>
+   <item row="13" column="0" colspan="2">
+    <widget class="QCheckBox" name="isVisualize">
+     <property name="text">
+      <string>Visualize</string>
+     </property>
+    </widget>
+   </item>
+   <item row="12" column="0" colspan="2">
+    <widget class="QListWidget" name="pathsList">
+     <property name="sortingEnabled">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="21" column="0" rowspan="2">
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QPushButton" name="saveJob">
+       <property name="text">
+        <string>Save..</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="loadJobs">
+       <property name="text">
+        <string>Load Jobs</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

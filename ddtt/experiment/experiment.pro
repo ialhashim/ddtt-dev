@@ -25,7 +25,8 @@ HEADERS +=  experiment.h \
             DeformToFit.h \
             PropagateProximity.h \
             PropagateSymmetry.h \
-            EvaluateCorrespondence.h
+            EvaluateCorrespondence.h \
+    BatchProcess.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
@@ -39,7 +40,8 @@ SOURCES +=  experiment.cpp \
             DeformToFit.cpp \
             PropagateProximity.cpp \
             PropagateSymmetry.cpp \
-            EvaluateCorrespondence.cpp
+            EvaluateCorrespondence.cpp \
+    BatchProcess.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc

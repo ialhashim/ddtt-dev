@@ -72,11 +72,23 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current = EvaluateCorrespondence::spokesFromLink(l);
 
-		// Scale by difference in closest distance of before / after
-		auto minDist = [](Array1D_Vector3& pts){double m = DBL_MAX; for (auto& p : pts) m = std::min(m, p.norm()); return m; };
-		double s_orig = minDist(original);
-		double s_curr = minDist(current);
-		double scale = std::min(s_orig,s_curr) / std::max(s_orig, s_curr);
+		// Scale by difference in closeness distance
+		double scale = 1.0;
+		{
+			auto minMaxDist = [](Array1D_Vector3& pts){
+				double mn = DBL_MAX, mx = -DBL_MAX;
+				for (auto& p : pts) { double d = p.norm(); mn = std::min(mn, d); mx = std::max(mx, d); }
+				return std::make_pair(mn, mx);
+			};
+
+			auto bounds_orig = minMaxDist(original);
+			auto bounds_curr = minMaxDist(current);
+
+			if (bounds_curr.first > bounds_orig.first){
+				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
+				scale = 1.0 - ratio;
+			}
+		}
 
 		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() ||
 							  l->n2->property["isAssignedNull"].toBool();
