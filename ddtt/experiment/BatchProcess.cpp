@@ -118,6 +118,8 @@ void BatchProcess::run()
 		QElapsedTimer searchTimer; searchTimer.start();
 		egd.searchAll();
 		emit(jobFinished(idx));
+		QCoreApplication::processEvents();
+
 		searchTime = searchTimer.elapsed();
 		
 		/// Rank solutions:
@@ -131,6 +133,8 @@ void BatchProcess::run()
 		QImage img;
 		for (int r = 0; r < resultsCount; r++)
 		{
+			if (r > sorted_solutions.size() - 1) continue; // less solutions than expected
+
 			auto cost = sorted_solutions.keys().at(r);
 
 			auto entire_path = Energy::SearchPath::getEntirePath(sorted_solutions[cost], egd.search_paths);
@@ -293,8 +297,12 @@ void RenderingWidget::paintGL()
 	// Setup camera
     qglviewer::Vec cameraPos(-1.5,-1.75,1.0);
 
-    auto delta = cameraPos;
-    cameraPos += (delta * bbox.diagonal().maxCoeff()) * 0.2;
+	auto s = bbox.diagonal().maxCoeff();
+	if (s > 1.0)
+	{
+		auto delta = cameraPos;
+		cameraPos += (delta * s) * 0.2;
+	}
 
 	qglviewer::Camera cam;
 	cam.setType(qglviewer::Camera::ORTHOGRAPHIC);
