@@ -1,6 +1,7 @@
 ﻿#include "BatchProcess.h"
 #include "myglobals.h"
 #include <QCoreApplication>
+#include <QMatrix4x4>
 
 Structure::ShapeGraph *shapeA, *shapeB;
 static QVector<QColor> myrndcolors = rndColors2(100);
@@ -14,13 +15,14 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 	renderer = new RenderingWidget(512, NULL);
 	renderer->move(0, 0);
 	renderer->show();
+    renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 
 	// Progress
 	pd = new QProgressDialog("Searching..", "Cancel", 0, 0);
 	pd->setValue(0);
 	pd->show();
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
-	pd->connect(this, SIGNAL(allJobsFinished(int)), SLOT(deleteLater()));
+    pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 }
 
 QImage stitchImages(const QImage & a, const QImage & b, bool isVertical = false, int padding = 2, QColor background = Qt::white)
@@ -47,10 +49,10 @@ QImage stitchImages(const QImage & a, const QImage & b, bool isVertical = false,
 
 QImage drawText(QString message, QImage a, int x = 14, int y = 14, QColor color = Qt::black)
 {
-	QPainter painter;
-	painter.setRenderHint(QPainter::Antialiasing);
-	painter.setRenderHint(QPainter::HighQualityAntialiasing);
+    QPainter painter;
 	painter.begin(&a);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::HighQualityAntialiasing);
 	painter.setBrush(Qt::black);
 	painter.setOpacity(0.2);
 	painter.drawText(QPoint(x+1, y+1), message);
@@ -203,10 +205,7 @@ void BatchProcess::run()
 	allTime = allTimer.elapsed();
 
 	emit(jobFinished(jobsArray.size()));
-	emit(allJobsFinished());
-
-	renderer->hide();
-	renderer->deleteLater();
+    emit(allJobsFinished());
 }
 
 void BatchProcess::appendJob(QVariantMap job, QString filename)
@@ -289,8 +288,13 @@ void RenderingWidget::paintGL()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_MULTISAMPLE);
 
+    auto bbox = cur_shape->bbox();
+
 	// Setup camera
-	qglviewer::Vec cameraPos(-1.5,-1.75,1.0);
+    qglviewer::Vec cameraPos(-1.5,-1.75,1.0);
+
+    auto delta = cameraPos;
+    cameraPos += (delta * bbox.diagonal().maxCoeff()) * 0.2;
 
 	qglviewer::Camera cam;
 	cam.setType(qglviewer::Camera::ORTHOGRAPHIC);
