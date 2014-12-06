@@ -89,6 +89,7 @@ void BatchProcess::run()
 		auto job = j.toObject(); if (job.isEmpty()) continue;
 		auto source = job["source"].toString();
 		auto target = job["target"].toString();
+		auto title = job["title"].toString();
 
 		/// Initial Assignments:
 		Energy::Assignments assignments;
@@ -193,7 +194,10 @@ void BatchProcess::run()
 		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
 		int msgWidth = QFontMetrics(QFont()).width(msg) + 14;
 		img = drawText(msg, img, img.width() - msgWidth, 14);
-		img.save(QString("result.png"));
+
+		auto output_file = QString("%1/%2.png").arg(outputPath).arg(title);
+		QDir d(""); d.mkpath(QFileInfo(output_file).absolutePath());
+		img.save(output_file);
 	}
 
 	allTime = allTimer.elapsed();
@@ -219,7 +223,7 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	if (!json.contains("outputPath"))
 	{
 		json["outputPath"] = QString("outputPath");
-		json["resultsCount"] = 10;
+		json["resultsCount"] = 15;
 	}
 
 	auto jobs = json["jobs"].toArray();

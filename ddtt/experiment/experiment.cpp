@@ -588,6 +588,7 @@ void experiment::create()
 		QVariantMap job;
 		job["source"].setValue(g1->property["name"].toString());
 		job["target"].setValue(g2->property["name"].toString());
+		job["title"].setValue(g1->name() + "-" + g2->name());
 
 		QVariantList assignments;
 		for (int i = 0; i < g1->landmarks.size(); i++)
