@@ -90,12 +90,15 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 			}
 		}
 
-		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() ||
-							  l->n2->property["isAssignedNull"].toBool();
+		// If allowing any-null correspondences
+		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() || l->n2->property["isAssignedNull"].toBool();
 
 		for (size_t i = 0; i < original.size(); i++)
 		{
 			double v = original[i].normalized().dot(current[i].normalized());
+
+			if (v < 0)
+				v = 0;
 
 			if (isAssignedNull) v = 0;
 

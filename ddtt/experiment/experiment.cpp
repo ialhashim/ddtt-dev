@@ -699,6 +699,7 @@ void experiment::decorate()
 									auto a = l->n1->position(ci), b = l->n2->position(cj);
 									Vector3 cur_spoke = a - b;
 									double v = orig_spokes[si++].normalized().dot(cur_spoke.normalized());
+									if (v < 0) v = 0;
 									ls.addLine(a, b, starlab::qtJetColor(1.0 - v));
 								}
 							}
