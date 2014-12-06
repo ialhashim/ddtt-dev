@@ -10,17 +10,55 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 	// Clean up my self
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
 
+	// Rendering	
+	renderer = new RenderingWidget(512, NULL);
+	renderer->move(0, 0);
+	renderer->show();
+
 	// Progress
 	pd = new QProgressDialog("Searching..", "Cancel", 0, 0);
 	pd->setValue(0);
 	pd->show();
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
 	pd->connect(this, SIGNAL(allJobsFinished(int)), SLOT(deleteLater()));
+}
 
-	// Rendering	
-	renderer = new RenderingWidget(256, NULL);
-	renderer->moveToThread(this);
-	renderer->show();
+QImage stitchImages(const QImage & a, const QImage & b, bool isVertical = false, int padding = 2, QColor background = Qt::white)
+{
+	int newWidth = isVertical ? (2 * padding) + std::max(a.width(), b.width()) : (3 * padding) + a.width() + b.width();
+	int newHeight = isVertical ? (3 * padding) + a.height() + b.height() : (2 * padding) + std::max(a.height(), b.height());
+	QImage img(newWidth, newHeight, QImage::Format_ARGB32_Premultiplied);
+	QPainter painter;
+	painter.begin(&img);
+	painter.fillRect(img.rect(), background);
+	if (isVertical)
+	{
+		painter.drawImage(padding, padding, a);
+		painter.drawImage(padding, padding + a.height() + padding, b);
+	}
+	else
+	{
+		painter.drawImage(padding, padding, a);
+		painter.drawImage(padding + a.width() + padding, padding, b);
+	}
+	painter.end();
+	return img;
+}
+
+QImage drawText(QString message, QImage a, int x = 14, int y = 14, QColor color = Qt::black)
+{
+	QPainter painter;
+	painter.setRenderHint(QPainter::Antialiasing);
+	painter.setRenderHint(QPainter::HighQualityAntialiasing);
+	painter.begin(&a);
+	painter.setBrush(Qt::black);
+	painter.setOpacity(0.2);
+	painter.drawText(QPoint(x+1, y+1), message);
+	painter.setOpacity(1.0);
+	painter.setBrush(color);
+	painter.drawText(QPoint(x, y), message);
+	painter.end();
+	return a;
 }
 
 void BatchProcess::run()
@@ -35,6 +73,9 @@ void BatchProcess::run()
 	QString outputPath = json["outputPath"].toString();
 	auto jobsArray = json["jobs"].toArray();
 
+	QElapsedTimer allTimer; allTimer.start();
+	int allTime = 0;
+
 	// Progress
 	pd->setMaximum(jobsArray.size());
 
@@ -42,8 +83,7 @@ void BatchProcess::run()
 	{
 		auto & j = jobsArray[idx];
 
-		int allTime = 0, searchTime = 0;
-		QElapsedTimer allTimer; allTimer.start();
+		int searchTime = 0;
 
 		/// Input Shapes:
 		auto job = j.toObject(); if (job.isEmpty()) continue;
@@ -85,7 +125,7 @@ void BatchProcess::run()
 		}
 
 		/// Draw top solutions:
-		QVector<QImage> images;
+		QImage img;
 		for (int r = 0; r < resultsCount; r++)
 		{
 			auto cost = sorted_solutions.keys().at(r);
@@ -139,25 +179,24 @@ void BatchProcess::run()
 				}
 			}
 
-			auto simg = renderer->render(shapeA);
-			auto timg = renderer->render(shapeB);
+			int thumbWidth = 256;
 
-			QImage img(simg.width() + timg.width(), simg.height(), QImage::Format_ARGB32_Premultiplied);
-			QPainter painter;
-			painter.begin(&img);
-			painter.drawImage(0, 0, simg);
-			painter.drawImage(simg.width(), 0, timg);
-			painter.setBrush(Qt::black);
-			painter.drawText(10, 10, QString::number(cost));
-			painter.end();
+			auto cur_solution_img = stitchImages(
+				renderer->render(shapeA).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation), 
+				renderer->render(shapeB).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
 
-			QString number; number.sprintf("%04d", r);
-			img.save(QString("result_%1.png").arg(number));
-			images << img;
+			cur_solution_img = drawText(QString("cost = %1").arg(cost), cur_solution_img);
+
+			img = stitchImages(img, cur_solution_img, true, 0);
 		}
 
-		allTime = allTimer.elapsed();
+		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
+		int msgWidth = QFontMetrics(QFont()).width(msg) + 14;
+		img = drawText(msg, img, img.width() - msgWidth, 14);
+		img.save(QString("result.png"));
 	}
+
+	allTime = allTimer.elapsed();
 
 	emit(jobFinished(jobsArray.size()));
 	emit(allJobsFinished());
@@ -209,7 +248,7 @@ QImage RenderingWidget::render(Structure::ShapeGraph * shape)
 void RenderingWidget::initializeGL()
 {
 	initializeOpenGLFunctions();
-	glClearColor(1, 1, 1, 1);
+	glClearColor(0.92f, 0.92f, 0.92f, 1);
 
 	glDisable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
@@ -247,7 +286,7 @@ void RenderingWidget::paintGL()
 	glEnable(GL_MULTISAMPLE);
 
 	// Setup camera
-	qglviewer::Vec cameraPos(-2,-2,1.5);
+	qglviewer::Vec cameraPos(-1.5,-1.75,1.0);
 
 	qglviewer::Camera cam;
 	cam.setType(qglviewer::Camera::ORTHOGRAPHIC);

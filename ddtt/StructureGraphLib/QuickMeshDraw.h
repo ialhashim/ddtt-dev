@@ -9,12 +9,7 @@ struct QuickMeshDraw{
 	{
 		if(!mesh) return;
 
-		if(!mesh->property("hasNormals").toBool())
-		{
-			mesh->update_face_normals();
-			mesh->update_vertex_normals();
-			mesh->setProperty("hasNormals",true);
-		}
+        if(!mesh->has_face_property<Vector3>("f:normal")) mesh->update_face_normals();
 
 		glEnable (GL_BLEND);
 		glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

@@ -62,7 +62,7 @@ namespace Structure
 			for (auto nid : r.parts) box.extend(robustBBox(nid));
 			return box;
 		}
-		Relation relationOf(const QString & partID){ 
+		Relation & relationOf(const QString & partID){ 
 			Relation non; 
 			for (auto & r : relations) if (r.parts.contains(partID)) return r; 
 			return non; 

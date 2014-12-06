@@ -59,7 +59,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		if (g.size() > 2)
 		{
 			// Compute distances from group centroid to parts
-			for (auto part : r.parts) centers.push_back( shape->getNode(part)->position(Eigen::Vector4d(0,0,0,0)) );
+			for (auto part : r.parts) centers.push_back( shape->getNode(part)->position(Eigen::Vector4d(0.5,0.5,0,0)) );
 
 			for (auto c : centers) centroid += c;
 			centroid /= centers.size();
@@ -115,7 +115,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 
 				// Vector from part's head to centroid
 				for (size_t i = 0; i < r.parts.size(); i++)
-					r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0)));
+					r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
 			}
 		}
 
@@ -183,7 +183,7 @@ void StructureAnalysis::updateRelation(Structure::ShapeGraph * shape, Structure:
 	std::vector<Vector3> centers;
 	Vector3 centroid(0, 0, 0);
 
-	for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0, 0, 0, 0)));
+	for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
 
 	if (r.type == Structure::Relation::REFLECTIONAL)
 	{
@@ -198,6 +198,6 @@ void StructureAnalysis::updateRelation(Structure::ShapeGraph * shape, Structure:
 
 		// Vector from part's head to centroid
 		for (size_t i = 0; i < r.parts.size(); i++)
-			r.deltas[i] = centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0, 0, 0, 0));
+			r.deltas[i] = centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
 	}
 }

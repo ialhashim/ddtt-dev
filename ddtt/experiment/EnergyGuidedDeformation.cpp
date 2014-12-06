@@ -86,9 +86,6 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 			// Deform the assigned
 			applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
 
-			// Shape modifications
-			postDeformation(path.shapeA, path.fixed + path.current);
-
 			// Track established correspondence
 			for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
 		}
@@ -194,7 +191,9 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 
 		QVector<Energy::SearchPath> suggested_children(pairings.size());
 
+#ifndef QT_DEBUG
 		#pragma omp parallel for
+#endif
 		for (int r = 0; r < pairings.size(); r++)
 		{
 			auto & pairing = pairings[r];
@@ -271,7 +270,8 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 					for (size_t i = 0; i < relationA.parts.size(); i++)
 					{
 						auto partID = relationA.parts[i];
-						Vector3 partCenterA = (path.shapeA->getNode(partID)->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+						auto partA = path.shapeA->getNode(partID);
+						Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
 
 						QMap<double, QString> dists;
 						for (auto tpartID : relationB.parts)
@@ -295,7 +295,7 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 				// Evaluate cost of applying deformation and propagation
 				auto copy_la = la, copy_lb = lb;
 				topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-				applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + la);
+				applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
 				cost = EvaluateCorrespondence::evaluate(&shapeA);
 
 				double diff_cost = abs(cost - path.cost);
@@ -370,6 +370,25 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 	if (lb.contains(Structure::null_part))
 	{
 		return;
+	}
+
+	// Detect and handle many-many cases:
+	if (la.size() > 1 && lb.size() > 1)
+	{
+		// Unique parts
+		auto la_set = shapeA->relationOf(la.front()).parts;
+		auto lb_set = shapeB->relationOf(lb.front()).parts;
+
+		if (la.size() != la_set.size() || lb.size() != lb_set.size())
+		{
+			// Experimental: allow sliding
+			for (auto partID : la_set)
+			{
+				auto partA = shapeA->getNode(partID);
+				QString situation = la_set.size() > lb_set.size() ? "isMerged" : "isSplit";
+				partA->property[situation].setValue(true);
+			}
+		}
 	}
 
 	// CONVERT Case: curve to sheet (unrolling)
@@ -589,6 +608,7 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 	if (lb.contains(Structure::null_part)) return;
 
 	// Save initial configuration
+	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now deform", 15));
 	if (isSaveKeyframes) shapeA->saveKeyframe();
 
 	// Deform part to its target
@@ -603,20 +623,35 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 
 		DeformToFit::registerAndDeformNodes(shapeA->getNode(partID), shapeB->getNode(tpartID)); if (isSaveKeyframes) shapeA->saveKeyframe();
 	}
+
+	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now symmetry", 15));
 	PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) shapeA->saveKeyframe();
 
-	//if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(10, 10, "after deform_fit_propagate_sym", 12));
-
 	// Propagate edit by applying structural constraints
+	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now proximity", 15));
 	PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
 	//PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
 	//PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
+
+	postDeformation(shapeA, fixed);
+}
+
+void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed)
+{
+	auto fixedSet = fixed.toSet();
+
+	for (auto & r : shape->relations)
+	{
+		if (r.parts.empty() || !r.parts.toSet().intersect(fixedSet).empty()) continue;
+
+		StructureAnalysis::updateRelation(shape, r);
+	}
 }
 
 void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath*> & path)
 {
 	auto shapeA = new Structure::ShapeGraph(*origShapeA);
-	auto shapeB = new Structure::ShapeGraph(*origShapeB); 
+	auto shapeB = new Structure::ShapeGraph(*origShapeB);
 
 	for (auto & p : path)
 	{
@@ -630,18 +665,6 @@ void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath
 			p->shapeA = shapeA;
 			p->shapeB = shapeB;
 		}
-	}
-}
-
-void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed)
-{
-	auto fixedSet = fixed.toSet();
-
-	for (auto & r : shape->relations)
-	{
-		if (r.parts.empty() || !r.parts.toSet().intersect(fixedSet).empty()) continue;
-
-		StructureAnalysis::updateRelation(shape, r);
 	}
 }
 

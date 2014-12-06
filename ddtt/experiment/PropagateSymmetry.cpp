@@ -8,6 +8,13 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 	{
 		if (relation.parts.isEmpty()) continue;
 
+		// Experimental: allow sliding
+		{
+			auto rep = graph->getNode(relation.parts.front());
+			if (rep->property["isSplit"].toBool() || rep->property["isMerged"].toBool()) 
+				continue;
+		}
+
 		if (relation.type == Structure::Relation::REFLECTIONAL)
 		{
 			auto partA = graph->getNode(relation.parts.front()), partB = graph->getNode(relation.parts.back());
@@ -40,7 +47,7 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 			for (auto partID : relation.parts) if (fixedNodes.contains(partID)){ part = graph->getNode(partID); break; }
 
 			int idx = relation.parts.indexOf(part->id);
-			auto start = part->position(Eigen::Vector4d(0, 0, 0, 0));
+			auto start = part->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
 			Vector3 centroid = start + relation.deltas[idx];
 
 			auto cpts = part->controlPoints();
