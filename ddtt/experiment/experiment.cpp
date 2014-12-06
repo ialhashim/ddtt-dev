@@ -368,7 +368,7 @@ void experiment::postCorrespond()
 
 	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(mysearch->property["allSearchTime"].toInt()));
 
-	bool isVisualize = pw->ui->isVisualize->isChecked();
+    //bool isVisualize = pw->ui->isVisualize->isChecked();
 
 	if (pw->ui->isShowParts->isChecked())
 		showCorrespond(mysearch->bestCorrespondence);
