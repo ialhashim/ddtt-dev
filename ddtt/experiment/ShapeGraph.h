@@ -44,7 +44,7 @@ namespace Structure
 	typedef QVector<Landmark> Landmarks;
 
 	struct ShapeGraph : public Graph{
-		ShapeGraph(QString path) : Graph(path){}
+		ShapeGraph(QString path) : Graph(path), animation_index(0) {}
 		ShapeGraph(const ShapeGraph& other) : Graph(other){
 			this->landmarks = other.landmarks;
 			this->relations = other.relations;

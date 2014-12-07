@@ -34,7 +34,7 @@ public:
 	void doCorrespond2();
 
 	void doCorrespondSearch();	
-	void setSearchPath(Energy::SearchPath * path);
+	void setSearchPath(Energy::SearchNode * path);
 
 	experiment() : widget(NULL), dockwidget(NULL), isReady(false) {}
     QWidget * widget;

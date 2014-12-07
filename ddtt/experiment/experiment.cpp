@@ -33,11 +33,11 @@ CorrespondenceSearch * mysearch = NULL;
 Energy::GuidedDeformation * egd = NULL;
 Viewer * v = NULL;
 Q_DECLARE_METATYPE(Structure::ShapeGraph*);
-Q_DECLARE_METATYPE(Energy::SearchPath*);
+Q_DECLARE_METATYPE(Energy::SearchNode*);
 experiment * exprmnt = NULL;
-Energy::SearchPath * selected_path;
+Energy::SearchNode * selected_path;
 
-QString pathToHtml(Energy::SearchPath & p)
+QString pathToHtml(Energy::SearchNode & p)
 {
 	QStringList html;
 
@@ -51,7 +51,7 @@ QString pathToHtml(Energy::SearchPath & p)
 
 	html << "<br/>";
 	html << "<span class=cost>" + QString::number(p.cost) + "</span>";
-	html << "<span class=children>(" + QString::number(p.children.size()) + ")</span>";
+	html << "<span class=children>(" + QString::number(p.num_children) + ")</span>";
 
 	//html << "<span>" + p.current.join("-") + "</span>";
 	//html << "<span>fixed:" + p.fixed.join("-") + "</span><br/>";
@@ -59,19 +59,7 @@ QString pathToHtml(Energy::SearchPath & p)
 	return html.join("");
 };
 
-void expandBranch(Viewer * v, int parent_idx, Energy::SearchPath & path)
-{
-	// Expand children
-	for (auto & child : path.children)
-	{
-		int child_idx = v->addNode(pathToHtml(child));
-		v->addEdge(parent_idx, child_idx);
-
-		v->nodeProperties[child_idx]["path"].setValue(&child);
-	}
-}
-
-void experiment::setSearchPath(Energy::SearchPath * path)
+void experiment::setSearchPath(Energy::SearchNode * path)
 {
 	// Show deformed
 	graphs.clear();
@@ -170,13 +158,13 @@ void experiment::doEnergySearch()
 	// Create a search path
 	Energy::Assignments assignments;
 	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
-	Energy::SearchPath path(shapeA, shapeB, QStringList(), assignments);
-	egd->search_paths << path;
 
+	QVector<Energy::SearchNode> search_roots;
+	Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+	search_roots << path;
 
 	// Explore path
-	egd->searchAll();
-
+	egd->searchAll(graphs.front(), graphs.back(), search_roots);
 
 	auto timeElapsed = timer.elapsed();
 
@@ -190,31 +178,38 @@ void experiment::doEnergySearch()
 		connect(v->wv, &QWebView::loadFinished, [&](){
 			v->addCSS(".source{color:red} .target{color:blue} .cost{color:gray} .children{color:gray}");
 
-			auto & path = egd->search_paths.front();
+			auto & path = *egd->searchTrees.front().begin();
 			int idx = v->addNode(pathToHtml(path));
-			v->nodeProperties[idx]["path"].setValue(&path);
+			Energy::SearchNode* path_ptr = &path;
+			v->nodeProperties[idx]["path"].setValue(path_ptr);
 
 			v->updateGraph();
 
 			connect(v, &Viewer::nodeSelected, [&](int nid){
-				auto path = v->nodeProperties[nid]["path"].value<Energy::SearchPath*>();
-				if (!path) return;
+				auto node = v->nodeProperties[nid]["path"].value<Energy::SearchNode*>();
+				if (!node) return;
 
-				auto entire_path = Energy::SearchPath::getEntirePath(path, egd->search_paths);
-				egd->applySearchPath(entire_path);
-				selected_path = path;
+				egd->applySearchPath( egd->getEntirePath(node) );
+
+				selected_path = node;
 				exprmnt->setSearchPath(selected_path);
 
-				auto shape = path->shapeA;
+				auto shape = node->shapeA;
 				if (!shape) return;
-				path->property["nid"].setValue(nid);
+				node->property["nid"].setValue(nid);
 
 				// Expand children
 				if (!v->nodeProperties[nid]["expanded"].toBool())
 				{
-					expandBranch(v, nid, *path);
-					v->updateGraph();
+					// Expand children
+					for (auto child : egd->childrenOf(selected_path))
+					{
+						int child_idx = v->addNode(pathToHtml(*child));
+						v->addEdge(nid, child_idx);
+						v->nodeProperties[child_idx]["path"].setValue(child);
+					}
 
+					v->updateGraph();
 					v->nodeProperties[nid]["expanded"].setValue(true);
 				}
 
@@ -223,7 +218,7 @@ void experiment::doEnergySearch()
 		});
 
 		connect(v, &Viewer::goingToExpand, [&](){
-			auto toExpand = Energy::SearchPath::getEntirePath(selected_path, egd->search_paths);
+			auto toExpand = egd->getEntirePath(selected_path);
 
 			int nid = toExpand.front()->property["nid"].value<int>();
 
@@ -242,11 +237,11 @@ void experiment::doEnergySearch()
 
 	// Select least cost path
 	auto all_solutions = egd->solutions();
-	QList < QPair<double, Energy::SearchPath*> > solutions;
+	QList < QPair<double, Energy::SearchNode*> > solutions;
 	for (auto s : all_solutions) solutions << qMakePair(s->cost, s);
 	qSort(solutions.begin(), solutions.end());
 	
-	auto entire_path = Energy::SearchPath::getEntirePath(solutions.front().second, egd->search_paths);
+	auto entire_path = egd->getEntirePath(solutions.front().second);
 	egd->applySearchPath( entire_path );
 	selected_path = entire_path.back();
 	setSearchPath( selected_path );

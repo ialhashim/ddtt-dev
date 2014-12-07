@@ -27,6 +27,14 @@ static inline double rad_to_deg(double rad) {
 	return deg;
 }
 
+static double roundDecimal(const double number, const int decimals) {
+	int intPart = number;
+	double decimalPart = number - intPart;
+	double numberDecimals = pow(10, decimals);
+	double decimalRound = round(decimalPart * numberDecimals);
+	return static_cast<double> (intPart + (decimalRound / numberDecimals));
+}
+
 inline QVector<QColor> rndColors2(int count){
 	QVector<QColor> colors;
 	float currentHue = 0.0;

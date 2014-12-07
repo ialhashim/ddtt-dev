@@ -111,22 +111,27 @@ void BatchProcess::run()
 		shapeB = new Structure::ShapeGraph(target);
 
 		// Set initial correspondence
-		Energy::SearchPath path(shapeA, shapeB, QStringList(), assignments);
-		egd.search_paths << path;
+		QVector<Energy::SearchNode> search_roots;
+		Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+		search_roots << path;
 
 		// Search for all solutions
 		QElapsedTimer searchTimer; searchTimer.start();
-		egd.searchAll();
+		egd.searchAll(shapeA, shapeB, search_roots);
 		emit(jobFinished(idx));
 		QCoreApplication::processEvents();
 
 		searchTime = searchTimer.elapsed();
 		
 		/// Rank solutions:
-		QMap <double, Energy::SearchPath*> sorted_solutions;
+		QMap <double, Energy::SearchNode*> sorted_solutions;
 		{
 			auto all_solutions = egd.solutions();
-			for (auto s : all_solutions) sorted_solutions[s->cost] = s;
+			for (auto s : all_solutions)
+			{
+				double cost = roundDecimal(s->cost, 2);
+				sorted_solutions[cost] = s;
+			}
 		}
 
 		/// Draw top solutions:
@@ -137,7 +142,7 @@ void BatchProcess::run()
 
 			auto cost = sorted_solutions.keys().at(r);
 
-			auto entire_path = Energy::SearchPath::getEntirePath(sorted_solutions[cost], egd.search_paths);
+			auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
 			egd.applySearchPath(entire_path);
 			auto selected_path = entire_path.back();
 

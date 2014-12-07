@@ -11,221 +11,191 @@
 
 #include "hausdorff.h"
 
-void Energy::GuidedDeformation::searchAll()
+#include "myglobals.h"
+
+void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots)
 {
-	if (search_paths.empty() || !search_paths.front().shapeA) return;
+	if (roots.empty()) return;
 
-	origShapeA = new Structure::ShapeGraph(*search_paths.front().shapeA);
-	origShapeB = new Structure::ShapeGraph(*search_paths.front().shapeB);
+	// Insert given roots of search trees
+	for (auto & root : roots)
+		searchTrees.push_back(SearchTree(root));
 
-	// Analyze symmetry groups
-	StructureAnalysis::analyzeGroups(origShapeA, false);
-	StructureAnalysis::analyzeGroups(origShapeB, false);
-
-	// Prepare for proximity propagation
-	PropagateProximity::prepareForProximity(origShapeA);
-
-	// Prepare for structure distortion evaluation
-	EvaluateCorrespondence::prepare(origShapeA);
-	EvaluateCorrespondence::prepare(origShapeB);
-
-	// Compression:
+	// Pre-processing
 	{
-		for (auto n : origShapeA->nodes){
-			auto i = (byte)idxPartMapA.size();
-			idxPartMapA[i] = n->id;
-			partIdxMapA[n->id] = i;
-		}
+		origShapeA = new Structure::ShapeGraph(*shapeA);
+		origShapeB = new Structure::ShapeGraph(*shapeB);
 
-		for (auto n : origShapeB->nodes){
-			auto i = (byte)idxPartMapB.size();
-			idxPartMapB[i] = n->id;
-			partIdxMapB[n->id] = i;
-		}
+		// Analyze symmetry groups
+		StructureAnalysis::analyzeGroups(origShapeA, false);
+		StructureAnalysis::analyzeGroups(origShapeB, false);
+
+		// Prepare for proximity propagation
+		PropagateProximity::prepareForProximity(origShapeA);
+
+		// Prepare for structure distortion evaluation
+		EvaluateCorrespondence::prepare(origShapeA);
+		EvaluateCorrespondence::prepare(origShapeB);
 	}
 
-	for (auto & root : search_paths)
+	// Start search from roots
+	for (auto & searchTree : searchTrees)
 	{
+		auto & root = *searchTree.begin();
+
 		// Make copies
 		root.shapeA = new Structure::ShapeGraph(*origShapeA);
 		root.shapeB = new Structure::ShapeGraph(*origShapeB);
 
+		// Set as unassigned anything not set for this root
 		root.unassigned = root.unassignedList();
 
-		explore(root);
+		// Explore
+		std::stack < Energy::SearchTree::iterator_base > path_stack;
+		path_stack.push(searchTree.begin());
+
+		while (!path_stack.empty())
+		{
+			auto pathItr = path_stack.top();
+			path_stack.pop();
+
+			auto & path = *pathItr;
+
+			// Apply and evaluate deformation given current assignment
+			applyAssignment(path);
+
+			// Collect valid suggestions
+			auto suggested_children = suggestChildren(path);
+			for (auto & child : suggested_children)
+				searchTree.append_child(pathItr, child);
+			path.num_children = suggested_children.size();
+
+			// Explore each suggestion:
+			SearchTree::sibling_iterator child = searchTree.begin(pathItr);
+			while (child != searchTree.end(pathItr)) {
+				path_stack.push(child);
+				++child;
+			}
+
+			// Clean up:
+			if (pathItr.node->parent)
+			{
+				delete path.shapeA;
+				delete path.shapeB;
+				path.shapeA = path.shapeB = NULL;
+			}
+		}
 	}
 }
 
-void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
+void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode & path)
 {
-	if (root.assignments.empty() && root.unassigned.empty()) return;
-
-	std::stack < Energy::SearchPath* > path_stack;
-	path_stack.push(&root);
-	bool isRoot = true;
-
-	while (!path_stack.empty())
+	// Go over and apply the suggested assignments:
+	for (auto ap : path.assignments)
 	{
-		auto & path = *path_stack.top();
-		path_stack.pop();
+		// Get assignment pair <source, target>
+		auto la = ap.first, lb = ap.second;
+		assert(la.size() && lb.size());
 
-		// Go over and apply previously suggested assignments:
-		for (auto ap : path.assignments)
-		{
-			// Get assignment pair <source, target>
-			auto la = ap.first, lb = ap.second;
+		// Apply any needed topological operations
+		topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
 
-			assert(la.size() && lb.size());
+		// Assigned parts will be fixed
+		for (auto partID : ap.first) path.current << partID;
 
-			// Apply any needed topological operations
-			topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
+		// Deform the assigned
+		applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
 
-			// Assigned parts will be fixed
-			for (auto partID : ap.first) path.current << partID;
+		// Track established correspondence
+		for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
+	}
 
-			// Deform the assigned
-			applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
+	// Evaluate distortion of shape
+	path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
+}
 
-			// Track established correspondence
-			for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
+QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Energy::SearchNode & path)
+{
+	// Hard coded thresholding to limit search space
+	double candidate_threshold = 0.5;
+	double cost_threshold = 0.5;
+
+	// Perform full search if we can afford it
+	int shape_relations_threshold = 6;
+	auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
+
+	/// Suggest for next unassigned:
+	QVector<Structure::Relation> candidatesA;
+
+	// Start process from remaining unassigned parts if needed
+	if (!path.unassigned.isEmpty())
+	{
+		// Suggest for all unassigned
+		for (auto partID : path.unassigned){
+			auto r = path.shapeA->relationOf(partID);
+			if (!candidatesA.contains(r)) candidatesA << r;
 		}
 
-		// Evaluate distortion of shape
-		path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
-
-		double candidate_threshold = 0.5;
-		double cost_threshold = 0.5;
-
-		// Perform full search if we can afford it
-		int shape_relations_threshold = 7;
-		auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
-		if (max_num_relations < shape_relations_threshold) candidate_threshold = cost_threshold = 2.0;
-
-		/// Suggest for next unassigned:
-		QVector<Structure::Relation> candidatesA;
-
-		// Collect set of next candidates to be assigned by proximity to currently assigned
-		for (auto partID : path.current)
+		if (max_num_relations < shape_relations_threshold)
 		{
-			for (auto edge : path.shapeA->getEdges(partID)){
-				auto other = edge->otherNode(partID);
-				if (path.fixed.contains(other->id)) continue;
-
-				auto r = path.shapeA->relationOf(other->id);
-				if (!candidatesA.contains(r)) candidatesA << r;
-			}
+			candidate_threshold = cost_threshold = 2.0;
 		}
-
-		// Collect next candidate to be assigned by finding part with good equivalent on target
-		/*if (!path.unassigned.isEmpty())
+		else
 		{
-			auto dists = EvaluateCorrespondence::hausdroffDistance(path.shapeA, path.shapeB);
-
-			double min_dist = DBL_MAX;
-			QString min_part = path.unassigned.front();
-
-			for (auto partA : dists.keys()){
-				if (!path.unassigned.contains(partA)) continue;
-
-				for (auto partB : dists[partA].keys()){
-					double dist = dists[partA][partB];
-					if (dist < min_dist){
-						min_dist = dist;
-						min_part = partA;
-					}
-				}
-			}
-
-			candidatesA << path.shapeA->relationOf(min_part);
-		}*/
-
-		// Start process from remaining unassigned parts if needed
-		if (candidatesA.empty() && !path.unassigned.isEmpty())
-		{
-			// Suggest for all unassigned
-			//for (auto partID : path.unassigned){
-			//	auto r = path.shapeA->relationOf(partID);
-			//	if (!candidatesA.contains(r)) candidatesA << r;
-			//}
-
-			// Arbitrary choice
-			//candidatesA << path.shapeA->relationOf(path.unassigned.front());
-
-			// Pick next largest unassigned
-			//QMap < double, QString > unassigned_size;
-			//for (auto partID : path.unassigned) unassigned_size[path.shapeA->robustBBox(partID).diagonal().norm()] = partID;
-			//candidatesA << path.shapeA->relationOf( unassigned_size.values().back() );
-
-			// Start from an arbitrary node in fixed set
-			QStringList nowFixed = path.fixed + path.current;
-			for (auto partID : path.mapping.keys()){
-				for (auto edge : path.shapeA->getEdges(partID)){
-					auto other = edge->otherNode(partID);
-					if (nowFixed.contains(other->id)) continue;
-
-					auto r = path.shapeA->relationOf(other->id);
-					if (!candidatesA.contains(r)) candidatesA << r;
-					break;
-				}
-				if (!candidatesA.empty())
-					break;
-			}
+			int expand_by = 2;
+			candidatesA.resize(std::min( expand_by, candidatesA.size()));
 		}
+	}
 
-		// Current shapes bounding boxes
-		auto boxA = path.shapeA->bbox(), boxB = path.shapeB->bbox();
+	// Suggest for each candidate
+	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
+	for (auto relationA : candidatesA){
+		// Find candidate target groups
+		for (auto relationB : path.shapeB->relations)
+			pairings.push_back(qMakePair(relationA, relationB));
+	}
 
-		// Suggest for each candidate
-		QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
-		for (auto relationA : candidatesA)
-		{
-			// Create a null
-			Structure::Relation null_relation;
-			null_relation.type = Structure::Relation::NULLRELATION;
-			null_relation.parts.push_back(Structure::null_part);
+	// Current shapes bounding boxes
+	auto boxA = path.shapeA->bbox(), boxB = path.shapeB->bbox();
 
-			// Find candidate target groups
-			for (auto relationB : path.shapeB->relations /*+ (QVector<Structure::Relation>() << null_relation)*/)
-				pairings.push_back(qMakePair(relationA, relationB));
-		}
-
-		QVector<Energy::SearchPath> suggested_children(pairings.size());
+	// Output:
+	QVector<Energy::SearchNode> suggested_children(pairings.size());
 
 #ifndef QT_DEBUG
-		#pragma omp parallel for
+#pragma omp parallel for
 #endif
-		for (int r = 0; r < pairings.size(); r++)
+	for (int r = 0; r < pairings.size(); r++)
+	{
+		auto & pairing = pairings[r];
+
+		auto & relationA = pairing.first;
+		auto & relationB = pairing.second;
+
+		// Relative position of centroid
+		auto rboxA = path.shapeA->relationBBox(relationA);
+		Vector3 rboxCenterA = (rboxA.center() - boxA.min()).array() / boxA.sizes().array();
+
+		// Special case: many-to-null:
+		if (relationB.type == Structure::Relation::NULLRELATION)
 		{
-			auto & pairing = pairings[r];
+			// Make copy and match up
+			Structure::ShapeGraph shapeA(*path.shapeA);
+			QStringList la, lb;
+			for (auto p : relationA.parts) lb << Structure::null_part;
 
-			auto & relationA = pairing.first;
-			auto & relationB = pairing.second;
+			// Collapse part geometry to single point
+			for (auto p : relationA.parts){
+				auto n = shapeA.getNode(p);
+				auto cpts = n->controlPoints();
+				auto centroid = n->position(Eigen::Vector4d(1, 0, 0, 0));
+				for (auto & p : cpts) p = centroid;
+				n->setControlPoints(cpts);
 
-			// Relative position of centroid
-			auto rboxA = path.shapeA->relationBBox(relationA);
-			Vector3 rboxCenterA = (rboxA.center() - boxA.min()).array() / boxA.sizes().array();
+				n->property["isAssignedNull"].setValue(true);
+			}
 
-			// Special case: many-to-null:
-			if (relationB.type == Structure::Relation::NULLRELATION)
-			{
-				// Make copy and match up
-				Structure::ShapeGraph shapeA(*path.shapeA);
-				QStringList la, lb;
-				for (auto p : relationA.parts) lb << Structure::null_part;
-
-				// Collapse part geometry to single point
-				for (auto p : relationA.parts){
-					auto n = shapeA.getNode(p);
-					auto cpts = n->controlPoints();
-					auto centroid = n->position(Eigen::Vector4d(1, 0, 0, 0));
-					for (auto & p : cpts) p = centroid;
-					n->setControlPoints(cpts);
-
-					n->property["isAssignedNull"].setValue(true);
-				}
-
-				// Evaluate and consider
-				//double cost = EvaluateCorrespondence::evaluate(&shapeA);
+			// Evaluate and consider
+			//double cost = EvaluateCorrespondence::evaluate(&shapeA);
 				{
 					auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
 					auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
@@ -243,115 +213,101 @@ void Energy::GuidedDeformation::explore( Energy::SearchPath & root )
 
 					assert(la.size() && lb.size());
 
-					suggested_children[r] = SearchPath(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
+					suggested_children[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
+				}
+		}
+		else
+		{
+			auto rboxB = path.shapeB->relationBBox(relationB);
+			Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
+
+			// Thresholding: Skip assignment if spatially too far
+			auto dist = (rboxCenterA - rboxCenterB).norm();
+			if (dist > candidate_threshold) continue;
+
+			// Try and evaluate suggestion
+			double cost = 0;
+			QStringList la = relationA.parts, lb = relationB.parts;
+
+			// Case: many-to-many, find best matching between two sets
+			if (la.size() != 1 && lb.size() != 1)
+			{
+				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+
+				lb.clear();
+
+				for (size_t i = 0; i < relationA.parts.size(); i++)
+				{
+					auto partID = relationA.parts[i];
+					auto partA = path.shapeA->getNode(partID);
+					Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+
+					QMap<double, QString> dists;
+					for (auto tpartID : relationB.parts)
+					{
+						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+						dists[(partCenterA - partCenterB).norm()] = tpartID;
+					}
+
+					lb << dists.values().front();
 				}
 			}
 			else
 			{
-				auto rboxB = path.shapeB->relationBBox(relationB);
-				Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
-				auto dist = (rboxCenterA - rboxCenterB).norm();
+				la = relationA.parts;
+				lb = relationB.parts;
+			}
 
-				// Skip assignment if spatially too far
-				if (dist > candidate_threshold) 
-					continue;
+			// Make copies
+			Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
 
-				// Try and evaluate suggestion
-				double cost = 0;
-				QStringList la = relationA.parts, lb = relationB.parts;
+			// Evaluate cost of applying deformation and propagation
+			auto copy_la = la, copy_lb = lb;
+			topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
+			applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
+			cost = EvaluateCorrespondence::evaluate(&shapeA);
 
-				// Case: many-to-many, find best matching between two sets
-				if (la.size() != 1 && lb.size() != 1)
-				{
-					Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+			// Thresholding: Skip really bad assignments
+			double diff_cost = abs(cost - path.cost);
+			if (diff_cost < cost_threshold)
+			{
+				auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
+				auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
 
-					lb.clear();
+				QStringList unassigned = path.unassigned;
+				for (auto p : la) unassigned.removeAll(p);
 
-					for (size_t i = 0; i < relationA.parts.size(); i++)
-					{
-						auto partID = relationA.parts[i];
-						auto partA = path.shapeA->getNode(partID);
-						Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+				Assignments assignment;
+				assignment << qMakePair(la, lb);
+				assert(la.size() && lb.size());
 
-						QMap<double, QString> dists;
-						for (auto tpartID : relationB.parts)
-						{
-							Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
-							dists[(partCenterA - partCenterB).norm()] = tpartID;
-						}
-
-						lb << dists.values().front();
-					}
-				}
-				else
-				{
-					la = relationA.parts;
-					lb = relationB.parts;
-				}
-
-				// Make copies
-				Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
-
-				// Evaluate cost of applying deformation and propagation
-				auto copy_la = la, copy_lb = lb;
-				topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-				applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
-				cost = EvaluateCorrespondence::evaluate(&shapeA);
-
-				double diff_cost = abs(cost - path.cost);
-
-				// Consider ones we like
-				if (diff_cost < cost_threshold)
-				{
-					auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
-					auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
-
-					QStringList canadidate_unassigned = path.unassigned;
-					for (auto p : la) canadidate_unassigned.removeAll(p);
-
-					Assignments assignment;
-					assignment << qMakePair(la, lb);
-
-					assert(la.size() && lb.size());
-
-					suggested_children[r] = SearchPath(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, canadidate_unassigned, path.mapping);
-				}
+				suggested_children[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping);
 			}
 		}
-
-		// Collect valid suggestions
-		for (auto & child : suggested_children) 
-			if (child.shapeA) 
-				path.children.push_back(child);
-
-		// Explore each suggestion:
-		for (auto & child : path.children)
-			path_stack.push(&child);
-
-		// Memory saving:
-		if (isRoot) isRoot = false;
-		else
-		{ 
-			delete path.shapeA; 
-			delete path.shapeB; 
-			path.shapeA = path.shapeB = NULL;
-		}
 	}
+
+	QVector<Energy::SearchNode> accepted_children;
+
+	for (auto & child : suggested_children)
+		if (child.shapeA)
+			accepted_children.push_back(child);
+
+	return accepted_children;
 }
 
-QVector<Energy::SearchPath*> Energy::GuidedDeformation::solutions()
+QVector<Energy::SearchNode*> Energy::GuidedDeformation::solutions()
 {
-	auto t = Energy::SearchPath::exploreAsTree(search_paths);
+	auto & t = searchTrees.front();
 
-	QVector<Energy::SearchPath*> result;
+	QVector<Energy::SearchNode*> result;
 	for (auto leaf = t.begin_leaf(); leaf != t.end_leaf(); leaf++)
-		if((*leaf)->unassigned.isEmpty()) 
-			result.push_back(*leaf);
+		if (leaf->unassigned.isEmpty())
+			result.push_back(&(*leaf));
 
 	/* Case: All paths where prematurely terminated */
 	if (result.empty())
 		for (auto leaf = t.begin_leaf(); leaf != t.end_leaf(); leaf++)
-			result.push_back(*leaf);
+			result.push_back(&(*leaf));
 
 	return result;
 }
@@ -419,14 +375,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		// Remove from all relations
 		StructureAnalysis::removeFromGroups(shapeA, snode);
 
-		// Compression:
-		if (!partIdxMapA.contains(snode_sheet->id))
-		{
-			auto i = (byte)idxPartMapA.size();
-			idxPartMapA[i] = snode_sheet->id;
-			partIdxMapA[snode_sheet->id] = i;
-		}
-
 		delete snode;
 	}
 
@@ -472,14 +420,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			lb << shapeB->addNode(new Structure::Curve(tcurve, tcurve_id))->id;
 		}
 
-		// Compression:
-		if (!partIdxMapA.contains(snode_sheet->id))
-		{
-			auto i = (byte)idxPartMapA.size();
-			idxPartMapA[i] = snode_sheet->id;
-			partIdxMapA[snode_sheet->id] = i;
-		}
-
 		shapeA->removeNode(sheetid);
 	}
 
@@ -512,7 +452,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		{
 			auto snode = shapeA->getNode(partID);
 			StructureAnalysis::removeFromGroups(shapeA, snode);
-			if(partID != la.front()) snode->property["isMerged"].setValue(true);
+			if (partID != la.front()) snode->property["isMerged"].setValue(true);
 			lb << tnodeID;
 		}
 	}
@@ -543,14 +483,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 		lb.clear();
 		lb << newnode;
-
-		// Compression:
-		if (!partIdxMapB.contains(newnode))
-		{
-			auto i = (byte)idxPartMapB.size();
-			idxPartMapB[i] = newnode;
-			partIdxMapB[newnode] = i;
-		}
 	}
 
 	// SPLIT Case: one curve - many curves
@@ -582,14 +514,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 			shapeA->addNode(new_snode);
 			new_nodes << new_snode;
-
-			// Compression:
-			if (!partIdxMapB.contains(new_snode->id))
-			{
-				auto i = (byte)idxPartMapB.size();
-				idxPartMapB[i] = new_snode->id;
-				partIdxMapB[new_snode->id] = i;
-			}
 		}
 
 		la.clear();
@@ -601,9 +525,9 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 	}
 }
 
-void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, 
+void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
 	const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes)
-{	
+{
 	// Special case: many-to-null
 	if (lb.contains(Structure::null_part)) return;
 
@@ -648,7 +572,43 @@ void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, c
 	}
 }
 
-void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath*> & path)
+QVector<Energy::SearchNode*> Energy::GuidedDeformation::childrenOf(Energy::SearchNode * path)
+{
+	QVector<Energy::SearchNode*> children;
+
+	auto & searchTree = searchTrees.front();
+	auto pathItr = searchTree.begin();
+	for (; pathItr != searchTree.end(); pathItr++) if (&(*pathItr) == path) break;
+
+	SearchTree::sibling_iterator child = searchTree.begin(pathItr);
+	while (child != searchTree.end(pathItr)) {
+		children << &(*child);
+		++child;
+	}
+
+	return children;
+}
+
+QVector<Energy::SearchNode*> Energy::GuidedDeformation::getEntirePath(Energy::SearchNode * path)
+{
+	QVector<Energy::SearchNode*> entirePath;
+
+	auto & t = searchTrees.front();
+	auto itr = t.begin();
+	for (; itr != t.end(); itr++) if (&(*itr) == path) break;
+
+	// Find ancestors
+	auto current = itr;
+	while (current != 0){
+		auto & p = *current;
+		entirePath.push_front(&p);
+		current = t.parent(current);
+	}
+
+	return entirePath;
+}
+
+void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchNode*> & path)
 {
 	auto shapeA = new Structure::ShapeGraph(*origShapeA);
 	auto shapeB = new Structure::ShapeGraph(*origShapeB);
@@ -666,52 +626,4 @@ void Energy::GuidedDeformation::applySearchPath(const QVector<Energy::SearchPath
 			p->shapeB = shapeB;
 		}
 	}
-}
-
-void Energy::SearchPath::compress(const QMap<QString, PartIndex> & mapA, const QMap<QString, PartIndex> & mapB)
-{
-	assert(_assignments.empty());
-
-	// Convert part IDs from strings to small numbers
-	for (auto & a : assignments){
-		QVector < SearchPath::PartIndex > mappedA, mappedB;
-		for (auto p : a.first) mappedA << mapA[p];
-		for (auto p : a.second) mappedB << mapB[p];
-		_assignments.push_back(qMakePair(mappedA, mappedB));
-	}
-
-	for (auto & p : fixed) _fixed.push_back(mapA[p]);
-	for (auto & p : current) _current.push_back(mapA[p]);
-	for (auto & p : unassigned) _unassigned.push_back(mapA[p]);
-	for (auto & k : mapping.keys()) _mapping[mapA[k]] = mapB[mapping[k]];
-
-	// Clean up
-	assignments.clear();
-	fixed.clear();
-	current.clear();
-	unassigned.clear();
-	mapping.clear();
-}
-
-void Energy::SearchPath::decompress(const QMap<PartIndex, QString> & mapA, const QMap<PartIndex, QString> & mapB)
-{
-	// Reconstruct part IDs from small numbers
-	for (auto a : _assignments){
-		QStringList mappedA, mappedB;
-		for (auto p : a.first) mappedA << mapA[p];
-		for (auto p : a.second) mappedB << mapB[p];
-		assignments.push_back(qMakePair(mappedA, mappedB));
-	}
-
-	for (auto & p : _fixed) fixed.push_back(mapA[p]);
-	for (auto & p : _current) current.push_back(mapA[p]);
-	for (auto & p : _unassigned) unassigned.push_back(mapA[p]);
-	for (auto & k : _mapping.keys()) mapping[mapA[k]] = mapB[_mapping[k]];
-
-	// Clean up
-	_assignments.clear();
-	_fixed.clear();
-	_current.clear();
-	_unassigned.clear();
-	_mapping.clear();
 }
