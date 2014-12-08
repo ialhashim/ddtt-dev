@@ -45,7 +45,8 @@ public:
 public slots:
 	void postCorrespond();
 	void showCorrespond(int id);
-	void doEnergySearch();
+	void doEnergySearch();	
+	void doEnergyStep();
 
 	void encodeGeometry();
 	void decodeGeometry();

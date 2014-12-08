@@ -50,7 +50,7 @@ namespace Energy
 
 		void searchAll(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots);
 
-		void applyAssignment(Energy::SearchNode & path);
+		void applyAssignment(Energy::SearchNode & path, bool isSaveKeyframes);
 		QVector<Energy::SearchNode> suggestChildren(const Energy::SearchNode & path);
 
 		QVector<Energy::SearchNode*> solutions();

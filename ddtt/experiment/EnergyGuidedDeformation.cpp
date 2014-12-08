@@ -62,7 +62,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 			auto & path = *pathItr;
 
 			// Apply and evaluate deformation given current assignment
-			applyAssignment(path);
+			applyAssignment(path, false);
 
 			// Collect valid suggestions
 			auto suggested_children = suggestChildren(path);
@@ -88,7 +88,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 	}
 }
 
-void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode & path)
+void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode & path, bool isSaveKeyframes)
 {
 	// Go over and apply the suggested assignments:
 	for (auto ap : path.assignments)
@@ -104,7 +104,7 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode & path)
 		for (auto partID : ap.first) path.current << partID;
 
 		// Deform the assigned
-		applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current);
+		applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current, isSaveKeyframes);
 
 		// Track established correspondence
 		for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();

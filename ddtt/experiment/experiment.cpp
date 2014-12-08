@@ -29,6 +29,8 @@ CorrespondenceSearch * mysearch = NULL;
 #include "Viewer.h"
 
 #include "BatchProcess.h"
+#include "StructureAnalysis.h"
+#include "PropagateProximity.h"
 
 Energy::GuidedDeformation * egd = NULL;
 Viewer * v = NULL;
@@ -394,6 +396,43 @@ void experiment::postCorrespond()
 	drawArea()->update();
 }
 
+void experiment::doEnergyStep()
+{
+	auto shapeA = new Structure::ShapeGraph(*graphs.front());
+	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+
+	QVector<QStringList> landmarks_front;
+	QVector<QStringList> landmarks_back;
+
+	for (auto landmark : graphs.front()->landmarks){
+		QStringList m;
+		for (auto l : landmark) m << l.partid;
+		landmarks_front << m;
+	}
+
+	for (auto landmark : graphs.back()->landmarks){
+		QStringList m;
+		for (auto l : landmark) m << l.partid;
+		landmarks_back << m;
+	}
+
+	Energy::GuidedDeformation egd;
+
+	// Create a search path
+	Energy::Assignments assignments;
+	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
+	QVector<Energy::SearchNode> search_roots;
+	Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+
+	egd.applyAssignment(path, true);
+
+	graphs.clear();
+	graphs.push_back(path.shapeA);
+	graphs.push_back(path.shapeB);
+
+	mainWindow()->setStatusBarMessage(QString("cost = %1").arg(path.cost));
+}
+
 void experiment::doCorrespond()
 {
 	QElapsedTimer timer; timer.start();
@@ -506,7 +545,17 @@ void experiment::create()
 	});
 	connect(pw->ui->executeButton, &QPushButton::released, [&]{
 		drawArea()->clear();
-		this->doCorrespond();
+		//this->doCorrespond();
+
+		// Prepare
+		StructureAnalysis::analyzeGroups(graphs.front(), false);
+		StructureAnalysis::analyzeGroups(graphs.back(), false);
+		PropagateProximity::prepareForProximity(graphs.front());
+		EvaluateCorrespondence::prepare(graphs.front());
+		EvaluateCorrespondence::prepare(graphs.back());
+
+		this->doEnergyStep();
+
 		drawArea()->update();
 	});
 	connect(pw->ui->clearShapes, &QPushButton::released, [&]{
@@ -790,6 +839,11 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 	if (event->key() == Qt::Key_D)
 	{
 		decodeGeometry();
+	}
+
+	if (event->key() == Qt::Key_O)
+	{
+		graphs.front()->saveToFile("broken.xml", false);
 	}
 
 	if (event->key() == Qt::Key_Space)
