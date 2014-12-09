@@ -53,7 +53,7 @@ QString pathToHtml(Energy::SearchNode & p)
 	}
 
 	html << "<br/>";
-	html << "<span class=cost>" + QString::number(p.cost) + "</span>";
+	html << "<span class=cost>" + QString::number(p.energy) + "</span>";
 	html << "<span class=children>(" + QString::number(p.num_children) + ")</span>";
 
 	//html << "<span>" + p.current.join("-") + "</span>";
@@ -66,7 +66,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 {
 	// Show deformed
 	graphs.clear();
-	graphs << path->shapeA << path->shapeB;
+	graphs << new Structure::ShapeGraph(*path->shapeA.data()) << new Structure::ShapeGraph(*path->shapeB.data());
 
 	// Grey out
 	for (auto n : graphs.front()->nodes){
@@ -428,10 +428,10 @@ void experiment::doEnergyStep()
 	Energy::GuidedDeformation::applyAssignment(&path, true);
 
 	graphs.clear();
-	graphs.push_back(path.shapeA);
-	graphs.push_back(path.shapeB);
+	graphs.push_back(new Structure::ShapeGraph(*path.shapeA.data()));
+	graphs.push_back(new Structure::ShapeGraph(*path.shapeB.data()));
 
-	mainWindow()->setStatusBarMessage(QString("cost = %1").arg(path.cost));
+	mainWindow()->setStatusBarMessage(QString("cost = %1").arg(path.energy));
 }
 
 void experiment::doCorrespond()

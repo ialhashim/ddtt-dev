@@ -86,7 +86,7 @@ void BatchProcess::run()
 
 		QElapsedTimer searchTimer; searchTimer.start();
 
-		if (true)
+		if (false)
 		{
 			sorted_solutions[0] = AStar::search(path);
 		}
@@ -106,7 +106,7 @@ void BatchProcess::run()
 			auto all_solutions = egd.solutions();
 			for (auto s : all_solutions)
 			{
-				double cost = roundDecimal(s->cost, 2);
+				double cost = roundDecimal(s->energy, 2);
 				sorted_solutions[cost] = s;
 			}
 		}
@@ -120,21 +120,21 @@ void BatchProcess::run()
 			Energy::SearchNode * selected_path = NULL;
 			double cost = 0;
 
-			if (!egd.searchTrees.empty())
-			{
+			/*if (!egd.searchTrees.empty())
+			{*/
 				cost = sorted_solutions.keys().at(r);
 
 				auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
 				egd.applySearchPath(entire_path);
-				auto selected_path = entire_path.back();
-			}
-			else
+				selected_path = entire_path.back();
+			/*}*/
+			/*else
 			{
 				selected_path = sorted_solutions.first();
-			}
+			}*/
 
-			shapeA = selected_path->shapeA;
-			shapeB = selected_path->shapeB;
+			shapeA = new Structure::ShapeGraph(*selected_path->shapeA.data());
+			shapeB = new Structure::ShapeGraph(*selected_path->shapeB.data());
 
 			// Color corresponded nodes
 			{

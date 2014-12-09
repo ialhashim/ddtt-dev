@@ -14,7 +14,7 @@ namespace AStar
 		/* Heuristic */
 		double GoalDistanceEstimate( PathSearchNode & )
 		{
-			auto allDists = EvaluateCorrespondence::hausdroffDistance(shapeA, shapeB);
+			auto allDists = EvaluateCorrespondence::hausdroffDistance(shapeA.data(), shapeB.data());
 
 			double sum = 0;
 
@@ -33,7 +33,7 @@ namespace AStar
 		/* Actual cost (arc cost) */
 		double GetCost( PathSearchNode &successor )
 		{
-			Energy::GuidedDeformation::applyAssignment(&successor, true);
+			Energy::GuidedDeformation::applyAssignment(&successor, false);
 			return successor.cost;
 		}
 
@@ -45,14 +45,6 @@ namespace AStar
 			{
 				auto NewNode = PathSearchNode(suggestion);
 				astarsearch->AddSuccessor(NewNode);
-			}
-
-			// Clean up:
-			if (suggestions.size())
-			{
-				delete shapeA;
-				delete shapeB;
-				shapeA = shapeB = NULL;
 			}
 
 			return true;
@@ -72,9 +64,12 @@ namespace AStar
 	Energy::SearchNode * search(Energy::SearchNode & start)
 	{
 		// Prepare shapes
-		Energy::GuidedDeformation::preprocess(start.shapeA, start.shapeB);
+		Energy::GuidedDeformation::preprocess(start.shapeA.data(), start.shapeB.data());
 		Energy::GuidedDeformation::applyAssignment(&start, true);
-		PathSearchNode startNode(start);
+
+		auto startCopy = new Energy::SearchNode(start);
+
+		PathSearchNode startNode(*startCopy);
 
 		AStarSearch<PathSearchNode> astarsearch;
 
@@ -100,7 +95,7 @@ namespace AStar
 
 		astarsearch.FreeSolutionNodes();
 
-		return new Energy::SearchNode(final_node.shapeA, final_node.shapeB, final_node.fixed, 
-			final_node.assignments, final_node.unassigned, final_node.mapping, final_node.cost);
+		return new Energy::SearchNode(new Structure::ShapeGraph(*final_node.shapeA.data()), new Structure::ShapeGraph(*final_node.shapeB.data()), final_node.fixed,
+			final_node.assignments, final_node.unassigned, final_node.mapping, final_node.cost, final_node.energy);
 	}
 }
