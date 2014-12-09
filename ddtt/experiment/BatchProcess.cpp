@@ -118,7 +118,7 @@ void BatchProcess::run()
 		// Search for all solutions
 		QElapsedTimer searchTimer; searchTimer.start();
 		egd.searchAll(shapeA, shapeB, search_roots);
-		emit(jobFinished(idx));
+		emit(jobFinished(std::min(idx + 1, jobsArray.size()-1)));
 		QCoreApplication::processEvents();
 
 		searchTime = searchTimer.elapsed();
