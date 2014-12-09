@@ -425,7 +425,7 @@ void experiment::doEnergyStep()
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
 
-	Energy::GuidedDeformation::applyAssignment(path, true);
+	Energy::GuidedDeformation::applyAssignment(&path, true);
 
 	graphs.clear();
 	graphs.push_back(path.shapeA);

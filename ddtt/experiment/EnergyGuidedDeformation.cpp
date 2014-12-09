@@ -68,7 +68,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 			auto & path = *pathItr;
 
 			// Apply and evaluate deformation given current assignment
-			applyAssignment(path, false);
+			applyAssignment(&path, false);
 
 			// Collect valid suggestions
 			auto suggested_children = suggestChildren(path);
@@ -94,30 +94,30 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 	}
 }
 
-void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode & path, bool isSaveKeyframes)
+void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes)
 {
 	// Go over and apply the suggested assignments:
-	for (auto ap : path.assignments)
+	for (auto ap : path->assignments)
 	{
 		// Get assignment pair <source, target>
 		auto la = ap.first, lb = ap.second;
 		assert(la.size() && lb.size());
 
 		// Apply any needed topological operations
-		topologicalOpeartions(path.shapeA, path.shapeB, la, lb);
+		topologicalOpeartions(path->shapeA, path->shapeB, la, lb);
 
 		// Assigned parts will be fixed
-		for (auto partID : ap.first) path.current << partID;
+		for (auto partID : ap.first) path->current << partID;
 
 		// Deform the assigned
-		applyDeformation(path.shapeA, path.shapeB, la, lb, path.fixed + path.current, isSaveKeyframes);
+		applyDeformation(path->shapeA, path->shapeB, la, lb, path->fixed + path->current, isSaveKeyframes);
 
 		// Track established correspondence
-		for (size_t i = 0; i < la.size(); i++) path.mapping[la[i]] = lb[i].split(",").front();
+		for (size_t i = 0; i < la.size(); i++) path->mapping[la[i]] = lb[i].split(",").front();
 	}
 
 	// Evaluate distortion of shape
-	path.cost = EvaluateCorrespondence::evaluate(path.shapeA);
+	path->cost = EvaluateCorrespondence::evaluate(path->shapeA);
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Energy::SearchNode & path)
@@ -129,7 +129,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 	// Perform full search if we can afford it
 	int shape_relations_threshold = 6;
 	auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
-	int expand_by = 1;
+	int expand_by = 2;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -143,10 +143,14 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 			if (!candidatesA.contains(r)) candidatesA << r;
 		}
 
-		if (max_num_relations < shape_relations_threshold)
-			candidate_threshold = cost_threshold = 2.0;
+		if (false)
+		{
+			candidate_threshold = cost_threshold = std::numeric_limits<double>::max();
+		}
 		else
+		{
 			candidatesA.resize(std::min(expand_by, candidatesA.size()));
+		}
 	}
 
 	// Suggest for each candidate

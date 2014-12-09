@@ -40,7 +40,7 @@ namespace Energy
 			return result; 
 		}
 
-		bool operator<(const SearchNode & path){ return cost < path.cost; }
+		bool operator<(const SearchNode & path) const { return cost < path.cost; }
 	};
 
 	typedef tree<SearchNode> SearchTree;
@@ -57,8 +57,7 @@ namespace Energy
 		static void applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB, const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes = false);
 		static void postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed);
 
-		static void applyAssignment(Energy::SearchNode & path, bool isSaveKeyframes);
-
+		static void applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes);
 		static QVector<Energy::SearchNode> suggestChildren(const Energy::SearchNode & path);
 
 		QVector<Energy::SearchNode*> solutions();

@@ -263,3 +263,44 @@ void cart_product(Vvi& out, const Vvi& in, int maxCount = -1)
 		}
 	}
 }
+
+// Image utility:
+#include <QImage>
+#include <QPainter>
+inline QImage stitchImages(const QImage & a, const QImage & b, bool isVertical = false, int padding = 2, QColor background = Qt::white)
+{
+	int newWidth = isVertical ? (2 * padding) + std::max(a.width(), b.width()) : (3 * padding) + a.width() + b.width();
+	int newHeight = isVertical ? (3 * padding) + a.height() + b.height() : (2 * padding) + std::max(a.height(), b.height());
+	QImage img(newWidth, newHeight, QImage::Format_ARGB32_Premultiplied);
+	QPainter painter;
+	painter.begin(&img);
+	painter.fillRect(img.rect(), background);
+	if (isVertical)
+	{
+		painter.drawImage(padding, padding, a);
+		painter.drawImage(padding, padding + a.height() + padding, b);
+	}
+	else
+	{
+		painter.drawImage(padding, padding, a);
+		painter.drawImage(padding + a.width() + padding, padding, b);
+	}
+	painter.end();
+	return img;
+}
+
+inline QImage drawText(QString message, QImage a, int x = 14, int y = 14, QColor color = Qt::black)
+{
+	QPainter painter;
+	painter.begin(&a);
+	painter.setRenderHint(QPainter::Antialiasing);
+	painter.setRenderHint(QPainter::HighQualityAntialiasing);
+	painter.setBrush(Qt::black);
+	painter.setOpacity(0.2);
+	painter.drawText(QPoint(x + 1, y + 1), message);
+	painter.setOpacity(1.0);
+	painter.setBrush(color);
+	painter.drawText(QPoint(x, y), message);
+	painter.end();
+	return a;
+}

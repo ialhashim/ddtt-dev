@@ -2,6 +2,9 @@
 #include "myglobals.h"
 #include <QCoreApplication>
 #include <QMatrix4x4>
+#include "EncodeDecodeGeometry.h"
+
+#include "AStarSearch.h"
 
 Structure::ShapeGraph *shapeA, *shapeB;
 static QVector<QColor> myrndcolors = rndColors2(100);
@@ -23,44 +26,6 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 	pd->show();
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
     pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
-}
-
-QImage stitchImages(const QImage & a, const QImage & b, bool isVertical = false, int padding = 2, QColor background = Qt::white)
-{
-	int newWidth = isVertical ? (2 * padding) + std::max(a.width(), b.width()) : (3 * padding) + a.width() + b.width();
-	int newHeight = isVertical ? (3 * padding) + a.height() + b.height() : (2 * padding) + std::max(a.height(), b.height());
-	QImage img(newWidth, newHeight, QImage::Format_ARGB32_Premultiplied);
-	QPainter painter;
-	painter.begin(&img);
-	painter.fillRect(img.rect(), background);
-	if (isVertical)
-	{
-		painter.drawImage(padding, padding, a);
-		painter.drawImage(padding, padding + a.height() + padding, b);
-	}
-	else
-	{
-		painter.drawImage(padding, padding, a);
-		painter.drawImage(padding + a.width() + padding, padding, b);
-	}
-	painter.end();
-	return img;
-}
-
-QImage drawText(QString message, QImage a, int x = 14, int y = 14, QColor color = Qt::black)
-{
-    QPainter painter;
-	painter.begin(&a);
-    painter.setRenderHint(QPainter::Antialiasing);
-    painter.setRenderHint(QPainter::HighQualityAntialiasing);
-	painter.setBrush(Qt::black);
-	painter.setOpacity(0.2);
-	painter.drawText(QPoint(x+1, y+1), message);
-	painter.setOpacity(1.0);
-	painter.setBrush(color);
-	painter.drawText(QPoint(x, y), message);
-	painter.end();
-	return a;
 }
 
 void BatchProcess::run()
@@ -103,6 +68,9 @@ void BatchProcess::run()
 			assignments.push_back(qMakePair(la, lb));
 		}
 
+		// Results:
+		QMap <double, Energy::SearchNode*> sorted_solutions;
+
 		/// Search solutions:
 		Energy::GuidedDeformation egd;			
 		
@@ -113,18 +81,27 @@ void BatchProcess::run()
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
 		Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+		path.unassigned = path.unassignedList();
 		search_roots << path;
 
-		// Search for all solutions
 		QElapsedTimer searchTimer; searchTimer.start();
-		egd.searchAll(shapeA, shapeB, search_roots);
-		emit(jobFinished(std::min(idx + 1, jobsArray.size()-1)));
-		QCoreApplication::processEvents();
 
+		if (true)
+		{
+			sorted_solutions[0] = AStar::search(path);
+		}
+		else
+		{
+			// Search for all solutions
+			egd.searchAll(shapeA, shapeB, search_roots);
+		}
+
+		emit(jobFinished(std::min(idx + 1, jobsArray.size() - 1)));
+		QCoreApplication::processEvents();
 		searchTime = searchTimer.elapsed();
-		
+
 		/// Rank solutions:
-		QMap <double, Energy::SearchNode*> sorted_solutions;
+		if (sorted_solutions.empty())
 		{
 			auto all_solutions = egd.solutions();
 			for (auto s : all_solutions)
@@ -140,11 +117,21 @@ void BatchProcess::run()
 		{
 			if (r > sorted_solutions.size() - 1) continue; // less solutions than expected
 
-			auto cost = sorted_solutions.keys().at(r);
+			Energy::SearchNode * selected_path = NULL;
+			double cost = 0;
 
-			auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
-			egd.applySearchPath(entire_path);
-			auto selected_path = entire_path.back();
+			if (!egd.searchTrees.empty())
+			{
+				cost = sorted_solutions.keys().at(r);
+
+				auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
+				egd.applySearchPath(entire_path);
+				auto selected_path = entire_path.back();
+			}
+			else
+			{
+				selected_path = sorted_solutions.first();
+			}
 
 			shapeA = selected_path->shapeA;
 			shapeB = selected_path->shapeB;
@@ -196,6 +183,30 @@ void BatchProcess::run()
 			auto cur_solution_img = stitchImages(
 				renderer->render(shapeA).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation), 
 				renderer->render(shapeB).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
+
+			// Show deformed
+			{
+				auto shapeAcopy = new Structure::ShapeGraph(*shapeA);
+				for (auto n : shapeAcopy->nodes)
+				{
+					auto orig_mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+					QSharedPointer<SurfaceMeshModel> new_mesh_ptr(orig_mesh->clone());
+					new_mesh_ptr->updateBoundingBox();
+					new_mesh_ptr->update_face_normals();
+					new_mesh_ptr->update_vertex_normals();
+					n->property["mesh"].setValue(new_mesh_ptr);
+				}
+
+				shapeAcopy->setAllControlPoints(shapeAcopy->animation.front());
+				ShapeGeometry::encodeGeometry(shapeAcopy);
+				shapeAcopy->setAllControlPoints(shapeAcopy->animation.back());
+				ShapeGeometry::decodeGeometry(shapeAcopy);
+
+				auto deformedImg = renderer->render(shapeAcopy).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
+				deformedImg = drawText("[Deformed source]", deformedImg, 14, deformedImg.height() - 20);
+
+				cur_solution_img = stitchImages(cur_solution_img, deformedImg);
+			}
 
 			cur_solution_img = drawText(QString("cost = %1").arg(cost), cur_solution_img);
 
