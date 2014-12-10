@@ -115,18 +115,15 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 
 	path->cost = curEnergy - prevEnergy;
 	path->energy = path->energy + path->cost;
+
+	assert(path->cost != 0);
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
-	double cost_threshold = 0.5;
-
-	// Perform full search if we can afford it
-	int shape_relations_threshold = 6;
-	auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
-	int expand_by = 2;
+	double cost_threshold = 0.4;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -134,22 +131,26 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 	// Start process from remaining unassigned parts if needed
 	if (!path.unassigned.isEmpty())
 	{
-		// Suggest for all unassigned
+		// Suggest for all remaining unassigned
 		for (auto partID : path.unassigned){
 			auto r = path.shapeA->relationOf(partID);
 			if (!candidatesA.contains(r)) candidatesA << r;
 		}
 
+		// Perform full search if we can afford it
+		/*int shape_relations_threshold = 6;
+		auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
+		int expand_by = 2;
 		if ( max_num_relations > shape_relations_threshold )
-		{
-			candidatesA.resize(std::min(expand_by, candidatesA.size()));
-		}
+			candidatesA.resize(std::min(expand_by, candidatesA.size()));*/
 	}
 
 	// Suggest for each candidate
 	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
-	for (auto relationA : candidatesA){
-		// Find candidate target groups
+	for (auto relationA : candidatesA)
+	{
+		// Candidate target groups
+		/// Thresholding [0]: possibly skip geometrically very different ones
 		for (auto relationB : path.shapeB->relations)
 			pairings.push_back(qMakePair(relationA, relationB));
 	}
@@ -177,67 +178,68 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 		auto rboxB = path.shapeB->relationBBox(relationB);
 		Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
 
-		// Thresholding: Skip assignment if spatially too far
+		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
-		if (dist > candidate_threshold) continue;
-
-		// Try and evaluate suggestion
-		double curEnergy = 0;
-		QStringList la = relationA.parts, lb = relationB.parts;
-
-		// Case: many-to-many, find best matching between two sets
-		if (la.size() != 1 && lb.size() != 1)
+		if (dist < candidate_threshold)
 		{
-			Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+			// Try and evaluate suggestion
+			double curEnergy = 0;
+			QStringList la = relationA.parts, lb = relationB.parts;
 
-			lb.clear();
-
-			for (size_t i = 0; i < relationA.parts.size(); i++)
+			// Case: many-to-many, find best matching between two sets
+			if (la.size() != 1 && lb.size() != 1)
 			{
-				auto partID = relationA.parts[i];
-				auto partA = path.shapeA->getNode(partID);
-				Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
 
-				QMap<double, QString> dists;
-				for (auto tpartID : relationB.parts)
+				lb.clear();
+
+				for (size_t i = 0; i < relationA.parts.size(); i++)
 				{
-					Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
-					dists[(partCenterA - partCenterB).norm()] = tpartID;
+					auto partID = relationA.parts[i];
+					auto partA = path.shapeA->getNode(partID);
+					Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+
+					QMap<double, QString> dists;
+					for (auto tpartID : relationB.parts)
+					{
+						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+						dists[(partCenterA - partCenterB).norm()] = tpartID;
+					}
+
+					lb << dists.values().front();
 				}
-
-				lb << dists.values().front();
 			}
-		}
-		else
-		{
-			la = relationA.parts;
-			lb = relationB.parts;
-		}
+			else
+			{
+				la = relationA.parts;
+				lb = relationB.parts;
+			}
 
-		// Make copies
-		Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
+			// Make copies
+			Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
 
-		// Evaluate cost of applying deformation and propagation
-		auto copy_la = la, copy_lb = lb;
-		topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-		applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
-		curEnergy = EvaluateCorrespondence::evaluate(&shapeA);
+			// Evaluate cost of applying deformation and propagation
+			auto copy_la = la, copy_lb = lb;
+			topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
+			applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
+			curEnergy = EvaluateCorrespondence::evaluate(&shapeA);
 
-		// Thresholding: Skip really bad assignments
-		double cost = curEnergy - path.energy;
-		if (cost < cost_threshold)
-		{
-			auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
-			auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
+			/// Thresholding [2]: Skip really bad assignments
+			double cost = curEnergy - path.energy;
+			if (cost < cost_threshold)
+			{
+				auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
+				auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
 
-			QStringList unassigned = path.unassigned;
-			for (auto p : la) unassigned.removeAll(p);
+				QStringList unassigned = path.unassigned;
+				for (auto p : la) unassigned.removeAll(p);
 
-			Assignments assignment;
-			assignment << qMakePair(la, lb);
-			assert(la.size() && lb.size());
+				Assignments assignment;
+				assignment << qMakePair(la, lb);
+				assert(la.size() && lb.size());
 
-			suggested_children[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+				suggested_children[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+			}
 		}
 	}
 

@@ -181,7 +181,7 @@ public: // methods
 	}
 
 	// Advances search one step 
-	unsigned int SearchStep()
+	unsigned int SearchStep(int num_solutions, int max_open_set)
 	{
 		// Firstly break if the user has not initialised the search
 		assert( (m_State > SEARCH_STATE_NOT_INITIALISED) &&
@@ -214,44 +214,44 @@ public: // methods
 		m_OpenList.pop_back();
 
 		// Check for the goal, once we pop that we're done
-		if( n->m_UserState.IsGoal( m_Goal->m_UserState ) )
+		if( n->m_UserState.IsGoal() )
 		{
-			// IB: modification
-			m_Goal->m_UserState = n->m_UserState;
-
-			// The user is going to use the Goal Node he passed in 
-			// so copy the parent pointer of n 
-			m_Goal->parent = n->parent;
-			m_Goal->g = n->g;
-
-			// A special case is that the goal was passed in as the start state
-			// so handle that here
-			if( false == n->m_UserState.IsSameState( m_Start->m_UserState ) )
+			if (solutions.size() >= num_solutions)
 			{
-				FreeNode( n );
+				// delete nodes that aren't needed for the solution
+				FreeUnusedNodes();
 
-				// set the child pointers in each node (except Goal which has no child)
-				Node *nodeChild = m_Goal;
-				Node *nodeParent = m_Goal->parent;
+				m_State = SEARCH_STATE_SUCCEEDED;
 
-				do 
-				{
-					nodeParent->child = nodeChild;
-
-					nodeChild = nodeParent;
-					nodeParent = nodeParent->parent;
-				
-				} 
-				while( nodeChild != m_Start ); // Start is always the first node by definition
-
+				return m_State;
 			}
+			else
+			{
+				m_ClosedList.push_back(n);
 
-			// delete nodes that aren't needed for the solution
-			FreeUnusedNodes();
+				solutions.push_back(std::vector<UserState>());
 
-			m_State = SEARCH_STATE_SUCCEEDED;
+				auto & r = solutions.back();
+				auto data = n->m_UserState;
+				r.push_back(data);
 
-			return m_State;
+				// back trace
+				while (n = n->parent)
+				{
+					auto data = n->m_UserState;
+					r.push_back(data);
+				}
+				
+				std::reverse( solutions.back().begin(), solutions.back().end() );
+
+				/*// IB: modification
+				m_Goal->m_UserState = n->m_UserState;
+
+				// The user is going to use the Goal Node he passed in 
+				// so copy the parent pointer of n 
+				m_Goal->parent = n->parent;
+				m_Goal->g = n->g;*/
+			}
 		}
 		else // not goal
 		{
@@ -287,11 +287,12 @@ public: // methods
 			}
 			
 			// Now handle each successor to the current node ...
-			for( typename vector< Node * >::iterator successor = m_Successors.begin(); successor != m_Successors.end(); successor ++ )
+			for (typename vector< Node * >::iterator successoritr = m_Successors.begin(); successoritr != m_Successors.end(); successoritr++)
 			{
+				Node * successor = *successoritr;
 
 				// 	The g value for this successor ...
-				float newg = n->g + n->m_UserState.GetCost( (*successor)->m_UserState );
+				float newg = n->g + n->m_UserState.GetCost( successor->m_UserState );
 
 				// Now we need to find whether the node is on the open or closed lists
 				// If it is but the node that is already on them is better (lower g)
@@ -303,7 +304,7 @@ public: // methods
 
 				for( openlist_result = m_OpenList.begin(); openlist_result != m_OpenList.end(); openlist_result ++ )
 				{
-					if( (*openlist_result)->m_UserState.IsSameState( (*successor)->m_UserState ) )
+					if( (*openlist_result)->m_UserState.IsSameState( successor->m_UserState ) )
 					{
 						break;					
 					}
@@ -316,7 +317,7 @@ public: // methods
 
 					if( (*openlist_result)->g <= newg )
 					{
-						FreeNode( (*successor) );
+						FreeNode( successor );
 
 						// the one on Open is cheaper than this one
 						continue;
@@ -327,7 +328,7 @@ public: // methods
 
 				for( closedlist_result = m_ClosedList.begin(); closedlist_result != m_ClosedList.end(); closedlist_result ++ )
 				{
-					if( (*closedlist_result)->m_UserState.IsSameState( (*successor)->m_UserState ) )
+					if( (*closedlist_result)->m_UserState.IsSameState( successor->m_UserState ) )
 					{
 						break;					
 					}
@@ -341,7 +342,7 @@ public: // methods
 					if( (*closedlist_result)->g <= newg )
 					{
 						// the one on Closed is cheaper than this one
-						FreeNode( (*successor) );
+						FreeNode( successor );
 
 						continue;
 					}
@@ -350,17 +351,17 @@ public: // methods
 				// This node is the best node so far with this particular state
 				// so lets keep it and set up its AStar specific data ...
 
-				(*successor)->parent = n;
-				(*successor)->g = newg;
-				(*successor)->h = (*successor)->m_UserState.GoalDistanceEstimate( m_Goal->m_UserState );
-				(*successor)->f = (*successor)->g + (*successor)->h;
+				successor->parent = n;
+				successor->g = newg;
+				successor->h = successor->m_UserState.GoalDistanceEstimate( m_Goal->m_UserState );
+				successor->f = successor->g + successor->h;
 
 				// Remove successor from closed if it was on it
 
 				if( closedlist_result != m_ClosedList.end() )
 				{
 					// remove it from Closed
-					FreeNode(  (*closedlist_result) ); 
+					//FreeNode(  (*closedlist_result) ); 
 					m_ClosedList.erase( closedlist_result );
 
 					// Fix thanks to ...
@@ -375,7 +376,7 @@ public: // methods
 				if( openlist_result != m_OpenList.end() )
 				{	   
 
-					FreeNode( (*openlist_result) ); 
+					//FreeNode( (*openlist_result) ); 
 			   		m_OpenList.erase( openlist_result );
 
 					// re-make the heap 
@@ -387,16 +388,16 @@ public: // methods
 				}
 
 				// heap now unsorted
-				m_OpenList.push_back( (*successor) );
+				m_OpenList.push_back( successor );
 
 				// sort back element into heap
 				push_heap( m_OpenList.begin(), m_OpenList.end(), HeapCompare_f() );
 
-			}
+			} // end successor
 
 			// push n onto Closed, as we have expanded it now
 
-			m_ClosedList.push_back( n );
+			m_ClosedList.push_back(n);
 
 		} // end else (not goal so expand)
 
@@ -790,6 +791,9 @@ private: // data
 	
 	bool m_CancelRequest;
 
+public:
+	std::vector< std::vector<UserState> > solutions;
+
 };
 
 template <class T> class AStarState
@@ -797,7 +801,7 @@ template <class T> class AStarState
 public:
 	virtual ~AStarState() {}
 	virtual float GoalDistanceEstimate( T &nodeGoal ) = 0; // Heuristic function which computes the estimated cost to the goal node
-	virtual bool IsGoal( T &nodeGoal ) = 0; // Returns true if this node is the goal node
+	virtual bool IsGoal() = 0; // Returns true if this node is the goal node
 	virtual bool GetSuccessors( AStarSearch<T> *astarsearch, T *parent_node ) = 0; // Retrieves all successors to this node and adds them via astarsearch.addSuccessor()
 	virtual float GetCost( T &successor ) = 0; // Computes the cost of travelling from this node to the successor node
 	virtual bool IsSameState( T &rhs ) = 0; // Returns true if this node is the same as the rhs node

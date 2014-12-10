@@ -86,23 +86,25 @@ void BatchProcess::run()
 
 		QElapsedTimer searchTimer; searchTimer.start();
 
-		if (false)
+		bool isSearchAstar = true;
+		if ( isSearchAstar )
 		{
-			sorted_solutions[0] = AStar::search(path);
+			for (auto & solution : AStar::search(path))
+			{
+				egd.origShapeA = new Structure::ShapeGraph(*shapeA);
+				egd.origShapeB = new Structure::ShapeGraph(*shapeB);
+
+				QVector <Energy::SearchNode*> solution_vec;
+				for (auto state : solution) solution_vec << new Energy::SearchNode(state);
+				egd.applySearchPath(solution_vec);
+				sorted_solutions[solution.back().energy] = solution_vec.back();
+			}
 		}
 		else
 		{
 			// Search for all solutions
 			egd.searchAll(shapeA, shapeB, search_roots);
-		}
 
-		emit(jobFinished(std::min(idx + 1, jobsArray.size() - 1)));
-		QCoreApplication::processEvents();
-		searchTime = searchTimer.elapsed();
-
-		/// Rank solutions:
-		if (sorted_solutions.empty())
-		{
 			auto all_solutions = egd.solutions();
 			for (auto s : all_solutions)
 			{
@@ -111,6 +113,10 @@ void BatchProcess::run()
 			}
 		}
 
+		emit(jobFinished(std::min(idx + 1, jobsArray.size() - 1)));
+		QCoreApplication::processEvents();
+		searchTime = searchTimer.elapsed();
+
 		/// Draw top solutions:
 		QImage img;
 		for (int r = 0; r < resultsCount; r++)
@@ -118,20 +124,18 @@ void BatchProcess::run()
 			if (r > sorted_solutions.size() - 1) continue; // less solutions than expected
 
 			Energy::SearchNode * selected_path = NULL;
-			double cost = 0;
+			double cost = sorted_solutions.keys().at(r);
 
-			/*if (!egd.searchTrees.empty())
-			{*/
-				cost = sorted_solutions.keys().at(r);
-
+			if (!isSearchAstar)
+			{
 				auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
 				egd.applySearchPath(entire_path);
 				selected_path = entire_path.back();
-			/*}*/
-			/*else
+			}
+			else
 			{
-				selected_path = sorted_solutions.first();
-			}*/
+				selected_path = sorted_solutions[cost];
+			}
 
 			shapeA = new Structure::ShapeGraph(*selected_path->shapeA.data());
 			shapeB = new Structure::ShapeGraph(*selected_path->shapeB.data());
@@ -189,7 +193,11 @@ void BatchProcess::run()
 				auto shapeAcopy = new Structure::ShapeGraph(*shapeA);
 				for (auto n : shapeAcopy->nodes)
 				{
+					if (!n->property.contains("mesh")) continue;
+
 					auto orig_mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
+					if (!orig_mesh) continue;
+
 					QSharedPointer<SurfaceMeshModel> new_mesh_ptr(orig_mesh->clone());
 					new_mesh_ptr->updateBoundingBox();
 					new_mesh_ptr->update_face_normals();
