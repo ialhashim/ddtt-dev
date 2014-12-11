@@ -119,7 +119,7 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 	assert(path->cost != 0);
 }
 
-QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Energy::SearchNode & path)
+QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
@@ -132,7 +132,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 	if (!path.unassigned.isEmpty())
 	{
 		// Suggest for all remaining unassigned
-		for (auto partID : path.unassigned){
+		for (auto & partID : path.unassigned){
 			auto r = path.shapeA->relationOf(partID);
 			if (!candidatesA.contains(r)) candidatesA << r;
 		}
@@ -147,11 +147,11 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 
 	// Suggest for each candidate
 	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
-	for (auto relationA : candidatesA)
+	for (auto & relationA : candidatesA)
 	{
 		// Candidate target groups
 		/// Thresholding [0]: possibly skip geometrically very different ones
-		for (auto relationB : path.shapeB->relations)
+		for (auto & relationB : path.shapeB->relations)
 			pairings.push_back(qMakePair(relationA, relationB));
 	}
 
@@ -228,8 +228,8 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 			double cost = curEnergy - path.energy;
 			if (cost < cost_threshold)
 			{
-				auto modifiedShapeA = new Structure::ShapeGraph(*path.shapeA);
-				auto modifiedShapeB = new Structure::ShapeGraph(*path.shapeB);
+				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
 
 				QStringList unassigned = path.unassigned;
 				for (auto p : la) unassigned.removeAll(p);
@@ -248,6 +248,10 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(const Ene
 	for (auto & child : suggested_children)
 		if (child.shapeA)
 			accepted_children.push_back(child);
+
+	// Clean up:
+	path.shapeA.clear(); 
+	path.shapeB.clear();
 
 	return accepted_children;
 }

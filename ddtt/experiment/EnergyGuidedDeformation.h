@@ -22,7 +22,8 @@ namespace Energy
 		QMap<QString, QVariant> property;
 		int num_children;
 
-		SearchNode(Structure::ShapeGraph * shapeA = NULL, Structure::ShapeGraph * shapeB = NULL, 
+		SearchNode(QSharedPointer<Structure::ShapeGraph> shapeA = QSharedPointer<Structure::ShapeGraph>(), 
+			QSharedPointer<Structure::ShapeGraph> shapeB = QSharedPointer<Structure::ShapeGraph>(),
 			const QStringList & fixed = QStringList(), const Assignments & assignments = Assignments(), 
 			const QStringList & unassigned = QStringList(), const QMap<QString, QString> & mapping = QMap<QString, QString>(),
 			double cost = std::numeric_limits<double>::max(), double energy = 0.0) : shapeA(shapeA), shapeB(shapeB), fixed(fixed),
@@ -58,7 +59,7 @@ namespace Energy
 		static void postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed);
 
 		static void applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes);
-		static QVector<Energy::SearchNode> suggestChildren(const Energy::SearchNode & path);
+		static QVector<Energy::SearchNode> suggestChildren(Energy::SearchNode & path);
 
 		QVector<Energy::SearchNode*> solutions();
 		QVector<Energy::SearchNode*> parents();

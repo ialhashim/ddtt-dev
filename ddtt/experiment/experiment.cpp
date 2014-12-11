@@ -120,8 +120,8 @@ void experiment::doEnergySearch()
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
 	for (auto g : graphs) g->property["showMeshes"].setValue(false);
 
-	auto shapeA = new Structure::ShapeGraph(*graphs.front());
-	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.front()));
+	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.back()));
 
 	QMatrix4x4 mat;
 
@@ -399,8 +399,8 @@ void experiment::postCorrespond()
 
 void experiment::doEnergyStep()
 {
-	auto shapeA = new Structure::ShapeGraph(*graphs.front());
-	auto shapeB = new Structure::ShapeGraph(*graphs.back());
+	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.front()));
+	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.back()));
 
 	QVector<QStringList> landmarks_front;
 	QVector<QStringList> landmarks_back;

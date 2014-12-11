@@ -75,8 +75,8 @@ void BatchProcess::run()
 		Energy::GuidedDeformation egd;			
 		
 		// Load shapes
-		shapeA = new Structure::ShapeGraph(source);
-		shapeB = new Structure::ShapeGraph(target);
+		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(source));
+		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(target));
 
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
@@ -103,7 +103,7 @@ void BatchProcess::run()
 		else
 		{
 			// Search for all solutions
-			egd.searchAll(shapeA, shapeB, search_roots);
+			egd.searchAll(shapeA.data(), shapeB.data(), search_roots);
 
 			auto all_solutions = egd.solutions();
 			for (auto s : all_solutions)
@@ -137,8 +137,8 @@ void BatchProcess::run()
 				selected_path = sorted_solutions[cost];
 			}
 
-			shapeA = new Structure::ShapeGraph(*selected_path->shapeA.data());
-			shapeB = new Structure::ShapeGraph(*selected_path->shapeB.data());
+			auto shapeA = new Structure::ShapeGraph(*selected_path->shapeA.data());
+			auto shapeB = new Structure::ShapeGraph(*selected_path->shapeB.data());
 
 			// Color corresponded nodes
 			{

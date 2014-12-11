@@ -37,15 +37,12 @@ namespace AStar
 			return successor.cost;
 		}
 
-		bool GetSuccessors( AStarSearch<PathSearchNode> *astarsearch, PathSearchNode *parent_node )
+		bool GetSuccessors( AStarSearch<PathSearchNode> *astarsearch )
 		{
 			auto suggestions = Energy::GuidedDeformation::suggestChildren(*this);
 
 			for (auto suggestion : suggestions)
-			{
-				auto NewNode = PathSearchNode(suggestion);
-				astarsearch->AddSuccessor(NewNode);
-			}
+				astarsearch->AddSuccessor(PathSearchNode(suggestion));
 
 			return suggestions.size();
 		}
@@ -57,45 +54,53 @@ namespace AStar
 
 		bool IsSameState( PathSearchNode &rhs )
 		{
-			if (this->mapping.empty()) 
-				return false;
+			if (this->mapping.empty()) return false;
 			return this->mapping == rhs.mapping;
 		}
 	};
 
-	std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & start)
+	std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root)
 	{
 		// Prepare shapes
-		Energy::GuidedDeformation::preprocess(start.shapeA.data(), start.shapeB.data());
+		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());
+
+		Energy::SearchNode start;
+		start.shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*root.shapeA.data()));
+		start.shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*root.shapeB.data()));
+		start.assignments = root.assignments;
+		start.unassigned = root.unassignedList();
 		Energy::GuidedDeformation::applyAssignment(&start, true);
 
 		auto startCopy = new Energy::SearchNode(start);
 
 		PathSearchNode startNode(*startCopy);
 
-		int num_solutions = 100;
-		int max_open_set = 10000;
-
-		AStarSearch<PathSearchNode> astarsearch( num_solutions );
-
-		astarsearch.SetStartAndGoalStates(startNode, startNode);
-
-		unsigned int SearchState;
-		unsigned int SearchSteps = 0;
-
-		do
-		{
-			SearchState = astarsearch.SearchStep( num_solutions, max_open_set );
-			SearchSteps++;
-		} 
-		while (SearchState == AStarSearch<PathSearchNode>::SEARCH_STATE_SEARCHING);
-
-		// Convert to original type
 		std::vector< std::vector<Energy::SearchNode> > result;
-		for (auto & row : astarsearch.solutions){
-			std::vector<Energy::SearchNode> r;
-			for (auto & element : row) r.push_back(element);
-			result.push_back(r);
+
+		/// Perform search:
+		{
+			int num_solutions = 1000;
+			int max_open_set = 10000;
+
+			AStarSearch<PathSearchNode> astarsearch(num_solutions);
+
+			astarsearch.SetStartAndGoalStates(startNode, startNode);
+
+			unsigned int SearchState;
+			unsigned int SearchSteps = 0;
+
+			do
+			{
+				SearchState = astarsearch.SearchStep(num_solutions, max_open_set);
+				SearchSteps++;
+			} while (SearchState == AStarSearch<PathSearchNode>::SEARCH_STATE_SEARCHING);
+
+			// Convert to original type
+			for (auto & row : astarsearch.solutions){
+				std::vector<Energy::SearchNode> r;
+				for (auto & element : row) r.push_back(element);
+				result.push_back(r);
+			}
 		}
 
 		return result;
