@@ -89,7 +89,7 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path))
+			for (auto & solution : AStar::search(path, 200))
 			{
 				egd.origShapeA = new Structure::ShapeGraph(*shapeA);
 				egd.origShapeB = new Structure::ShapeGraph(*shapeB);
@@ -250,7 +250,7 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	if (!json.contains("outputPath"))
 	{
 		json["outputPath"] = QString("outputPath");
-		json["resultsCount"] = 15;
+		json["resultsCount"] = 10;
 	}
 
 	auto jobs = json["jobs"].toArray();

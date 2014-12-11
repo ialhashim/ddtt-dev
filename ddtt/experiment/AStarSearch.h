@@ -59,7 +59,7 @@ namespace AStar
 		}
 	};
 
-	std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root)
+	std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, int num_solutions = 100)
 	{
 		// Prepare shapes
 		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());
@@ -79,7 +79,6 @@ namespace AStar
 
 		/// Perform search:
 		{
-			int num_solutions = 1000;
 			int max_open_set = 10000;
 
 			AStarSearch<PathSearchNode> astarsearch(num_solutions);
