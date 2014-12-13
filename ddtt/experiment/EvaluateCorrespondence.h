@@ -12,6 +12,7 @@ struct EvaluateCorrespondence
 	static Array2D_Vector4d sampleNode(Structure::Node * n, double resolution);
 	static QMap<QString, NanoKdTree*> kdTreesNodes( Structure::ShapeGraph * shape );
 	static QMap<QString, QMap<QString, double> > hausdroffDistance( Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB );
+	static double RMSD(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB);
 };
 
 Q_DECLARE_METATYPE(Vector3);

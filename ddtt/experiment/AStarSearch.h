@@ -14,20 +14,32 @@ namespace AStar
 		/* Heuristic */
 		double GoalDistanceEstimate( PathSearchNode & )
 		{
-			auto allDists = EvaluateCorrespondence::hausdroffDistance(shapeA.data(), shapeB.data());
+			bool isHausdorff = true;
+			bool isRMSD = false;
 
-			double sum = 0;
-
-			for (auto partID : allDists.keys())
+			// Hausdorff distance
+			if (isHausdorff)
 			{
-				auto dists = allDists[partID];
-
-				double curSum = 0;
-				for (auto d : dists) curSum += d;
-				sum += curSum / dists.size();
+				auto allDists = EvaluateCorrespondence::hausdroffDistance(shapeA.data(), shapeB.data());
+				double sum = 0;
+				for (auto partID : allDists.keys()){
+					auto dists = allDists[partID];
+					double curSum = 0;
+					for (auto d : dists) curSum += d;
+					sum += curSum / dists.size();
+				}
+				double avg = sum / allDists.size();
+				return avg;
 			}
-			
-			return sum / allDists.size();
+
+			//  Root Mean Squared Deviation (RMSD)
+			if (isRMSD)
+			{
+				double rmsd = EvaluateCorrespondence::RMSD(shapeA.data(), shapeB.data());
+				return rmsd;
+			}
+
+			return 0;
 		}
 
 		/* Actual cost (arc cost) */

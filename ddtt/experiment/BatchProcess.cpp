@@ -39,6 +39,7 @@ void BatchProcess::run()
 	int resultsCount = json["resultsCount"].toInt();
 	QString outputPath = json["outputPath"].toString();
 	auto jobsArray = json["jobs"].toArray();
+	bool isSwapped = json["isSwap"].toBool();
 
 	QElapsedTimer allTimer; allTimer.start();
 	int allTime = 0;
@@ -58,6 +59,13 @@ void BatchProcess::run()
 		auto target = job["target"].toString();
 		auto title = job["title"].toString();
 
+		if (isSwapped)
+		{
+			std::swap(source, target);
+			auto splitTitle = title.split("-");
+			title = splitTitle.size() > 1 ? splitTitle.back() + "-" + splitTitle.front() : title;
+		}
+
 		/// Initial Assignments:
 		Energy::Assignments assignments;
 		for (auto a : job["assignments"].toArray())
@@ -65,6 +73,7 @@ void BatchProcess::run()
 			QStringList la, lb;
 			for (auto part : a.toObject()["source"].toArray().toVariantList()) la << part.toString();
 			for (auto part : a.toObject()["target"].toArray().toVariantList()) lb << part.toString();
+			if (isSwapped) std::swap(la, lb);
 			assignments.push_back(qMakePair(la, lb));
 		}
 
@@ -89,7 +98,7 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path, 200))
+			for (auto & solution : AStar::search(path, 100))
 			{
 				egd.origShapeA = new Structure::ShapeGraph(*shapeA);
 				egd.origShapeB = new Structure::ShapeGraph(*shapeB);

@@ -170,3 +170,51 @@ QMap<QString, QMap<QString, double> > EvaluateCorrespondence::hausdroffDistance(
 
 	return result;
 }
+
+double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB)
+{
+	// Collect point sets X, Y
+	auto sampleShape = [&](Structure::ShapeGraph * shape){
+		std::vector<Vector3> samples;
+		for (auto n : shape->nodes){
+			auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
+			if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(n, 0);
+			for (auto row : coords) for (auto c : row) samples.push_back( n->position(c) );
+		}
+		return samples;
+	};
+
+	auto X = sampleShape(shapeA);
+	auto Y = sampleShape(shapeB);
+
+	// Point query acceleration
+	auto buildKdTree = []( std::vector<Vector3> samples ){
+		auto t = new NanoKdTree;
+		for (auto p : samples) t->addPoint(p);
+		t->build();
+		return QSharedPointer<NanoKdTree>(t);
+	};
+	QSharedPointer<NanoKdTree> X_tree = buildKdTree(X);
+	QSharedPointer<NanoKdTree> Y_tree = buildKdTree(Y);
+
+	auto dist_x_Y = [](QSharedPointer<NanoKdTree> X_tree, QSharedPointer<NanoKdTree> Y_tree){
+		auto & X = X_tree->cloud.pts, Y = Y_tree->cloud.pts;
+		int n = X.size();
+		double sum = 0;
+		for (int i = 0; i < n; i++)
+		{
+			auto & p = X[i];
+			KDResults matches;
+			Y_tree->k_closest(p, 1, matches); // min_j
+			sum += matches.front().second; // (Euclidean distance)^2
+		}
+		return sum;
+	};
+
+	int n = (int) X.size(); // or Y.size()??
+
+	double a = (dist_x_Y(X_tree, Y_tree) + dist_x_Y(Y_tree, X_tree));
+	double b = 2.0 * n;
+
+	return sqrt( a / b );
+}
