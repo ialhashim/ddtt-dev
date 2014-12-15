@@ -15,6 +15,13 @@ void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::Shap
 				continue;
 		}
 
+		// If all nodes in relation fixed, it is a fixed relation
+		{
+			bool isFullyFixed = true;
+			for (auto partID : relation.parts) if (!fixedNodes.contains(partID)) { isFullyFixed = false; break; }
+			if (isFullyFixed) continue;
+		}
+
 		if (relation.type == Structure::Relation::REFLECTIONAL)
 		{
 			auto partA = graph->getNode(relation.parts.front()), partB = graph->getNode(relation.parts.back());

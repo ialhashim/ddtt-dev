@@ -1,11 +1,12 @@
 #pragma once
 #include "ShapeGraph.h"
 #include "NanoKdTree.h"
+#include "EnergyGuidedDeformation.h"
 
 struct EvaluateCorrespondence
 {
 	static void prepare( Structure::ShapeGraph * shape );
-	static double evaluate( Structure::ShapeGraph * shape );
+	static double evaluate( Energy::SearchNode * searchNode );
 
 	// Utility:
 	static Array1D_Vector3 spokesFromLink( Structure::Link * link );

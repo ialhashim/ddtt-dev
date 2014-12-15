@@ -67,7 +67,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 
 			auto & path = *pathItr;
 
-			// Apply and evaluate deformation given current assignment
+			// Apply deformation given current assignment
 			applyAssignment(&path, false);
 
 			// Collect valid suggestions
@@ -111,19 +111,18 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 	}
 
 	// Evaluate distortion of shape
-	double curEnergy = EvaluateCorrespondence::evaluate(path->shapeA.data());
+	double curEnergy = EvaluateCorrespondence::evaluate(path);
 
 	path->cost = curEnergy - prevEnergy;
 	path->energy = path->energy + path->cost;
-
-	assert(path->cost != 0);
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
-	double candidate_threshold = 0.4;
-	double cost_threshold = 0.2;
+	double candidate_threshold = 0.5;
+	double cost_threshold = 0.25;
+	int k_top_candidates = 5;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -136,13 +135,6 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 			auto r = path.shapeA->relationOf(partID);
 			if (!candidatesA.contains(r)) candidatesA << r;
 		}
-
-		// Perform full search if we can afford it
-		/*int shape_relations_threshold = 6;
-		auto max_num_relations = std::max(path.shapeA->relations.size(), path.shapeB->relations.size());
-		int expand_by = 2;
-		if ( max_num_relations > shape_relations_threshold )
-			candidatesA.resize(std::min(expand_by, candidatesA.size()));*/
 	}
 
 	// Suggest for each candidate
@@ -159,11 +151,11 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	auto boxA = path.shapeA->bbox(), boxB = path.shapeB->bbox();
 
 	// Output:
-	QVector<Energy::SearchNode> suggested_children(pairings.size());
+	QList< QPair<double, Energy::SearchNode> > evaluated_children;
 
-#ifndef QT_DEBUG
+//#ifndef QT_DEBUG
 #pragma omp parallel for
-#endif
+//#endif
 	for (int r = 0; r < pairings.size(); r++)
 	{
 		auto & pairing = pairings[r];
@@ -182,7 +174,6 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 		auto dist = (rboxCenterA - rboxCenterB).norm();
 		if (dist < candidate_threshold)
 		{
-			// Try and evaluate suggestion
 			double curEnergy = 0;
 			QStringList la = relationA.parts, lb = relationB.parts;
 
@@ -216,13 +207,26 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 			}
 
 			// Make copies
-			Structure::ShapeGraph shapeA(*path.shapeA), shapeB(*path.shapeB);
+			auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+			auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
 
-			// Evaluate cost of applying deformation and propagation
+			// Apply then evaluate cost of current suggestion
 			auto copy_la = la, copy_lb = lb;
-			topologicalOpeartions(&shapeA, &shapeB, copy_la, copy_lb);
-			applyDeformation(&shapeA, &shapeB, copy_la, copy_lb, path.fixed + path.current + copy_la);
-			curEnergy = EvaluateCorrespondence::evaluate(&shapeA);
+			topologicalOpeartions(shapeA.data(), shapeB.data(), copy_la, copy_lb);
+			applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la);
+
+			// Evaluate:
+			{
+				SearchNode tempNode;
+				tempNode.shapeA = shapeA;
+				tempNode.shapeB = shapeB;
+				tempNode.fixed = path.fixed + path.current + copy_la;
+				tempNode.mapping = path.mapping;
+				for (size_t i = 0; i < la.size(); i++) tempNode.mapping[copy_la[i]] = copy_lb[i].split(",").front();
+				tempNode.unassigned = path.unassigned;
+				for (auto p : la) tempNode.unassigned.removeAll(p);
+				curEnergy = EvaluateCorrespondence::evaluate(&tempNode);
+			}
 
 			/// Thresholding [2]: Skip really bad assignments
 			double cost = curEnergy - path.energy;
@@ -238,18 +242,21 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 				assignment << qMakePair(la, lb);
 				assert(la.size() && lb.size());
 
-				suggested_children[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+				#pragma omp critical
+				evaluated_children.push_back(qMakePair(cost, SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy)));
 			}
 		}
 	}
 
-	QVector<Energy::SearchNode> accepted_children;
+	/// Thresholding [3] : only accept the 'k' top suggestions
+	qSort(evaluated_children);
+	auto sorted_children = evaluated_children.toVector();
+	sorted_children.resize(std::min(sorted_children.size(), k_top_candidates));
 
-	for (auto & child : suggested_children)
-		if (child.shapeA)
-			accepted_children.push_back(child);
+	QVector < Energy::SearchNode > accepted_children;
+	for (auto & child : sorted_children) accepted_children.push_back(child.second);
 
-	// Clean up:
+	// Clean up of no longer needed data:
 	path.shapeA.clear(); 
 	path.shapeB.clear();
 

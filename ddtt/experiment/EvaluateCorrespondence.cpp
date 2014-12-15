@@ -62,9 +62,12 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(l));
 }
 
-double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
+double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
 	QVector<double> feature_vector;
+
+	auto shape = searchNode->shapeA.data();
+	auto targetShape = searchNode->shapeB.data();
 
 	// Binary properties:
 	for (auto l : shape->edges)
@@ -72,8 +75,8 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current = EvaluateCorrespondence::spokesFromLink(l);
 
-		// Scale by difference in closeness distance
-		double scale = 1.0;
+		/// Connection: scale by difference in closeness distance
+		double connection_weight = 1.0;
 		{
 			auto minMaxDist = [](Array1D_Vector3& pts){
 				double mn = DBL_MAX, mx = -DBL_MAX;
@@ -86,27 +89,53 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 
 			if (bounds_curr.first > bounds_orig.first){
 				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
-				scale = 1.0 - ratio;
+				connection_weight = 1.0 - ratio;
 			}
 		}
 
-		// If allowing any-null correspondences
-		bool isAssignedNull = l->n1->property["isAssignedNull"].toBool() || l->n2->property["isAssignedNull"].toBool();
+		/// Geometric: scale by geometric similarity
+		double geom_weight = 1.0;
+		{
+			auto fixedNodeChangedType = [&](Structure::Node * n){
+				bool isFixedAlready = searchNode->mapping.contains(n->id);
+				if (!isFixedAlready) return false;
+				if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) return false;
+				return true;
+			};
+			
+			auto ratio = [&](Structure::Node * n){
+				if (fixedNodeChangedType(n)){
+					double rs = 1.0 / shape->relationOf(n->id).parts.size();
+					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
+					return rs == rt ? 0 : std::min(rs, rt);
+				}
+				return 0.0;
+			};
+
+			double r = std::max( ratio(l->n1), ratio(l->n2) );
+			geom_weight = 1.0 - r;
+		}
+
+		/// Structure: favor diversity in assignments
+		double diversity_weight = 1.0;
+		{
+			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
+				if (searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
+					diversity_weight = 0.5;
+		}
 
 		for (size_t i = 0; i < original.size(); i++)
 		{
 			double v = original[i].normalized().dot(current[i].normalized());
 
-			if (v < 0)
-				v = 0;
-
-			if (isAssignedNull) v = 0;
-
-			// Penalize bad values e.g. nan
+			// Bad values e.g. nan are broken edge values
 			if (!std::isfinite(v)) v = 0;
 
+			// Bound: beyond 90 degrees the original edge is broken 
+			if (v < 0) v = 0;
+
 			// Scaling
-			v *= scale;
+			v *= connection_weight * geom_weight * diversity_weight;
 
 			feature_vector << v;
 		}
@@ -120,7 +149,7 @@ double EvaluateCorrespondence::evaluate(Structure::ShapeGraph *shape)
 	double v_norm = v.norm(), original_norm = original_v.norm();
 
 	// Value of 1 means perfect match, anything lower is bad
-	double similarity = std::min(v_norm, original_norm) / std::max(v_norm, original_norm);
+	double similarity = v_norm / original_norm;
 	double cost = 1.0 - similarity;
 
 	return cost;

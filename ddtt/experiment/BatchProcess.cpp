@@ -41,6 +41,13 @@ void BatchProcess::run()
 	auto jobsArray = json["jobs"].toArray();
 	bool isSwapped = json["isSwap"].toBool();
 
+	// Clear past results in output folder
+	QDir d(""); d.mkpath(outputPath);
+	QDir dir(outputPath);
+	for (auto filename : dir.entryList(QDir::Files))
+		if (filename.endsWith(".png"))
+			dir.remove(dir.absolutePath() + "/" + filename);
+		
 	QElapsedTimer allTimer; allTimer.start();
 	int allTime = 0;
 
@@ -98,7 +105,7 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path, 100))
+			for (auto & solution : AStar::search(path, 200))
 			{
 				egd.origShapeA = new Structure::ShapeGraph(*shapeA);
 				egd.origShapeB = new Structure::ShapeGraph(*shapeB);
@@ -235,7 +242,6 @@ void BatchProcess::run()
 		img = drawText(msg, img, img.width() - msgWidth, 14);
 
 		auto output_file = QString("%1/%2.png").arg(outputPath).arg(title);
-		QDir d(""); d.mkpath(QFileInfo(output_file).absolutePath());
 		img.save(output_file);
 	}
 
@@ -243,6 +249,7 @@ void BatchProcess::run()
 
 	emit(jobFinished(jobsArray.size()));
     emit(allJobsFinished());
+	emit(reportMessage(QString("Batch process time (%1 s)").arg(double(allTimer.elapsed()) / 1000), 0));
 }
 
 void BatchProcess::appendJob(QVariantMap job, QString filename)

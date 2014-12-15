@@ -39,6 +39,7 @@ public:
 signals:
 	void jobFinished(int);
 	void allJobsFinished();
+	void reportMessage(QString,double);
 };
 
 // Utility:

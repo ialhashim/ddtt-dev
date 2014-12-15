@@ -241,7 +241,7 @@ void experiment::doEnergySearch()
 	// Select least cost path
 	auto all_solutions = egd->solutions();
 	QList < QPair<double, Energy::SearchNode*> > solutions;
-	for (auto s : all_solutions) solutions << qMakePair(s->cost, s);
+	for (auto s : all_solutions) solutions << qMakePair(s->energy, s);
 	qSort(solutions.begin(), solutions.end());
 	
 	auto entire_path = egd->getEntirePath(solutions.front().second);
@@ -251,7 +251,7 @@ void experiment::doEnergySearch()
 
 	QApplication::restoreOverrideCursor();
 
-	double cost = EvaluateCorrespondence::evaluate(graphs.front());
+	double cost = EvaluateCorrespondence::evaluate(selected_path);
 	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - solutions %3").arg(timeElapsed).arg(cost).arg(solutions.size()));
 }
 
@@ -622,6 +622,7 @@ void experiment::create()
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
 		QTimer::singleShot(0, [=] { 
 			BatchProcess * bp = new BatchProcess(filename);
+			mainWindow()->connect(bp, SIGNAL(reportMessage(QString,double)), SLOT(setStatusBarMessage(QString, double)));
 			bp->start();
 		});
 	});
