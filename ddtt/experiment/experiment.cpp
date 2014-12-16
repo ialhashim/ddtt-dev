@@ -622,6 +622,7 @@ void experiment::create()
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
 		QTimer::singleShot(0, [=] { 
 			BatchProcess * bp = new BatchProcess(filename);
+			QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
 			mainWindow()->connect(bp, SIGNAL(reportMessage(QString,double)), SLOT(setStatusBarMessage(QString, double)));
 			bp->start();
 		});

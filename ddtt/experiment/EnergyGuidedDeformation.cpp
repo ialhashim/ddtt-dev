@@ -38,10 +38,10 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 
 	// Pre-processing
 	{
-		origShapeA = new Structure::ShapeGraph(*shapeA);
-		origShapeB = new Structure::ShapeGraph(*shapeB);
+		origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+		origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
 
-		preprocess(origShapeA, origShapeB);
+		preprocess(origShapeA.data(), origShapeB.data());
 	}
 
 	// Start search from roots
@@ -520,7 +520,7 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 	if (lb.contains(Structure::null_part)) return;
 
 	// Save initial configuration
-	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now deform", 15));
+	//if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now deform", 15));
 	if (isSaveKeyframes) shapeA->saveKeyframe();
 
 	// Deform part to its target
@@ -536,11 +536,11 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 		DeformToFit::registerAndDeformNodes(shapeA->getNode(partID), shapeB->getNode(tpartID)); if (isSaveKeyframes) shapeA->saveKeyframe();
 	}
 
-	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now symmetry", 15));
+	//if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now symmetry", 15));
 	PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) shapeA->saveKeyframe();
 
 	// Propagate edit by applying structural constraints
-	if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now proximity", 15));
+	//if (isSaveKeyframes) shapeA->pushKeyframeDebug(new RenderObject::Text(30, 30, "now proximity", 15));
 	PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
 	//PropagateSymmetry::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
 	//PropagateProximity::propagate(fixed, shapeA); if (isSaveKeyframes) { shapeA->saveKeyframe(); }
@@ -596,19 +596,19 @@ QVector<Energy::SearchNode*> Energy::GuidedDeformation::getEntirePath(Energy::Se
 	return entirePath;
 }
 
-void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> & path)
+void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> path)
 {
-	auto shapeA = new Structure::ShapeGraph(*origShapeA);
-	auto shapeB = new Structure::ShapeGraph(*origShapeB);
+	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeA));
+	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeB));
 
 	for (auto & p : path)
 	{
-		for (auto ap : p->assignments)
+		for (auto & ap : p->assignments)
 		{
 			// Get assignment pair <source, target>
 			auto la = ap.first, lb = ap.second;
-			topologicalOpeartions(shapeA, shapeB, la, lb);
-			applyDeformation(shapeA, shapeB, la, lb, p->fixed + p->current, true);
+			topologicalOpeartions(shapeA.data(), shapeB.data(), la, lb);
+			applyDeformation(shapeA.data(), shapeB.data(), la, lb, p->fixed + p->current, true);
 
 			p->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 			p->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));

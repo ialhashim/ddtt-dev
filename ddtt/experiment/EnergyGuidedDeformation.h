@@ -48,7 +48,7 @@ namespace Energy
 
 	struct GuidedDeformation
 	{
-		Structure::ShapeGraph *origShapeA, *origShapeB;
+		QSharedPointer<Structure::ShapeGraph> origShapeA, origShapeB;
 		QVector< SearchTree > searchTrees;
 
 		static void preprocess(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB);
@@ -66,6 +66,6 @@ namespace Energy
 		QVector<Energy::SearchNode*> childrenOf(Energy::SearchNode * path);
 		QVector<Energy::SearchNode*> getEntirePath(Energy::SearchNode * path);
 
-		void applySearchPath(QVector<Energy::SearchNode*> & path);
+		void applySearchPath(QVector<Energy::SearchNode*> path);
 	};
 }

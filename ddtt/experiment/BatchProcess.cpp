@@ -85,7 +85,8 @@ void BatchProcess::run()
 		}
 
 		// Results:
-		QMap <double, Energy::SearchNode*> sorted_solutions;
+		QMap <double, Energy::SearchNode> sorted_solutions;
+		QVector < QVector <Energy::SearchNode> > solution_vec;
 
 		/// Search solutions:
 		Energy::GuidedDeformation egd;			
@@ -107,13 +108,15 @@ void BatchProcess::run()
 		{
 			for (auto & solution : AStar::search(path, 200))
 			{
-				egd.origShapeA = new Structure::ShapeGraph(*shapeA);
-				egd.origShapeB = new Structure::ShapeGraph(*shapeB);
+				egd.origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+				egd.origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
 
-				QVector <Energy::SearchNode*> solution_vec;
-				for (auto state : solution) solution_vec << new Energy::SearchNode(state);
-				egd.applySearchPath(solution_vec);
-				sorted_solutions[solution.back().energy] = solution_vec.back();
+				solution_vec.push_back(QVector<Energy::SearchNode>());
+				for (auto & state : solution) solution_vec.back() << state;
+				QVector<Energy::SearchNode*> ptrs;
+				for (auto & node : solution_vec.back()) ptrs << &node;
+				egd.applySearchPath(ptrs);
+				sorted_solutions[solution.back().energy] = solution_vec.back().back();
 			}
 		}
 		else
@@ -125,7 +128,7 @@ void BatchProcess::run()
 			for (auto s : all_solutions)
 			{
 				double cost = roundDecimal(s->energy, 2);
-				sorted_solutions[cost] = s;
+				sorted_solutions[cost] = *s;
 			}
 		}
 
@@ -144,17 +147,17 @@ void BatchProcess::run()
 
 			if (!isSearchAstar)
 			{
-				auto entire_path = egd.getEntirePath(sorted_solutions[cost]);
+				auto entire_path = egd.getEntirePath(&sorted_solutions[cost]);
 				egd.applySearchPath(entire_path);
 				selected_path = entire_path.back();
 			}
 			else
 			{
-				selected_path = sorted_solutions[cost];
+				selected_path = &sorted_solutions[cost];
 			}
 
-			auto shapeA = new Structure::ShapeGraph(*selected_path->shapeA.data());
-			auto shapeB = new Structure::ShapeGraph(*selected_path->shapeB.data());
+			auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeA.data()));
+			auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeB.data()));
 
 			// Color corresponded nodes
 			{
@@ -201,12 +204,12 @@ void BatchProcess::run()
 			int thumbWidth = 256;
 
 			auto cur_solution_img = stitchImages(
-				renderer->render(shapeA).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation), 
-				renderer->render(shapeB).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
+				renderer->render(shapeA.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation), 
+				renderer->render(shapeB.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
 
 			// Show deformed
 			{
-				auto shapeAcopy = new Structure::ShapeGraph(*shapeA);
+				auto shapeAcopy = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				for (auto n : shapeAcopy->nodes)
 				{
 					if (!n->property.contains("mesh")) continue;
@@ -222,11 +225,11 @@ void BatchProcess::run()
 				}
 
 				shapeAcopy->setAllControlPoints(shapeAcopy->animation.front());
-				ShapeGeometry::encodeGeometry(shapeAcopy);
+				ShapeGeometry::encodeGeometry(shapeAcopy.data());
 				shapeAcopy->setAllControlPoints(shapeAcopy->animation.back());
-				ShapeGeometry::decodeGeometry(shapeAcopy);
+				ShapeGeometry::decodeGeometry(shapeAcopy.data());
 
-				auto deformedImg = renderer->render(shapeAcopy).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
+				auto deformedImg = renderer->render(shapeAcopy.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
 				deformedImg = drawText("[Deformed source]", deformedImg, 14, deformedImg.height() - 20);
 
 				cur_solution_img = stitchImages(cur_solution_img, deformedImg);

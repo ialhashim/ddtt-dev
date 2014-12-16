@@ -83,7 +83,7 @@ namespace AStar
 		start.unassigned = root.unassignedList();
 		Energy::GuidedDeformation::applyAssignment(&start, true);
 
-		auto startCopy = new Energy::SearchNode(start);
+		auto startCopy = QSharedPointer<Energy::SearchNode>(new Energy::SearchNode(start));
 
 		PathSearchNode startNode(*startCopy);
 
