@@ -15,7 +15,7 @@ QT += gui opengl xml svg
 HEADERS +=  experiment.h \
             experiment-widget.h \
             #Deformer.h \
-            #DeformEnergy.h \
+            DeformEnergy.h \
             CorrespondenceGenerator.h \
             CorrespondenceSearch.h \
             ShapeGraph.h \
@@ -31,7 +31,7 @@ HEADERS +=  experiment.h \
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
             #Deformer.cpp \
-            #DeformEnergy.cpp \
+            DeformEnergy.cpp \
             CorrespondenceGenerator.cpp \
             CorrespondenceSearch.cpp \
             DeformEnergy2.cpp \
