@@ -17,11 +17,11 @@
 static QVector<QColor> colors = rndColors2(100);
 ExperimentWidget * pw = NULL;
 
-#include "DeformEnergy.h"
+//#include "DeformEnergy.h"
 #include "DeformEnergy2.h"
 #include "CorrespondenceSearch.h"
 CorrespondenceSearch * mysearch = NULL;
-#include "Deformer.h"
+//#include "Deformer.h"
 
 #include "EncodeDecodeGeometry.h"
 
@@ -354,8 +354,8 @@ void experiment::showCorrespond(int idx)
 		}
 		else
 		{
-			DeformEnergy d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
-			for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+            //DeformEnergy d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
+            //for (auto debug : d.debug) drawArea()->addRenderObject(debug);
 		}
 	}
 }
@@ -480,9 +480,9 @@ void experiment::doCorrespond2()
 
 	int num_solver_iterations = ((ExperimentWidget*)widget)->ui->numIterations->value();
 
-	Deformer d(graphs.front(), graphs.back(), num_solver_iterations);
+    //Deformer d(graphs.front(), graphs.back(), num_solver_iterations);
 
-	for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+    //for (auto debug : d.debug)drawArea()->addRenderObject(debug);
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }

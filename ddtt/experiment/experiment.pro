@@ -14,8 +14,8 @@ QT += gui opengl xml svg
 
 HEADERS +=  experiment.h \
             experiment-widget.h \
-            Deformer.h \
-            DeformEnergy.h \
+            #Deformer.h \
+            #DeformEnergy.h \
             CorrespondenceGenerator.h \
             CorrespondenceSearch.h \
             ShapeGraph.h \
@@ -26,12 +26,12 @@ HEADERS +=  experiment.h \
             PropagateProximity.h \
             PropagateSymmetry.h \
             EvaluateCorrespondence.h \
-    BatchProcess.h
+            BatchProcess.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
-            Deformer.cpp \
-            DeformEnergy.cpp \
+            #Deformer.cpp \
+            #DeformEnergy.cpp \
             CorrespondenceGenerator.cpp \
             CorrespondenceSearch.cpp \
             DeformEnergy2.cpp \
@@ -41,7 +41,7 @@ SOURCES +=  experiment.cpp \
             PropagateProximity.cpp \
             PropagateSymmetry.cpp \
             EvaluateCorrespondence.cpp \
-    BatchProcess.cpp
+            BatchProcess.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc
@@ -55,9 +55,9 @@ LIBS += -L$$PWD/../StructureGraphLib/$$CFG/lib -lStructureGraphLib
 INCLUDEPATH += ../StructureGraphLib
 
 # ShapeOp
-LIBS += -L$$PWD/libShapeOp/$$CFG/lib -llibShapeOp
-INCLUDEPATH += ./libShapeOp
-DEFINES += SHAPEOP_EXPORT
+#LIBS += -L$$PWD/libShapeOp/$$CFG/lib -llibShapeOp
+#INCLUDEPATH += ./libShapeOp
+#DEFINES += SHAPEOP_EXPORT
 
 # QDigraph library
 QT += webkitwidgets
