@@ -62,106 +62,13 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(l));
 }
 
-double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
-{
-	QVector<double> feature_vector;
-
-	auto shape = searchNode->shapeA.data();
-	auto targetShape = searchNode->shapeB.data();
-
-	// Binary properties:
-	for (auto l : shape->edges)
-	{
-		auto original = l->property["orig_spokes"].value<Array1D_Vector3>();
-		auto current = EvaluateCorrespondence::spokesFromLink(l);
-
-		/// Connection: scale by difference in closeness distance
-		double connection_weight = 1.0;
-		{
-			auto minMaxDist = [](Array1D_Vector3& pts){
-				double mn = DBL_MAX, mx = -DBL_MAX;
-				for (auto& p : pts) { double d = p.norm(); mn = std::min(mn, d); mx = std::max(mx, d); }
-				return std::make_pair(mn, mx);
-			};
-
-			auto bounds_orig = minMaxDist(original);
-			auto bounds_curr = minMaxDist(current);
-
-			if (bounds_curr.first > bounds_orig.first){
-				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
-				connection_weight = 1.0 - ratio;
-			}
-		}
-
-		/// Geometric: scale by geometric similarity
-		double geom_weight = 1.0;
-		{
-			auto fixedNodeChangedType = [&](Structure::Node * n){
-				bool isFixedAlready = searchNode->mapping.contains(n->id);
-				if (!isFixedAlready) return false;
-				if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) return false;
-				return true;
-			};
-			
-			auto ratio = [&](Structure::Node * n){
-				if (fixedNodeChangedType(n)){
-					double rs = 1.0 / shape->relationOf(n->id).parts.size();
-					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
-					return rs == rt ? 0 : std::min(rs, rt);
-				}
-				return 0.0;
-			};
-
-			double r = std::max( ratio(l->n1), ratio(l->n2) );
-			geom_weight = 1.0 - r;
-		}
-
-		/// Structure: favor diversity in assignments
-		double diversity_weight = 1.0;
-		{
-			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
-				if (searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
-					diversity_weight = 0.5;
-		}
-
-		for (size_t i = 0; i < original.size(); i++)
-		{
-			double v = original[i].normalized().dot(current[i].normalized());
-
-			// Bad values e.g. nan are broken edge values
-			if (!std::isfinite(v)) v = 0;
-
-			// Bound: beyond 90 degrees the original edge is broken 
-			if (v < 0) v = 0;
-
-			// Scaling
-			v *= connection_weight * geom_weight * diversity_weight;
-
-			feature_vector << v;
-		}
-	}
-
-	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(feature_vector.size());
-
-	Eigen::VectorXd v(feature_vector.size());
-	for (size_t d = 0; d < feature_vector.size(); d++) v[d] = feature_vector[d];
-
-	double v_norm = v.norm(), original_norm = original_v.norm();
-
-	// Value of 1 means perfect match, anything lower is bad
-	double similarity = v_norm / original_norm;
-	double cost = 1.0 - similarity;
-
-	return cost;
-}
-
 QMap<QString, NanoKdTree*> EvaluateCorrespondence::kdTreesNodes(Structure::ShapeGraph * shape)
 {
 	QMap < QString, NanoKdTree* > result;
 
 	auto buildKdTree = [](Structure::Node * n, const Array2D_Vector4d & coords){
 		auto t = new NanoKdTree;
-		for (auto row : coords) for(auto coord : row) t->addPoint(n->position(coord));
+		for (auto row : coords) for (auto coord : row) t->addPoint(n->position(coord));
 		t->build();
 		return t;
 	};
@@ -208,7 +115,7 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 		for (auto n : shape->nodes){
 			auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
 			if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(n, 0);
-			for (auto row : coords) for (auto c : row) samples.push_back( n->position(c) );
+			for (auto row : coords) for (auto c : row) samples.push_back(n->position(c));
 		}
 		return samples;
 	};
@@ -217,7 +124,7 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 	auto Y = sampleShape(shapeB);
 
 	// Point query acceleration
-	auto buildKdTree = []( std::vector<Vector3> samples ){
+	auto buildKdTree = [](std::vector<Vector3> samples){
 		auto t = new NanoKdTree;
 		for (auto p : samples) t->addPoint(p);
 		t->build();
@@ -240,10 +147,120 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 		return sum;
 	};
 
-	int n = (int) X.size(); // or Y.size()??
+	int n = (int)X.size(); // or Y.size()??
 
 	double a = (dist_x_Y(X_tree, Y_tree) + dist_x_Y(Y_tree, X_tree));
 	double b = 2.0 * n;
 
-	return sqrt( a / b );
+	return sqrt(a / b);
+}
+
+double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool isRecordDetails)
+{
+	QVector<double> feature_vector;
+
+	auto shape = searchNode->shapeA.data();
+	auto targetShape = searchNode->shapeB.data();
+
+	// Logging
+	QVariantMap costMap;
+
+	// Binary properties:
+	for (auto l : shape->edges)
+	{
+		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
+		auto current_spokes = EvaluateCorrespondence::spokesFromLink(l);
+
+		/// (a) Connection: scale by difference in closeness distance
+		double connection_weight = 1.0;
+		{
+			auto minMaxDist = [](Array1D_Vector3& vectors){
+				double mn = DBL_MAX, mx = -DBL_MAX;
+				for (auto& p : vectors) { double d = p.norm(); mn = std::min(mn, d); mx = std::max(mx, d); }
+				return std::make_pair(mn, mx);
+			};
+
+			auto bounds_orig = minMaxDist(original_spokes);
+			auto bounds_curr = minMaxDist(current_spokes);
+
+			if (bounds_curr.first > bounds_orig.first){
+				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
+				connection_weight = 1.0 - ratio;
+			}
+		}
+
+		/// (b) Geometric: scale by geometric similarity
+		double geom_weight = 1.0;
+		{
+			auto fixedNodeChangedType = [&](Structure::Node * n){
+				bool isFixedAlready = searchNode->mapping.contains(n->id);
+				if (!isFixedAlready) return false;
+				if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) return false;
+				return true;
+			};
+			
+			auto ratio = [&](Structure::Node * n){
+				if (fixedNodeChangedType(n)){
+					double rs = 1.0 / shape->relationOf(n->id).parts.size();
+					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
+					return rs == rt ? 0 : std::min(rs, rt);
+				}
+				return 0.0;
+			};
+
+			double r = std::max( ratio(l->n1), ratio(l->n2) );
+			geom_weight = 1.0 - r;
+		}
+
+		/// (c) Structure: favor diversity in assignments
+		double diversity_weight = 1.0;
+		{
+			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
+				if (searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
+					diversity_weight = 0.5;
+		}
+
+		QVector < double > link_vector;
+
+		for (size_t i = 0; i < original_spokes.size(); i++)
+		{
+			double v = original_spokes[i].normalized().dot(current_spokes[i].normalized());
+
+			// Bad values e.g. nan are broken feature values
+			if (!std::isfinite(v)) v = 0;
+
+			// Bound: beyond 90 degrees the original edge is broken 
+			if (v < 0) v = 0;
+
+			// Scaling
+			v *= connection_weight * geom_weight * diversity_weight;
+
+			link_vector << v;
+		}
+
+		for (auto v : link_vector) feature_vector << v;
+
+		double sum_link_vector = 0; for (auto v : link_vector) sum_link_vector += v;
+		double avg_link_vector = sum_link_vector / link_vector.size();
+		//feature_vector << avg_link_vector;
+
+		// Logging:
+		qSort(link_vector);
+		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5")
+			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(geom_weight).arg(diversity_weight).arg(avg_link_vector));
+	}
+
+	// Logging:
+	shape->property["costs"].setValue(costMap);
+
+	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
+	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
+
+	double v_norm = v.norm(), original_norm = original_v.norm();
+
+	// Value of 1 means perfect matching to original shape, anything lower is bad
+	double similarity = v_norm / original_norm;
+	double cost = 1.0 - similarity;
+
+	return cost;
 }

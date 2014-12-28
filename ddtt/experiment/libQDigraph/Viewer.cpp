@@ -83,6 +83,11 @@ void Viewer::insertLogItem(QString msg)
     ui->logWidget->insertItem(ui->logWidget->count(), msg);
 }
 
+void Viewer::clearLogItems()
+{
+    ui->logWidget->clear();
+}
+
 int Viewer::addNode(QString node_info)
 {
     QStringList params = node_info.split(",");

@@ -128,16 +128,16 @@ void GraphModifyWidget::visualizeSelections()
 	// Set black for all
 	foreach (Structure::Node * node,  g->nodes)
 	{
-        node->vis_property["color"].setValue(Qt::lightGray);
+        node->vis_property["color"].setValue(QColor(Qt::lightGray));
         node->vis_property["showControl"].setValue(false);
 	}
 
 	// Set red for landmark
 	foreach (QListWidgetItem * item, items_1)
-        g->getNode(item->text())->vis_property["color"].setValue( Qt::red );
+        g->getNode(item->text())->vis_property["color"].setValue( QColor(Qt::red) );
 
 	foreach (QListWidgetItem * item, items_2)
-        g->getNode(item->text())->vis_property["color"].setValue( Qt::green );
+        g->getNode(item->text())->vis_property["color"].setValue( QColor(Qt::green) );
 
 	emit( updateView() );
 

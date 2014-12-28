@@ -53,7 +53,9 @@ QString pathToHtml(Energy::SearchNode & p)
 	}
 
 	html << "<br/>";
-	html << "<span class=cost>" + QString::number(p.energy) + "</span>";
+	html << "<span class=energy>" + QString::number(p.energy) + "</span>";
+	html << "<br/>";
+	html << "<span class=cost>" + QString::number(p.cost) + "</span>";
 	html << "<span class=children>(" + QString::number(p.num_children) + ")</span>";
 
 	//html << "<span>" + p.current.join("-") + "</span>";
@@ -179,7 +181,7 @@ void experiment::doEnergySearch()
 		v->show();
 
 		connect(v->wv, &QWebView::loadFinished, [&](){
-			v->addCSS(".source{color:red} .target{color:blue} .cost{color:gray} .children{color:gray}");
+			v->addCSS(".source{color:red} .target{color:blue} .energy{color:#006400} .cost{color:gray} .children{color:gray}");
 
 			auto & path = *egd->searchTrees.front().begin();
 			int idx = v->addNode(pathToHtml(path));
@@ -196,6 +198,13 @@ void experiment::doEnergySearch()
 
 				selected_path = node;
 				exprmnt->setSearchPath(selected_path);
+
+				// Details of evaluation
+				double curEnergy = EvaluateCorrespondence::evaluate(selected_path, true);
+				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+
+				v->clearLogItems();
+				for (auto key : details.keys()) v->addLogItem( key + " : " + details[key].toString() );
 
 				auto shape = node->shapeA;
 				if (!shape) return;
@@ -224,6 +233,8 @@ void experiment::doEnergySearch()
 			auto toExpand = egd->getEntirePath(selected_path);
 
 			int nid = toExpand.front()->property["nid"].value<int>();
+
+			toExpand.removeFirst();
 
 			for (auto element : toExpand)
 			{

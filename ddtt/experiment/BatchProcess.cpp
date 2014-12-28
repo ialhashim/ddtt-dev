@@ -95,6 +95,8 @@ void BatchProcess::run()
 		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(source));
 		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(target));
 
+		if (shapeA->nodes.isEmpty() || shapeB->nodes.isEmpty()) continue;
+
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
 		Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);

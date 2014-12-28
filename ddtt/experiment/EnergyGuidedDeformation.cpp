@@ -132,6 +132,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	{
 		// Suggest for all remaining unassigned
 		for (auto & partID : path.unassigned){
+			if (!path.shapeA->hasRelation(partID)) continue;
 			auto r = path.shapeA->relationOf(partID);
 			if (!candidatesA.contains(r)) candidatesA << r;
 		}
@@ -300,8 +301,10 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 	if (la.size() > 1 && lb.size() > 1)
 	{
 		// Unique parts
-		auto la_set = shapeA->relationOf(la.front()).parts;
-		auto lb_set = shapeB->relationOf(lb.front()).parts;
+		QStringList la_set = la, lb_set = lb;
+		
+		if (shapeA->hasRelation(la.front())) la_set = shapeA->relationOf(la.front()).parts;
+		if (shapeB->hasRelation(lb.front())) lb_set = shapeB->relationOf(lb.front()).parts;
 
 		if (la.size() != la_set.size() || lb.size() != lb_set.size())
 		{
@@ -574,6 +577,8 @@ QVector<Energy::SearchNode*> Energy::GuidedDeformation::childrenOf(Energy::Searc
 		++child;
 	}
 
+	std::sort(children.begin(), children.end(), [&](Energy::SearchNode * a, Energy::SearchNode * b){ return a->cost < b->cost; });
+
 	return children;
 }
 
@@ -598,20 +603,21 @@ QVector<Energy::SearchNode*> Energy::GuidedDeformation::getEntirePath(Energy::Se
 
 void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> path)
 {
-	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeA));
-	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeB));
+	path.front()->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeA));
+	path.front()->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeB));
 
-	for (auto & p : path)
+	for (size_t i = 0; i < path.size(); i++)
 	{
-		for (auto & ap : p->assignments)
-		{
-			// Get assignment pair <source, target>
-			auto la = ap.first, lb = ap.second;
-			topologicalOpeartions(shapeA.data(), shapeB.data(), la, lb);
-			applyDeformation(shapeA.data(), shapeB.data(), la, lb, p->fixed + p->current, true);
+		auto p = path[i];
 
-			p->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
-			p->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+		// Prepare using previous step
+		if (i > 0)
+		{
+			p->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path[i - 1]->shapeA.data()));
+			p->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path[i - 1]->shapeB.data()));
+			p->energy = path[i - 1]->energy;
 		}
+
+		applyAssignment(p, true);
 	}
 }

@@ -91,7 +91,7 @@ body { font: 300 14px 'Helvetica Neue', Helvetica; }
 			
 			// Selection event
 			$('.node').off();
-			$('.node').click(function () { var index = $(this).attr('index'); console.log(index); Viewer.addLogItem(index); Viewer.nodeSelected(parseInt(index)); });
+                        $('.node').click(function () { var index = $(this).attr('index'); console.log(index); /*Viewer.addLogItem(index);*/ Viewer.nodeSelected(parseInt(index)); });
 		};
 </script>
 

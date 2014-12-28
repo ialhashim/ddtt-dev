@@ -722,7 +722,7 @@ MyDrawArea::~MyDrawArea()
 {
 	if(isDeleted) return;
 
-	saveOBJ(m, filename);
+    //saveOBJ(m, filename);
 }
 
 void MyDrawArea::focusInEvent(QFocusEvent * event)

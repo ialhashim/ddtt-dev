@@ -66,6 +66,10 @@ namespace Structure
 			for (auto & r : relations) if (r.parts.contains(partID)) return r; 
             return relations.front(); // should not get here
 		}
+		bool hasRelation(const QString & partID){
+			for (auto & r : relations) if (r.parts.contains(partID)) return true;
+			return false;
+		}
 
 		// Visualize shape changes:
 		int animation_index;

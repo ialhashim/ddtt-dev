@@ -6,7 +6,7 @@
 struct EvaluateCorrespondence
 {
 	static void prepare( Structure::ShapeGraph * shape );
-	static double evaluate( Energy::SearchNode * searchNode );
+	static double evaluate(Energy::SearchNode * searchNode, bool isRecordDetails = false);
 
 	// Utility:
 	static Array1D_Vector3 spokesFromLink( Structure::Link * link );

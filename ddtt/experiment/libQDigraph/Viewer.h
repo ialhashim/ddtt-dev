@@ -24,6 +24,7 @@ public:
 
 public slots:
     void insertLogItem(QString msg);
+    void clearLogItems();
 
     int addNode(QString node_info);
     void addEdge(QString edge_info);
