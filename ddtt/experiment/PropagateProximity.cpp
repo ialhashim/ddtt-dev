@@ -31,7 +31,7 @@ void PropagateProximity::prepareForProximity(Structure::Graph * graph)
     }
 }
 
-void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
+void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::ShapeGraph *graph)
 {
     // Constraints per part
     QMap < QString, QVector< ProximityConstraint > > constraints;
@@ -88,8 +88,9 @@ void PropagateProximity::propagate(const QStringList &fixedNodes, Structure::Sha
 			for (auto c : constraints[n->id])
 			{
 				// Experimental: allow sliding
-				if (c.from->property["isSplit"].toBool()) 	continue;
-				if (c.from->property["isMerged"].toBool())	continue;
+				bool fromIsRotation = (graph->hasRelation(c.from->id) && graph->relationOf(c.from->id).type == Structure::Relation::ROTATIONAL);
+				if (fromIsRotation && c.from->property["isSplit"].toBool()) 	continue;
+				if (fromIsRotation && c.from->property["isMerged"].toBool())	continue;
 
 				current_constraints << c;
 			}

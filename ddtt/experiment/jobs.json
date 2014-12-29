@@ -1,0 +1,213 @@
+{
+    "isSwap": false,
+    "jobs": [
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "UpBoardSheet",
+                        "LowBoardSheet"
+                    ],
+                    "target": [
+                        "BoardSheet"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed2/Bed2.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed1/Bed1.xml",
+            "title": "Bed2-Bed1"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic1/SimpleChair1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic2/shortChair01.xml",
+            "title": "SimpleChair1-shortChair01"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/kchair2bs/kchair2bs.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/kchair1bs/kchair1bs.xml",
+            "title": "kchair2bs-kchair1bs"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "SeatBar1",
+                        "SeatBar2",
+                        "SeatBar3",
+                        "SeatBar4",
+                        "SeatBar5",
+                        "SeatBar6"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic1/SimpleChair1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairWood1/Woodchair1.xml",
+            "title": "SimpleChair1-Woodchair1"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairFancy1/FancyChair.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairFancy2/fancyChair2.xml",
+            "title": "FancyChair-fancyChair2"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "TopSheet"
+                    ],
+                    "target": [
+                        "TableTop"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table7/Table7.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table8/Table8.xml",
+            "title": "Table7-Table8"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic1/SimpleChair1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairFilm/ChairFilm.xml",
+            "title": "SimpleChair1-ChairFilm"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "TopSheet"
+                    ],
+                    "target": [
+                        "TopSheet"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table4/Table4.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table6/Table6.xml",
+            "title": "Table4-Table6"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Base"
+                    ],
+                    "target": [
+                        "Base"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Lamp1/lamp1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Lamp2/Lamp2.xml",
+            "title": "lamp1-Lamp2"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic1/SimpleChair1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/kchair2bs/kchair2bs.xml",
+            "title": "SimpleChair1-kchair2bs"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "body"
+                    ],
+                    "target": [
+                        "Body"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/fighter1/fighter1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/fighter2/fighter2.xml",
+            "title": "fighter1-fighter2"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "SeatBar06",
+                        "SeatBar05",
+                        "SeatBar04",
+                        "SeatBar03",
+                        "SeatBar02",
+                        "SeatBar01"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/bench1/bench1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/bench2/bench2.xml",
+            "title": "bench1-bench2"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "BoardSheet"
+                    ],
+                    "target": [
+                        "ChamferBox"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed1/Bed1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed3/Bed3.xml",
+            "title": "Bed1-Bed3"
+        }
+    ],
+    "outputPath": "outputPath",
+    "resultsCount": 6
+}

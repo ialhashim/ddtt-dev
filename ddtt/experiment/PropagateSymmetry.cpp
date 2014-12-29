@@ -2,7 +2,7 @@
 #include "ShapeGraph.h"
 #include "StructureAnalysis.h"
 
-void PropagateSymmetry::propagate(const QStringList &fixedNodes, Structure::ShapeGraph *graph)
+void PropagateSymmetry::propagate(const QSet<QString> &fixedNodes, Structure::ShapeGraph *graph)
 {
 	for (auto & relation : graph->relations)
 	{

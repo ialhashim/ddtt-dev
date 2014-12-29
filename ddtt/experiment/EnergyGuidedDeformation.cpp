@@ -214,18 +214,18 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 			// Apply then evaluate cost of current suggestion
 			auto copy_la = la, copy_lb = lb;
 			topologicalOpeartions(shapeA.data(), shapeB.data(), copy_la, copy_lb);
-			applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la);
+			applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la.toSet());
 
 			// Evaluate:
 			{
 				SearchNode tempNode;
 				tempNode.shapeA = shapeA;
 				tempNode.shapeB = shapeB;
-				tempNode.fixed = path.fixed + path.current + copy_la;
+				tempNode.fixed = path.fixed + path.current + copy_la.toSet();
 				tempNode.mapping = path.mapping;
 				for (size_t i = 0; i < la.size(); i++) tempNode.mapping[copy_la[i]] = copy_lb[i].split(",").front();
 				tempNode.unassigned = path.unassigned;
-				for (auto p : la) tempNode.unassigned.removeAll(p);
+				for (auto p : la) tempNode.unassigned.remove(p);
 				curEnergy = EvaluateCorrespondence::evaluate(&tempNode);
 			}
 
@@ -236,8 +236,8 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
 				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
 
-				QStringList unassigned = path.unassigned;
-				for (auto p : la) unassigned.removeAll(p);
+				auto unassigned = path.unassigned;
+				for (auto p : la) unassigned.remove(p);
 
 				Assignments assignment;
 				assignment << qMakePair(la, lb);
@@ -297,7 +297,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		return;
 	}
 
-	// Detect and handle many-many cases:
+	// Many-many case:
 	if (la.size() > 1 && lb.size() > 1)
 	{
 		// Unique parts
@@ -517,7 +517,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 }
 
 void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, Structure::ShapeGraph *shapeB,
-	const QStringList & la, const QStringList & lb, const QStringList & fixed, bool isSaveKeyframes)
+	const QStringList & la, const QStringList & lb, const QSetString & fixed, bool isSaveKeyframes)
 {
 	// Special case: many-to-null
 	if (lb.contains(Structure::null_part)) return;
@@ -551,10 +551,8 @@ void Energy::GuidedDeformation::applyDeformation(Structure::ShapeGraph *shapeA, 
 	postDeformation(shapeA, fixed);
 }
 
-void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, const QStringList & fixed)
+void Energy::GuidedDeformation::postDeformation(Structure::ShapeGraph * shape, const QSet<QString> & fixedSet)
 {
-	auto fixedSet = fixed.toSet();
-
 	for (auto & r : shape->relations)
 	{
 		if (r.parts.empty() || !r.parts.toSet().intersect(fixedSet).empty()) continue;

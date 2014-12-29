@@ -165,7 +165,7 @@ void experiment::doEnergySearch()
 	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
 
 	QVector<Energy::SearchNode> search_roots;
-	Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
 	search_roots << path;
 
 	// Explore path
@@ -434,7 +434,7 @@ void experiment::doEnergyStep()
 	Energy::Assignments assignments;
 	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
 	QVector<Energy::SearchNode> search_roots;
-	Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
 
 	Energy::GuidedDeformation::applyAssignment(&path, true);
 

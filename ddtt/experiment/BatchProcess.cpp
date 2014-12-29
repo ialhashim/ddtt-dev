@@ -99,7 +99,7 @@ void BatchProcess::run()
 
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
-		Energy::SearchNode path(shapeA, shapeB, QStringList(), assignments);
+		Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
 		path.unassigned = path.unassignedList();
 		search_roots << path;
 
@@ -346,7 +346,7 @@ void RenderingWidget::paintGL()
 	if (s > 1.0)
 	{
 		auto delta = cameraPos;
-		cameraPos += (delta * s) * 0.2;
+		cameraPos += (delta * s) * 0.3;
 	}
 
 	qglviewer::Camera cam;

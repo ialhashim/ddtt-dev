@@ -189,7 +189,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 			}
 		}
 
-		/// (b) Geometric: scale by geometric similarity
+		/// (b) Geometric: scale by geometric (topological?) similarity
 		double geom_weight = 1.0;
 		{
 			auto fixedNodeChangedType = [&](Structure::Node * n){
@@ -198,9 +198,15 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 				if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) return false;
 				return true;
 			};
+
+			auto isTopologyChange = [&](Structure::Node * n){
+				return n->property["isSplit"].toBool() || n->property["isMerged"].toBool();
+			};
 			
-			auto ratio = [&](Structure::Node * n){
-				if (fixedNodeChangedType(n)){
+			auto ratio = [&](Structure::Node * n)
+			{
+				if (fixedNodeChangedType(n) || isTopologyChange(n))
+				{
 					double rs = 1.0 / shape->relationOf(n->id).parts.size();
 					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
 					return rs == rt ? 0 : std::min(rs, rt);
