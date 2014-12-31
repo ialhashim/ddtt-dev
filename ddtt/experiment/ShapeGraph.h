@@ -351,8 +351,16 @@ namespace Structure
 				curveCenters.row(r) = graph->getNode(nodeIDs[r])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
 			point = Vector3(curveCenters.colwise().mean());
 			curveCenters = curveCenters.rowwise() - point.transpose();
-			Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
-			direction = Vector3(svd.matrixV().col(0)).normalized();
+
+			if (nodeIDs.size() == 2)
+			{
+				direction = (curveCenters.row(1) - curveCenters.row(0)).normalized();
+			}
+			else
+			{
+				Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
+				direction = Vector3(svd.matrixV().col(0)).normalized();
+			}
 
 			// Sort curves
 			std::vector <size_t> sorted;
@@ -364,7 +372,8 @@ namespace Structure
 			Array2D_Vector3 cpnts;
 			for (size_t i = 0; i < sorted.size(); i++){
 				size_t idx = sorted[i];
-				cpnts.push_back(graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front());
+				auto curNode = graph->getNode(nodeIDs[idx])->getPoints(std::vector<Array1D_Vector4d>(1, sideCoordinates[0])).front();
+				cpnts.push_back(curNode);
 			}
 
 			// Requirement for NURBS is minimum 4 rows

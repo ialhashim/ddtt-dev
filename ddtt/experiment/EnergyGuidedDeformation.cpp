@@ -155,7 +155,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	QList< QPair<double, Energy::SearchNode> > evaluated_children;
 
 //#ifndef QT_DEBUG
-#pragma omp parallel for
+//#pragma omp parallel for
 //#endif
 	for (int r = 0; r < pairings.size(); r++)
 	{
@@ -181,7 +181,13 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 			// Case: many-to-many, find best matching between two sets
 			if (la.size() != 1 && lb.size() != 1)
 			{
-				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+				//Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+				auto intrestingCentroid = [&](Structure::ShapeGraph * shape, QString nodeID){
+					Eigen::Vector4d c(0, 0, 0, 0);
+					auto edges = shape->getEdges(nodeID);
+					for (auto e : edges) c += e->getCoord(nodeID).front();
+					return Eigen::Vector4d(c / edges.size());
+				};
 
 				lb.clear();
 
@@ -189,12 +195,20 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 				{
 					auto partID = relationA.parts[i];
 					auto partA = path.shapeA->getNode(partID);
-					Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+
+					auto centroid_coordinateA = intrestingCentroid(path.shapeA.data(), partID);
+					Vector3 partCenterA = (partA->position(centroid_coordinateA) - rboxA.min()).array() / rboxA.sizes().array();
+
+					partCenterA.array() *= rboxA.diagonal().normalized().array();
 
 					QMap<double, QString> dists;
 					for (auto tpartID : relationB.parts)
 					{
-						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+						auto centroid_coordinateB = intrestingCentroid(path.shapeB.data(), tpartID);
+						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinateB) - rboxB.min()).array() / rboxB.sizes().array();
+
+						partCenterB.array() *= rboxA.diagonal().normalized().array();
+
 						dists[(partCenterA - partCenterB).norm()] = tpartID;
 					}
 
@@ -353,6 +367,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 	if (la.size() > 1 && lb.size() == 1
 		&& shapeA->getNode(la.front())->type() == Structure::CURVE
 		&& shapeB->getNode(lb.front())->type() == Structure::SHEET)
+
 	{
 		auto tnode_sheet = (Structure::Sheet*)shapeB->getNode(lb.front());
 		lb.clear();
@@ -445,7 +460,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		}
 	}
 
-	// SPLIT Case: one sheet - many curves
+	// pseudo-SPLIT Case: one sheet - many curves
 	if (la.size() == 1 && lb.size() > 1
 		&& shapeA->getNode(la.front())->type() == Structure::SHEET
 		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
@@ -469,32 +484,35 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 	// Perform split:
 	if (one_many_curves || one_many_sheets)
 	{
+		auto copy_lb = lb;
+
 		auto snode = shapeA->getNode(la.front());
 
 		QVector<Structure::Node *> new_nodes;
 		new_nodes << snode;
 
-		// Match the one to its closest counter-part
-		auto boxA = shapeA->bbox(), boxB = shapeB->bbox();
-		Vector3 snode_center = (snode->position(Eigen::Vector4d(0.5,0.5,0,0)) - boxA.min()).array() / boxA.sizes().array();
-		QMap<double, QString> dists;
-		for (auto partID : lb){
-			Vector3 tnode_center = (shapeB->getNode(partID)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) - boxB.min()).array() / boxB.sizes().array();
-			dists[(tnode_center - snode_center).norm()] = partID;
+		// Match the first one to its closest counter-part
+		{
+			auto boxA = shapeA->bbox(), boxB = shapeB->bbox();
+			Vector3 snode_center = (snode->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) - boxA.min()).array() / boxA.sizes().array();
+			QMap<double, QString> dists;
+			for (auto partID : lb){
+				Vector3 tnode_center = (shapeB->getNode(partID)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) - boxB.min()).array() / boxB.sizes().array();
+				dists[(tnode_center - snode_center).norm()] = partID;
+			}
+			QString matched_tnode = dists.values().front();
+			std::swap(lb[0], lb[lb.indexOf(matched_tnode)]);
+			copy_lb.removeAll(matched_tnode);
 		}
-		QString matched_tnode = dists.values().front();
-		std::swap(lb[0], lb[lb.indexOf(matched_tnode)]);
-		auto copy_lb = lb;
-		copy_lb.removeAll(matched_tnode);
 
-		// Remaining copies
+		// Make remaining copies
 		for (auto partID : copy_lb)
 		{
-			// Make node copy
+			// Clone first node
 			auto new_snode = snode->clone();
 			new_snode->id += QString("@%1").arg(new_nodes.size());
 
-			// Copy underlying geometry
+			// Clone underlying geometry
 			{
 				auto orig_mesh = new_snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
 				QSharedPointer<SurfaceMeshModel> new_mesh_ptr(orig_mesh->clone());

@@ -2,6 +2,8 @@
 #include "ShapeGraph.h"
 #include "Synthesizer.h"
 
+#include "myglobals.h"
+
 namespace ShapeGeometry
 {
 	inline void encodeGeometry(Structure::ShapeGraph * g)
@@ -43,7 +45,16 @@ namespace ShapeGeometry
 			Array1D_Vector4d coords;
 			RMF rmf;
 			if (n->type() == Structure::CURVE) rmf = Synthesizer::consistentFrame((Structure::Curve*)n, coords);
-			int rmfCount = rmf.count();
+
+			// Collapsed sheet
+			if (n->type() == Structure::SHEET)
+			{
+				auto sheet = (Structure::Sheet*)n;
+				Structure::Curve curve_u(NURBS::NURBSCurved::createCurveFromPoints(sheet->surface.GetControlPointsU(0)), "curveU");
+				Structure::Curve curve_v(NURBS::NURBSCurved::createCurveFromPoints(sheet->surface.GetControlPointsV(0)), "curveV");
+				if (curve_u.area() < 1e-6) rmf = Synthesizer::consistentFrame(&curve_v, coords);
+				if (curve_v.area() < 1e-6) rmf = Synthesizer::consistentFrame(&curve_u, coords);
+			}
 
 			for (int i = 0; i < encoding.size(); i++){
 				auto & sample = encoding[i];
@@ -54,9 +65,9 @@ namespace ShapeGeometry
 				Vector3f rayPos = Vector3f(startPoint[0], startPoint[1], startPoint[2]);
 
 				Vector3d _X, _Y, _Z;
-				if (n->type() == Structure::CURVE)
+				if (!rmf.U.empty())
 				{
-					int idx = sample.u * (rmfCount - 1);
+					int idx = sample.u * (rmf.count() - 1);
 					_X = rmf.U[idx].r; _Y = rmf.U[idx].s; _Z = rmf.U[idx].t;
 				}
 				else

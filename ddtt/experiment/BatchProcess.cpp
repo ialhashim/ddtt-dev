@@ -226,9 +226,24 @@ void BatchProcess::run()
 					n->property["mesh"].setValue(new_mesh_ptr);
 				}
 
+				// Reset shape
 				shapeAcopy->setAllControlPoints(shapeAcopy->animation.front());
+
+				// Adjust for splitting cases
+				for (auto n : shapeAcopy->nodes){
+					if (n->id.contains("@")){
+						QString origNode = n->id.split("@").front();
+						n->setControlPoints(shapeAcopy->getNode(origNode)->controlPoints());
+					}
+				}
+
+				// Compute geometry encoding
 				ShapeGeometry::encodeGeometry(shapeAcopy.data());
+
+				// Deform abstractions
 				shapeAcopy->setAllControlPoints(shapeAcopy->animation.back());
+
+				// Compute deformed underlying surface
 				ShapeGeometry::decodeGeometry(shapeAcopy.data());
 
 				auto deformedImg = renderer->render(shapeAcopy.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);

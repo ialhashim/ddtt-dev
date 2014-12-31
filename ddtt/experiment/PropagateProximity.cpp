@@ -142,34 +142,37 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
                     for (auto & c : c_list) coords.push_back(Eigen::Vector2d(c.coord()[0], c.coord()[1]));
 					for (auto idx : chull2d::convex_hull_2d(coords)) filtered_constraints << c_list[idx];
 
-					bool isFixedAround = true;
-					for (auto & c : c_list) isFixedAround &= fixedNodes.contains(c.from->id);
-					if (isFixedAround)
-					{
-						filtered_constraints = c_list;                    
-						
-						std::vector < Eigen::Vector3d > cage;
-						for (auto & c : filtered_constraints) cage.push_back(c.link->position(n->id));
-
-						// Rotate cage towards z-axis around center of constraints
-						auto best_plane = best_plane_from_points(cage);
-						double cage_plane_dot = best_plane.second.dot(Vector3::UnitZ());
-						if (cage_plane_dot < 0) best_plane.second *= 1;
-						Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
-						for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
-
-						QVector<ProximityConstraint> ordered_constraints;
-						auto ordered_indices = chull2d::convex_hull_2d(cage);
-						for (auto idx : ordered_indices) ordered_constraints << filtered_constraints[idx];
-						filtered_constraints = ordered_constraints;
-					}
-
-					if (filtered_constraints.size() == 2)
+					if (filtered_constraints.size() == 2 || n->type() == Structure::CURVE)
 					{
 						auto & ca = c_list.front();
 						auto & cb = c_list.back();
 						n->deformTwoHandles(ca.coord(), ca.start() + ca.delta(), cb.coord(), cb.start() + cb.delta());
+
 						continue;
+					}
+					else
+					{
+						bool isFixedAround = true;
+						for (auto & c : c_list) isFixedAround &= fixedNodes.contains(c.from->id);
+						if (isFixedAround)
+						{
+							filtered_constraints = c_list;
+
+							std::vector < Eigen::Vector3d > cage;
+							for (auto & c : filtered_constraints) cage.push_back(c.link->position(n->id));
+
+							// Rotate cage towards z-axis around center of constraints
+							auto best_plane = best_plane_from_points(cage);
+							double cage_plane_dot = best_plane.second.dot(Vector3::UnitZ());
+							if (cage_plane_dot < 0) best_plane.second *= 1;
+							Eigen::Quaterniond q = Eigen::Quaterniond::FromTwoVectors(best_plane.second, Vector3::UnitZ());
+							for (auto & p : cage) p = (q * (p - best_plane.first)) + best_plane.first;  // now a rotated cage
+
+							QVector<ProximityConstraint> ordered_constraints;
+							auto ordered_indices = chull2d::convex_hull_2d(cage);
+							for (auto idx : ordered_indices) ordered_constraints << filtered_constraints[idx];
+							filtered_constraints = ordered_constraints;
+						}
 					}
 
                     // Build cage from convex hull of constraints

@@ -110,6 +110,13 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 	if (!graphs.front()->animation.empty())
 	{
 		graphs.front()->setAllControlPoints(graphs.front()->animation.front());
+		// Adjust for splitting cases
+		for (auto n : graphs.front()->nodes){
+			if (n->id.contains("@")){
+				QString origNode = n->id.split("@").front();
+				n->setControlPoints(graphs.front()->getNode(origNode)->controlPoints());
+			}
+		}
 		encodeGeometry();
 		graphs.front()->setAllControlPoints(graphs.front()->animation.back());
 	}
