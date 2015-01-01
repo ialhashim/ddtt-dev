@@ -2,13 +2,13 @@
 
 #include "hausdorff.h"
 
-Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::Link * l)
+Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * l)
 {
 	auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
 	auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
 
-	if (samples1.empty()) samples1 = EvaluateCorrespondence::sampleNode(l->n1, 0);
-	if (samples2.empty()) samples1 = EvaluateCorrespondence::sampleNode(l->n2, 0);
+	if (samples1.empty()) samples1 = EvaluateCorrespondence::sampleNode(shape, l->n1, 0);
+	if (samples2.empty()) samples1 = EvaluateCorrespondence::sampleNode(shape, l->n2, 0);
 
 	Array1D_Vector3 spokes;
 	for (auto rowi : samples1) for (auto ci : rowi)
@@ -18,15 +18,17 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::Link * l)
 	return spokes;
 }
 
-Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::Node * n, double resolution)
+Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution)
 {
-	if (resolution == 0) resolution = n->area() / 3;
+	double sampleDensity = 1.0 / 5;
+
+	if (resolution == 0) resolution = n->length() * sampleDensity;
 
 	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
 
 	// Special case: degenerate sheet
 	if (n->type() == Structure::SHEET && samples_coords.empty()){
-		double step = 0.25;
+		double step = sampleDensity;
 		for (double u = 0; u <= 1.0; u += step){
 			Array1D_Vector4d row;
 			for (double v = 0; v <= 1.0; v += step)
@@ -37,9 +39,20 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::Node * n, double 
 
 	n->property["samples_coords"].setValue(samples_coords);
 
-	n->property["orig_diagonal"].setValue(n->diagonal());
-	n->property["orig_start"].setValue(n->startPoint());
-	n->property["orig_length"].setValue(n->length());
+	// Unary node properties
+	{
+		n->property["orig_diagonal"].setValue(n->diagonal());
+		n->property["orig_start"].setValue(n->startPoint());
+		n->property["orig_length"].setValue(n->length());
+
+		// relative centroid
+		{
+			auto shapeBBox = shape->robustBBox();
+			Vector3d nodeRelativCenter = (n->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) -
+				shapeBBox.min()).array() / shapeBBox.sizes().array();
+			n->property["orig_relative_center"].setValue(nodeRelativCenter);
+		}
+	}
 
 	return samples_coords;
 }
@@ -56,11 +69,14 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	shape->property["sampling_resolution"].setValue(resolution);
 
 	for (auto n : shape->nodes)
-		EvaluateCorrespondence::sampleNode(n, resolution);
+		EvaluateCorrespondence::sampleNode(shape, n, resolution);
 
 	// Sample curve/sheet
 	for (auto l : shape->edges)
-		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(l));
+	{
+		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(shape, l));
+		l->property["orig_centroid_dir"].setValue(Vector3((l->n1->center() - l->n2->center()).normalized()));
+	}
 }
 
 QMap<QString, NanoKdTree*> EvaluateCorrespondence::kdTreesNodes(Structure::ShapeGraph * shape)
@@ -77,7 +93,7 @@ QMap<QString, NanoKdTree*> EvaluateCorrespondence::kdTreesNodes(Structure::Shape
 	for (auto n : shape->nodes)
 	{
 		auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
-		if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(n, 0);
+		if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(shape, n, 0);
 		result[n->id] = buildKdTree(n, coords);
 	}
 
@@ -115,7 +131,7 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 		std::vector<Vector3> samples;
 		for (auto n : shape->nodes){
 			auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
-			if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(n, 0);
+			if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(shape, n, 0);
 			for (auto row : coords) for (auto c : row) samples.push_back(n->position(c));
 		}
 		return samples;
@@ -156,6 +172,47 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 	return sqrt(a / b);
 }
 
+double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
+{
+	auto shape = searchNode->shapeA.data();
+	auto targetShape = searchNode->shapeB.data();
+
+	auto shapeBBox = shape->robustBBox();
+
+	QVector<double> feature_vector;
+
+	for (auto n : shape->nodes)
+	{
+		// Direction:
+		auto orig_diag = n->property["orig_diagonal"].value<Vector3>();
+		double dot_val = n->diagonal().normalized().dot(orig_diag.normalized());
+		feature_vector << dot_val;
+
+		// Length:
+		double cur_length = n->length();
+		double orig_length = n->property["orig_length"].toDouble();
+		feature_vector << std::min(cur_length, orig_length) / std::max(cur_length, orig_length);
+	}
+
+	for (auto l : shape->edges)
+	{
+		// Difference in central spoke
+		auto orig_diag = l->property["orig_centroid_dir"].value<Vector3>();
+		Vector3 diag = (l->n1->center() - l->n2->center()).normalized();
+		double dot_val = diag.dot(orig_diag);
+		feature_vector << dot_val;
+	}
+
+	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
+	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
+	double v_norm = v.norm(), original_norm = original_v.norm();
+	double similarity = v_norm / original_norm;
+	double cost = 1.0 - similarity;
+	return cost;
+
+	return 0;
+}
+
 double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
 	QVector<double> feature_vector;
@@ -170,7 +227,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	for (auto l : shape->edges)
 	{
 		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
-		auto current_spokes = EvaluateCorrespondence::spokesFromLink(l);
+		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
 
 		/// (a) Connection: scale by difference in closeness distance
 		double connection_weight = 1.0;

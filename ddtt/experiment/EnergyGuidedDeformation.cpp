@@ -122,7 +122,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
 	double cost_threshold = 0.3;
-	int k_top_candidates = 2;
+	int k_top_candidates = 5;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -345,7 +345,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		shapeA->nodes.replace(shapeA->nodes.indexOf(snode), snode_sheet);
 
 		// Prepare for evaluation
-		EvaluateCorrespondence::sampleNode(snode_sheet, shapeA->property["sampling_resolution"].toDouble());
+		EvaluateCorrespondence::sampleNode(shapeA, snode_sheet, shapeA->property["sampling_resolution"].toDouble());
 
 		// Fix coordinates (not robust..)
 		for (auto l : shapeA->getEdges(snode->id))
@@ -354,7 +354,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			l->replaceForced(snode->id, snode_sheet, sheet_coords);
 
 			// Prepare for evaluation
-			l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(l));
+			l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(shapeA, l));
 		}
 
 		// Remove from all relations
