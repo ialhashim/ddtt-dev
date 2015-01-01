@@ -40,12 +40,13 @@ void BatchProcess::run()
 	QString outputPath = json["outputPath"].toString();
 	auto jobsArray = json["jobs"].toArray();
 	bool isSwapped = json["isSwap"].toBool();
+	bool isSaveReport = json["isSaveReport"].toBool();
 
 	// Clear past results in output folder
 	QDir d(""); d.mkpath(outputPath);
 	QDir dir(outputPath);
 	for (auto filename : dir.entryList(QDir::Files))
-		if (filename.endsWith(".png"))
+		if (filename.endsWith(".png") || filename.endsWith(".txt"))
 			dir.remove(dir.absolutePath() + "/" + filename);
 		
 	QElapsedTimer allTimer; allTimer.start();
@@ -83,6 +84,9 @@ void BatchProcess::run()
 			if (isSwapped) std::swap(la, lb);
 			assignments.push_back(qMakePair(la, lb));
 		}
+
+		// Job report
+		QVariantMap jobReport;
 
 		// Results:
 		QMap <double, Energy::SearchNode> sorted_solutions;
@@ -255,6 +259,16 @@ void BatchProcess::run()
 			cur_solution_img = drawText(QString("cost = %1").arg(cost), cur_solution_img);
 
 			img = stitchImages(img, cur_solution_img, true, 0);
+
+			// Details of solution if requested
+			if ( isSaveReport )
+			{
+				EvaluateCorrespondence::evaluate(selected_path, true);
+				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+				QStringList reportItems;
+				for (auto key : details.keys()) reportItems += key + " : " + details[key].toString();
+				jobReport[QString("solution-%1").arg(r)] = reportItems;
+			}
 		}
 
 		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
@@ -263,6 +277,23 @@ void BatchProcess::run()
 
 		auto output_file = QString("%1/%2.png").arg(outputPath).arg(title);
 		img.save(output_file);
+
+		if ( isSaveReport )
+		{
+			auto report_file = QString("%1/%2.txt").arg(outputPath).arg(title);
+			QFile file(report_file);
+			file.open(QFile::WriteOnly | QFile::Text);
+			QTextStream out(&file);
+			for (auto key : jobReport.keys())
+			{
+				out << key << ":" << "\n";
+				for (auto item : jobReport[key].toStringList())
+				{
+					out << item << "\n";
+				}
+				out << "\n======================\n";
+			}
+		}
 	}
 
 	allTime = allTimer.elapsed();
@@ -287,6 +318,7 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	{
 		json["outputPath"] = QString("outputPath");
 		json["resultsCount"] = 10;
+		json["isSaveReport"] = false;
 	}
 
 	auto jobs = json["jobs"].toArray();

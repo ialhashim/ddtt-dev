@@ -219,6 +219,22 @@ SurfaceMesh::Scalar Sheet::area()
 	return a;
 }
 
+SurfaceMesh::Scalar Sheet::length()
+{
+    auto polylineLength = [&]( std::vector<Vector3> & polyline ){
+        double sum = 0;
+        for(int i = 1; i < (int)polyline.size(); i++){
+            sum += (polyline[i] - polyline[i-1]).norm();
+        }
+        return sum;
+    };
+
+    return  polylineLength(surface.GetControlPointsU(0)) +
+            polylineLength(surface.GetControlPointsV(0)) +
+            polylineLength(surface.GetControlPointsU(surface.mNumVCtrlPoints-1)) +
+            polylineLength(surface.GetControlPointsV(surface.mNumUCtrlPoints-1));
+}
+
 SurfaceMesh::Scalar Sheet::avgEdgeLength()
 {
     double sum = 0;

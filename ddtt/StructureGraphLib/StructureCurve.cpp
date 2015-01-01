@@ -247,7 +247,19 @@ Vector3 & Curve::controlPointFromCoord( Vector4d& coord )
 
 SurfaceMesh::Scalar Curve::area()
 {
-	return curve.GetTotalLength();
+    return curve.GetTotalLength();
+}
+
+Scalar Curve::length()
+{
+    auto polylineLength = [&]( std::vector<Vector3> & polyline ){
+        double sum = 0;
+        for(int i = 1; i < (int)polyline.size(); i++){
+            sum += (polyline[i] - polyline[i-1]).norm();
+        }
+        return sum;
+    };
+    return polylineLength(curve.mCtrlPoint);
 }
 
 SurfaceMesh::Vector3 Curve::center()

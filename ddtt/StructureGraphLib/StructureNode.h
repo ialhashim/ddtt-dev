@@ -70,6 +70,7 @@ struct Node
 
 	// Geometric properties
 	virtual Scalar area() = 0;
+    virtual Scalar length() = 0;
 
     inline Vector3 startPoint(){ return position(Eigen::Vector4d(0,0,0,0));  }
     inline Vector3 endPoint(){ return position(Eigen::Vector4d(1,1,0,0)); }

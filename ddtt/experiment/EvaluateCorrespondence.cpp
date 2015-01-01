@@ -39,6 +39,7 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::Node * n, double 
 
 	n->property["orig_diagonal"].setValue(n->diagonal());
 	n->property["orig_start"].setValue(n->startPoint());
+	n->property["orig_length"].setValue(n->length());
 
 	return samples_coords;
 }
@@ -222,8 +223,13 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 		double diversity_weight = 1.0;
 		{
 			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
-				if (searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
+			{
+				auto target_n1 = searchNode->mapping[l->n1->id];
+				auto target_n2 = searchNode->mapping[l->n2->id];
+
+				if (target_n1 == target_n2)
 					diversity_weight = 0.5;
+			}
 		}
 
 		QVector < double > link_vector;

@@ -60,6 +60,7 @@ struct Curve : public Node
 
 	// Geometric properties
 	Scalar area();
+    Scalar length();
 	Vector3d direction();
 
     // Connections

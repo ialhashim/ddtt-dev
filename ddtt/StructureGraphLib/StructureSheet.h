@@ -54,6 +54,7 @@ struct Sheet : public Node
 
 	// Geometric properties
 	Scalar area();
+    Scalar length();
     SurfaceMesh::Scalar avgEdgeLength();
 
 	// Encode and decode
