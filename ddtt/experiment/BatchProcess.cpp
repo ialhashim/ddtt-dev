@@ -263,7 +263,7 @@ void BatchProcess::run()
 			// Details of solution if requested
 			if ( isSaveReport )
 			{
-				EvaluateCorrespondence::evaluate(selected_path, true);
+				EvaluateCorrespondence::evaluate(selected_path);
 				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 				QStringList reportItems;
 				for (auto key : details.keys()) reportItems += key + " : " + details[key].toString();

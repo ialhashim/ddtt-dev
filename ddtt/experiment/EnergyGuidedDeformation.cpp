@@ -121,8 +121,8 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
-	double cost_threshold = 0.25;
-	int k_top_candidates = 5;
+	double cost_threshold = 0.3;
+	int k_top_candidates = 2;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -154,9 +154,9 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	// Output:
 	QList< QPair<double, Energy::SearchNode> > evaluated_children;
 
-//#ifndef QT_DEBUG
-//#pragma omp parallel for
-//#endif
+	//#ifndef QT_DEBUG
+	//#pragma omp parallel for
+	//#endif
 	for (int r = 0; r < pairings.size(); r++)
 	{
 		auto & pairing = pairings[r];
@@ -272,7 +272,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	for (auto & child : sorted_children) accepted_children.push_back(child.second);
 
 	// Clean up of no longer needed data:
-	path.shapeA.clear(); 
+	path.shapeA.clear();
 	path.shapeB.clear();
 
 	return accepted_children;

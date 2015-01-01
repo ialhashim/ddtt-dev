@@ -156,7 +156,7 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 	return sqrt(a / b);
 }
 
-double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool isRecordDetails)
+double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
 	QVector<double> feature_vector;
 
@@ -232,6 +232,26 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 			}
 		}
 
+		/// (d) Unary: favor matches where geometry has not changed much
+		double unary_weight = 1.0;
+		{
+			// Consider when both parts are now corresponded
+			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
+			{
+				auto lengthRatio = [&](Structure::ShapeGraph * shape, QString nodeID){
+					auto n = shape->getNode(nodeID);
+					double cur_length = n->length();
+					double orig_length = n->property["orig_length"].toDouble();
+					return std::min(cur_length, orig_length) / std::max(cur_length, orig_length);
+				};
+
+				double ratio = 1.0 - std::min(lengthRatio(shape, l->n1->id), lengthRatio(shape, l->n2->id));
+
+				double unary_range = 0.2;
+				unary_weight = 1.0 - (ratio * unary_range);
+			}
+		}
+
 		QVector < double > link_vector;
 
 		for (size_t i = 0; i < original_spokes.size(); i++)
@@ -245,7 +265,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 			if (v < 0) v = 0;
 
 			// Scaling
-			v *= connection_weight * geom_weight * diversity_weight;
+			v *= connection_weight * geom_weight * diversity_weight * unary_weight;
 
 			link_vector << v;
 		}
@@ -258,8 +278,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode, bool is
 
 		// Logging:
 		qSort(link_vector);
-		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5")
-			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(geom_weight).arg(diversity_weight).arg(avg_link_vector));
+		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5 / w_unary = %7")
+			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(geom_weight).arg(diversity_weight).arg(avg_link_vector).arg(unary_weight));
 	}
 
 	// Logging:

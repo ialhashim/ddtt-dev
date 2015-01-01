@@ -207,7 +207,7 @@ void experiment::doEnergySearch()
 				exprmnt->setSearchPath(selected_path);
 
 				// Details of evaluation
-				double curEnergy = EvaluateCorrespondence::evaluate(selected_path, true);
+				double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
 				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 
 				v->clearLogItems();
