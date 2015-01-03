@@ -112,7 +112,7 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path, 200))
+			for (auto & solution : AStar::search(path, 100))
 			{
 				egd.origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				egd.origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -267,6 +267,12 @@ void BatchProcess::run()
 				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 				QStringList reportItems;
 				for (auto key : details.keys()) reportItems += key + " : " + details[key].toString();
+				
+				QString mapping;
+				for (auto key : selected_path->mapping.keys())
+					mapping += QString("(%1,%2) ").arg(key).arg(selected_path->mapping[key]);
+				reportItems += mapping;
+
 				jobReport[QString("solution-%1").arg(r)] = reportItems;
 			}
 		}

@@ -120,8 +120,8 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
-	double candidate_threshold = 0.5;
-	double cost_threshold = 0.3;
+	double candidate_threshold = 0.6;
+	double cost_threshold = 0.4;
 	int k_top_candidates = 5;
 
 	/// Suggest for next unassigned:

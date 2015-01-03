@@ -93,6 +93,25 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				auto line = best_line_from_points(centers);
 				r.point = line.first;
 				r.axis = line.second;
+
+				// Sort parts in relation
+				{
+					Vector3 point, direction;
+					MatrixXd curveCenters(r.parts.size(), 3);
+					for (int pi = 0; pi < (int)r.parts.size(); pi++) curveCenters.row(pi) = shape->getNode(r.parts[pi])->position(Eigen::Vector4d(0.5, 0.5, 0, 0));
+					point = Vector3(curveCenters.colwise().mean());
+					curveCenters = curveCenters.rowwise() - point.transpose();
+					Eigen::JacobiSVD<Eigen::MatrixXd> svd(curveCenters, Eigen::ComputeThinU | Eigen::ComputeThinV);
+					direction = Vector3(svd.matrixV().col(0)).normalized();
+					std::vector <size_t> sorted;
+					QMap<size_t, double> dists;
+					for (size_t pi = 0; pi < (int)r.parts.size(); pi++) dists[pi] = curveCenters.row(pi).dot(direction);
+					for (auto p : sortQMapByValue(dists)) sorted.push_back(p.second);
+
+					QStringList sortedParts;
+					for (auto idx : sorted) sortedParts << r.parts[idx];
+					r.parts = sortedParts;
+				}
 			}
 
 			if (r.type == Structure::Relation::ROTATIONAL)

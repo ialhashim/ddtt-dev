@@ -2,6 +2,22 @@
 
 #include "hausdorff.h"
 
+Array1D_Vector3 coupledNormals(Structure::Link * l){
+	Array1D_Vector3 normals;
+	Eigen::Vector4d c1(0,0,0,0), c2(1,1,0,0), midc(0.5,0.5,0,0);
+	
+	Vector3 v1 = (l->n1->position(c2) - l->n1->position(c1)).normalized();
+	Vector3 v2 = (l->n2->position(midc) - l->n1->position(c1)).normalized();
+
+	Vector3 v3 = (l->n2->position(c2) - l->n2->position(c1)).normalized();
+	Vector3 v4 = (l->n1->position(midc) - l->n2->position(c1)).normalized();
+
+	normals.push_back(v1.cross(v2).normalized());
+	normals.push_back(v3.cross(v4).normalized());
+
+	return normals;
+}
+
 Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * l)
 {
 	auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
@@ -22,7 +38,7 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 {
 	double sampleDensity = 1.0 / 5;
 
-	if (resolution == 0) resolution = n->length() * sampleDensity;
+	if (resolution == 0) resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * sampleDensity;
 
 	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
 
@@ -44,14 +60,6 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 		n->property["orig_diagonal"].setValue(n->diagonal());
 		n->property["orig_start"].setValue(n->startPoint());
 		n->property["orig_length"].setValue(n->length());
-
-		// relative centroid
-		{
-			auto shapeBBox = shape->robustBBox();
-			Vector3d nodeRelativCenter = (n->position(Eigen::Vector4d(0.5, 0.5, 0, 0)) -
-				shapeBBox.min()).array() / shapeBBox.sizes().array();
-			n->property["orig_relative_center"].setValue(nodeRelativCenter);
-		}
 	}
 
 	return samples_coords;
@@ -177,31 +185,9 @@ double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
 	auto shape = searchNode->shapeA.data();
 	auto targetShape = searchNode->shapeB.data();
 
-	auto shapeBBox = shape->robustBBox();
-
 	QVector<double> feature_vector;
 
-	for (auto n : shape->nodes)
-	{
-		// Direction:
-		auto orig_diag = n->property["orig_diagonal"].value<Vector3>();
-		double dot_val = n->diagonal().normalized().dot(orig_diag.normalized());
-		feature_vector << dot_val;
-
-		// Length:
-		double cur_length = n->length();
-		double orig_length = n->property["orig_length"].toDouble();
-		feature_vector << std::min(cur_length, orig_length) / std::max(cur_length, orig_length);
-	}
-
-	for (auto l : shape->edges)
-	{
-		// Difference in central spoke
-		auto orig_diag = l->property["orig_centroid_dir"].value<Vector3>();
-		Vector3 diag = (l->n1->center() - l->n2->center()).normalized();
-		double dot_val = diag.dot(orig_diag);
-		feature_vector << dot_val;
-	}
+	feature_vector << 0;
 
 	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
 	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
@@ -226,6 +212,10 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	// Binary properties:
 	for (auto l : shape->edges)
 	{
+		// Avoid redundancy:
+		//if (shape->hasRelation(l->n1->id) && l->n1->id != shape->relationOf(l->n1->id).parts.front()) continue;
+		//if (shape->hasRelation(l->n2->id) && l->n2->id != shape->relationOf(l->n2->id).parts.front()) continue;
+
 		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
 
@@ -241,10 +231,20 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			auto bounds_orig = minMaxDist(original_spokes);
 			auto bounds_curr = minMaxDist(current_spokes);
 
+			double connection_weight_near = 1.0, connection_weight_far = 1.0;
+
+			// Near point got further
 			if (bounds_curr.first > bounds_orig.first){
 				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
-				connection_weight = 1.0 - ratio;
+				connection_weight_near = 1.0 - ratio;
 			}
+
+			// Far point got closer
+			//if (bounds_curr.second < bounds_orig.second * 1.25){
+			//	connection_weight_far = bounds_curr.second / bounds_orig.second;
+			//}
+
+			connection_weight = std::min(connection_weight_near, connection_weight_far);
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
@@ -261,10 +261,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 				return n->property["isSplit"].toBool() || n->property["isMerged"].toBool();
 			};
 			
-			auto ratio = [&](Structure::Node * n)
-			{
-				if (fixedNodeChangedType(n) || isTopologyChange(n))
-				{
+			auto ratio = [&](Structure::Node * n){
+				if (fixedNodeChangedType(n) || isTopologyChange(n)){
 					double rs = 1.0 / shape->relationOf(n->id).parts.size();
 					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
 					return rs == rt ? 0 : std::min(rs, rt);
@@ -277,7 +275,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		}
 
 		/// (c) Structure: favor diversity in assignments
-		double diversity_weight = 1.0;
+		/*double diversity_weight = 1.0;
 		{
 			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
 			{
@@ -287,10 +285,10 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 				if (target_n1 == target_n2)
 					diversity_weight = 0.5;
 			}
-		}
+		}*/
 
 		/// (d) Unary: favor matches where geometry has not changed much
-		double unary_weight = 1.0;
+		/*double unary_weight = 1.0;
 		{
 			// Consider when both parts are now corresponded
 			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
@@ -302,12 +300,25 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 					return std::min(cur_length, orig_length) / std::max(cur_length, orig_length);
 				};
 
-				double ratio = 1.0 - std::min(lengthRatio(shape, l->n1->id), lengthRatio(shape, l->n2->id));
+				double ratio = 1.0 - std::max(lengthRatio(shape, l->n1->id), lengthRatio(shape, l->n2->id));
 
-				double unary_range = 0.2;
+				double unary_range = 0.0;
 				unary_weight = 1.0 - (ratio * unary_range);
 			}
-		}
+		}*/
+
+		/// (e) Context: favor matches that connect in source and in target
+		/*double context_weight = 1.0;
+		{
+			if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id))
+			{
+				auto target_n1 = searchNode->mapping[l->n1->id];
+				auto target_n2 = searchNode->mapping[l->n2->id];
+
+				if (targetShape->getEdge(target_n1, target_n2) == nullptr)
+					context_weight = 0.95;
+			}
+		}*/
 
 		QVector < double > link_vector;
 
@@ -318,11 +329,11 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			// Bad values e.g. nan are broken feature values
 			if (!std::isfinite(v)) v = 0;
 
-			// Bound: beyond 90 degrees the original edge is broken 
-			if (v < 0) v = 0;
+			// Bound: the original edge is broken beyond a certain point
+			v = std::max(0.0, v);
 
 			// Scaling
-			v *= connection_weight * geom_weight * diversity_weight * unary_weight;
+			v *= connection_weight  * geom_weight /* * diversity_weight */;
 
 			link_vector << v;
 		}
@@ -335,8 +346,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		// Logging:
 		qSort(link_vector);
-		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5 / w_unary = %7")
-			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(geom_weight).arg(diversity_weight).arg(avg_link_vector).arg(unary_weight));
+		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5 / w_context = %7")
+			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(geom_weight).arg(1).arg(avg_link_vector).arg(1));
 	}
 
 	// Logging:

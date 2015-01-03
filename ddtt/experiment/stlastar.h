@@ -201,8 +201,7 @@ public: // methods
 			{
 				m_ClosedList.push_back(n);
 
-				solutions.push_back(std::vector<UserState>());
-				auto & r = solutions.back();
+				std::vector<UserState> r;
 
 				// back trace
 				while (n)
@@ -212,7 +211,32 @@ public: // methods
 					n = n->parent;
 				}
 
-				std::reverse( solutions.back().begin(), solutions.back().end() );
+				std::reverse( r.begin(), r.end() );
+
+				// Only record the minimal unique solutions
+				bool isFoundSimilar = false;
+				UserState curLastState = r.back();
+
+				for (size_t si = 0; si < solutions.size(); si++)
+				{
+					auto & solution = solutions[si];
+
+					UserState prevLastState = solution.back();
+
+					if (prevLastState.IsSameState(curLastState))
+					{
+						double prevCost = prevLastState.cost;
+						double curCost = curLastState.cost;
+
+						if (curCost < prevCost)
+							solutions[si] = r;
+
+						isFoundSimilar = true;
+						break;
+					}
+				}
+
+				if (!isFoundSimilar) solutions.push_back( r );
 			}
 		}
 		else // not goal

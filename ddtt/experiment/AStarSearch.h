@@ -14,7 +14,7 @@ namespace AStar
 		/* Heuristic */
 		double GoalDistanceEstimate( PathSearchNode & )
 		{
-			bool isHausdorff = true;
+			bool isHausdorff = false;
 			bool isRMSD = false;
 
 			// Hausdorff distance

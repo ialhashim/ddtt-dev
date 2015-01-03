@@ -233,7 +233,8 @@ Link * Graph::addEdge(Node *n1, Node *n2, Array1D_Vector4d coord1, Array1D_Vecto
 	if(linkName.isEmpty()) linkName = this->linkName(n1,n2);
 
 	QString edgeType = POINT_EDGE;
-	if(n1->type() == SHEET && n2->type() == SHEET) edgeType = LINE_EDGE;
+	//if(n1->type() == SHEET && n2->type() == SHEET) edgeType = LINE_EDGE; // BUG
+	if (coord1.size() > 1 && coord2.size() > 1) edgeType = LINE_EDGE;
 
 	Link * e = new Link( n1, n2, coord1, coord2, edgeType, linkName );
 	edges.push_back( e );
