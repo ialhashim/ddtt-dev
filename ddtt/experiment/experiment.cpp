@@ -32,6 +32,7 @@ CorrespondenceSearch * mysearch = NULL;
 #include "BatchProcess.h"
 #include "StructureAnalysis.h"
 #include "PropagateProximity.h"
+#include "AStarSearch.h"
 
 Energy::GuidedDeformation * egd = NULL;
 Viewer * v = NULL;
@@ -173,104 +174,132 @@ void experiment::doEnergySearch()
 
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
-	search_roots << path;
 
-	// Explore path
-	egd->searchAll(graphs.front(), graphs.back(), search_roots);
-
-	auto timeElapsed = timer.elapsed();
-
-	// Visualize search graph
+	if (pw->ui->isLimitedSearch->isChecked())
 	{
-		exprmnt = this;
+		QMap <double, Energy::SearchNode> sorted_solutions;
+		QVector < QVector <Energy::SearchNode> > solution_vec;
 
-		v = new Viewer;
-		v->show();
+		for (auto & solution : AStar::search(path, 10))
+		{
+			egd->origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+			egd->origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
 
-		connect(v->wv, &QWebView::loadFinished, [&](){
-			v->addCSS(".source{color:red} .target{color:blue} .energy{color:#006400} .cost{color:gray} .children{color:gray}");
+			solution_vec.push_back(QVector<Energy::SearchNode>());
+			for (auto & state : solution) solution_vec.back() << state;
+			QVector<Energy::SearchNode*> ptrs;
+			for (auto & node : solution_vec.back()) ptrs << &node;
+			egd->applySearchPath(ptrs);
+			sorted_solutions[solution.back().energy] = solution_vec.back().back();
+		}
 
-			auto & path = *egd->searchTrees.front().begin();
-			int idx = v->addNode(pathToHtml(path));
-			Energy::SearchNode* path_ptr = &path;
-			v->nodeProperties[idx]["path"].setValue(path_ptr);
+		double cost = sorted_solutions.keys().at(0);
 
-			v->updateGraph();
+		selected_path = new Energy::SearchNode(sorted_solutions[cost]);
+	}
+	else
+	{
+		search_roots << path;
 
-			connect(v, &Viewer::nodeSelected, [&](int nid){
-				auto node = v->nodeProperties[nid]["path"].value<Energy::SearchNode*>();
-				if (!node) return;
+		// Explore path
+		egd->searchAll(graphs.front(), graphs.back(), search_roots);
 
-				egd->applySearchPath( egd->getEntirePath(node) );
+		auto timeElapsed = timer.elapsed();
 
-				selected_path = node;
-				exprmnt->setSearchPath(selected_path);
+		// Visualize search graph
+		{
+			exprmnt = this;
 
-				// Details of evaluation
-				double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
-				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+			v = new Viewer;
+			v->show();
 
-				v->clearLogItems();
-				for (auto key : details.keys()) v->addLogItem( key + " : " + details[key].toString() );
+			connect(v->wv, &QWebView::loadFinished, [&](){
+				v->addCSS(".source{color:red} .target{color:blue} .energy{color:#006400} .cost{color:gray} .children{color:gray}");
 
-				auto shape = node->shapeA;
-				if (!shape) return;
-				node->property["nid"].setValue(nid);
+				auto & path = *egd->searchTrees.front().begin();
+				int idx = v->addNode(pathToHtml(path));
+				Energy::SearchNode* path_ptr = &path;
+				v->nodeProperties[idx]["path"].setValue(path_ptr);
 
-				// Expand children
-				if (!v->nodeProperties[nid]["expanded"].toBool())
-				{
+				v->updateGraph();
+
+				connect(v, &Viewer::nodeSelected, [&](int nid){
+					auto node = v->nodeProperties[nid]["path"].value<Energy::SearchNode*>();
+					if (!node) return;
+
+					egd->applySearchPath(egd->getEntirePath(node));
+
+					selected_path = node;
+					exprmnt->setSearchPath(selected_path);
+
+					// Details of evaluation
+					double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
+					QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+
+					v->clearLogItems();
+					for (auto key : details.keys()) v->addLogItem(key + " : " + details[key].toString());
+
+					auto shape = node->shapeA;
+					if (!shape) return;
+					node->property["nid"].setValue(nid);
+
 					// Expand children
-					for (auto child : egd->childrenOf(selected_path))
+					if (!v->nodeProperties[nid]["expanded"].toBool())
 					{
-						int child_idx = v->addNode(pathToHtml(*child));
-						v->addEdge(nid, child_idx);
-						v->nodeProperties[child_idx]["path"].setValue(child);
+						// Expand children
+						for (auto child : egd->childrenOf(selected_path))
+						{
+							int child_idx = v->addNode(pathToHtml(*child));
+							v->addEdge(nid, child_idx);
+							v->nodeProperties[child_idx]["path"].setValue(child);
+						}
+
+						v->updateGraph();
+						v->nodeProperties[nid]["expanded"].setValue(true);
 					}
 
-					v->updateGraph();
-					v->nodeProperties[nid]["expanded"].setValue(true);
+					exprmnt->drawArea()->update();
+				});
+			});
+
+			connect(v, &Viewer::goingToExpand, [&](){
+				auto toExpand = egd->getEntirePath(selected_path);
+
+				int nid = toExpand.front()->property["nid"].value<int>();
+
+				toExpand.removeFirst();
+
+				for (auto element : toExpand)
+				{
+					int child_nid = v->addNode(pathToHtml(*element));
+					v->addEdge(nid, child_nid);
+					v->nodeProperties[child_nid]["path"].setValue(element);
+
+					nid = child_nid;
 				}
 
-				exprmnt->drawArea()->update();
+				v->updateGraph();
 			});
-		});
+		}
 
-		connect(v, &Viewer::goingToExpand, [&](){
-			auto toExpand = egd->getEntirePath(selected_path);
+		// Select least cost path
+		auto all_solutions = egd->solutions();
+		QList < QPair<double, Energy::SearchNode*> > solutions;
+		for (auto s : all_solutions) solutions << qMakePair(s->energy, s);
+		qSort(solutions.begin(), solutions.end());
 
-			int nid = toExpand.front()->property["nid"].value<int>();
+		auto entire_path = egd->getEntirePath(solutions.front().second);
+		egd->applySearchPath(entire_path);
+		selected_path = entire_path.back();
 
-			toExpand.removeFirst();
+		double cost = EvaluateCorrespondence::evaluate(selected_path);
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - solutions %3").arg(timeElapsed).arg(cost).arg(solutions.size()));
 
-			for (auto element : toExpand)
-			{
-				int child_nid = v->addNode(pathToHtml(*element));
-				v->addEdge(nid, child_nid);
-				v->nodeProperties[child_nid]["path"].setValue(element);
-
-				nid = child_nid;
-			}
-
-			v->updateGraph();
-		});
 	}
 
-	// Select least cost path
-	auto all_solutions = egd->solutions();
-	QList < QPair<double, Energy::SearchNode*> > solutions;
-	for (auto s : all_solutions) solutions << qMakePair(s->energy, s);
-	qSort(solutions.begin(), solutions.end());
-	
-	auto entire_path = egd->getEntirePath(solutions.front().second);
-	egd->applySearchPath( entire_path );
-	selected_path = entire_path.back();
 	setSearchPath( selected_path );
 
 	QApplication::restoreOverrideCursor();
-
-	double cost = EvaluateCorrespondence::evaluate(selected_path);
-	mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - solutions %3").arg(timeElapsed).arg(cost).arg(solutions.size()));
 }
 
 void experiment::doCorrespondSearch()
@@ -638,6 +667,7 @@ void experiment::create()
 	});
 	connect(pw->ui->loadJobs, &QPushButton::released, [&]{
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
+		if (filename.isEmpty()) return;
 		QTimer::singleShot(0, [=] { 
 			BatchProcess * bp = new BatchProcess(filename);
 			QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));

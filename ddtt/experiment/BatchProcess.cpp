@@ -330,7 +330,7 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 
 	auto jj = QJsonObject::fromVariantMap(job);
 	auto tt = jj.keys();
-	jobs.push_back(jj);
+	jobs.push_front(jj);
 
 	json["jobs"] = jobs;
 

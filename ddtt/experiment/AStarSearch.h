@@ -16,7 +16,6 @@ namespace AStar
 		{
 			bool isHausdorff = false;
 			bool isRMSD = false;
-			bool isUseReversedCost = false;
 
 			// Hausdorff distance
 			if (isHausdorff)
@@ -38,13 +37,6 @@ namespace AStar
 			{
 				double rmsd = EvaluateCorrespondence::RMSD(shapeA.data(), shapeB.data());
 				return rmsd;
-			}
-
-			// Cost of deforming target to source
-			if (isUseReversedCost)
-			{
-				if (!peer.isNull())
-					return peer->energy;
 			}
 
 			return 0;
@@ -79,7 +71,7 @@ namespace AStar
 		}
 	};
 
-	std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, int num_solutions = 100)
+	static inline std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, int num_solutions = 100)
 	{
 		// Prepare shapes
 		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());

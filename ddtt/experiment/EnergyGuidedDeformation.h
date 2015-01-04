@@ -29,7 +29,7 @@ namespace Energy
 			const QSetString & unassigned = QSetString(), const QMap<QString, QString> & mapping = QMap<QString, QString>(),
 			double cost = std::numeric_limits<double>::max(), double energy = 0.0)
 			: shapeA(shapeA), shapeB(shapeB), fixed(fixed), assignments(assignments), unassigned(unassigned), mapping(mapping), 
-			cost(cost), energy(energy), num_children(0), isPeer(false){}
+			cost(cost), energy(energy), num_children(0){}
 
 		QSetString fixedOnTarget(){ QSetString result; for (auto a : assignments) for (auto p : a.second) result << p; return result; }
 		QSetString unassignedList(){
@@ -44,11 +44,6 @@ namespace Energy
 		}
 
 		bool operator<(const SearchNode & path) const { return energy < path.energy; }
-
-		// Symmetric cost:
-		bool isPeer;
-		QSharedPointer<SearchNode> peer;
-		static SearchNode * generatePeer(SearchNode * fromNode);
 	};
 
 	typedef tree<SearchNode> SearchTree;

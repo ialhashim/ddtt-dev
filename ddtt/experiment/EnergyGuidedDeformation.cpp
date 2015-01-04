@@ -88,13 +88,6 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 
 void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes)
 {
-	// Symmetric cost: create initial peer
-	if (!path->isPeer && path->peer.isNull()) {
-		path->peer = QSharedPointer<Energy::SearchNode>(Energy::SearchNode::generatePeer(path));
-		path->peer->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path->shapeB.data()));
-		path->peer->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path->shapeA.data()));
-	}
-
 	double prevEnergy = path->energy;
 
 	// Go over and apply the suggested assignments:
@@ -122,21 +115,14 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 
 	path->cost = curEnergy - prevEnergy;
 	path->energy = path->energy + path->cost;
-
-	// Symmetric cost: apply to assignment on peer
-	if (!path->isPeer && !path->peer->shapeA.isNull()) 
-		Energy::GuidedDeformation::applyAssignment(path->peer.data(), isSaveKeyframes);
-
-	if (!path->isPeer && !path->peer->shapeA.isNull())
-		path->energy = std::max(path->energy, path->peer->energy);
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
-	double cost_threshold = 0.3;
-	int k_top_candidates = 5;
+	double cost_threshold = 0.5;
+	int k_top_candidates = 4;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
@@ -199,6 +185,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 				auto intrestingCentroid = [&](Structure::ShapeGraph * shape, QString nodeID){
 					Eigen::Vector4d c(0, 0, 0, 0);
 					auto edges = shape->getEdges(nodeID);
+					if (edges.empty()) return Eigen::Vector4d(0.5,0.5,0,0);
 					for (auto e : edges) c += e->getCoord(nodeID).front();
 					return Eigen::Vector4d(c / edges.size());
 				};
@@ -278,18 +265,6 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 		}
 	}
 
-	// Symmetric cost: generate peer for this child
-	for (auto & cost_child : evaluated_children)
-	{
-		auto & child = cost_child.second;
-
-		child.peer = QSharedPointer<SearchNode>(Energy::SearchNode::generatePeer(&child));
-		child.peer->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.peer->shapeA));
-		child.peer->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.peer->shapeB));
-		child.peer->unassigned = child.peer->unassignedList();
-		child.peer->energy = path.peer->energy;
-	}
-
 	/// Thresholding [3] : only accept the 'k' top suggestions
 	qSort(evaluated_children);
 	auto sorted_children = evaluated_children.toVector();
@@ -301,10 +276,6 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	// Clean up of no longer needed data:
 	path.shapeA.clear();
 	path.shapeB.clear();
-
-	// Symmetric cost: clean up
-	path.peer->shapeA.clear();
-	path.peer->shapeB.clear();
 
 	return accepted_children;
 }
@@ -668,23 +639,4 @@ void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> pat
 
 		applyAssignment(p, true);
 	}
-}
-
-Energy::SearchNode * Energy::SearchNode::generatePeer(SearchNode * fromNode)
-{
-	// Swapped shapes
-	Energy::SearchNode * result = new Energy::SearchNode;
-	result->isPeer = true;
-
-	// Assignments
-	for (auto a_pair : fromNode->assignments)
-		result->assignments.push_back(qMakePair(a_pair.second.toSet().toList(), a_pair.first));
-
-	// Mapping
-	for (auto key : fromNode->mapping.keys()) result->mapping[ fromNode->mapping[key] ] = key;
-	
-	// Fixed
-	for (auto key : result->mapping.keys()) result->fixed << key;
-
-	return result;
 }
