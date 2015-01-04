@@ -16,6 +16,7 @@ namespace AStar
 		{
 			bool isHausdorff = false;
 			bool isRMSD = false;
+			bool isUseReversedCost = false;
 
 			// Hausdorff distance
 			if (isHausdorff)
@@ -37,6 +38,13 @@ namespace AStar
 			{
 				double rmsd = EvaluateCorrespondence::RMSD(shapeA.data(), shapeB.data());
 				return rmsd;
+			}
+
+			// Cost of deforming target to source
+			if (isUseReversedCost)
+			{
+				if (!peer.isNull())
+					return peer->energy;
 			}
 
 			return 0;

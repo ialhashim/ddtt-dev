@@ -41,6 +41,7 @@ void BatchProcess::run()
 	auto jobsArray = json["jobs"].toArray();
 	bool isSwapped = json["isSwap"].toBool();
 	bool isSaveReport = json["isSaveReport"].toBool();
+	int thumbWidth = std::max(256, json["thumbWidth"].toInt());
 
 	// Clear past results in output folder
 	QDir d(""); d.mkpath(outputPath);
@@ -206,8 +207,6 @@ void BatchProcess::run()
 					shapeA->getNode(spart)->vis_property["meshSolid"].setValue(true);
 				}
 			}
-
-			int thumbWidth = 256;
 
 			auto cur_solution_img = stitchImages(
 				renderer->render(shapeA.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation), 

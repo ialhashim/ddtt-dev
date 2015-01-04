@@ -88,6 +88,13 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 
 void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes)
 {
+	// Symmetric cost: create initial peer
+	if (!path->isPeer && path->peer.isNull()) {
+		path->peer = QSharedPointer<Energy::SearchNode>(Energy::SearchNode::generatePeer(path));
+		path->peer->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path->shapeB.data()));
+		path->peer->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path->shapeA.data()));
+	}
+
 	double prevEnergy = path->energy;
 
 	// Go over and apply the suggested assignments:
@@ -115,13 +122,20 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 
 	path->cost = curEnergy - prevEnergy;
 	path->energy = path->energy + path->cost;
+
+	// Symmetric cost: apply to assignment on peer
+	if (!path->isPeer && !path->peer->shapeA.isNull()) 
+		Energy::GuidedDeformation::applyAssignment(path->peer.data(), isSaveKeyframes);
+
+	if (!path->isPeer && !path->peer->shapeA.isNull())
+		path->energy = std::max(path->energy, path->peer->energy);
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
 {
 	// Hard coded thresholding to limit search space
-	double candidate_threshold = 0.6;
-	double cost_threshold = 0.4;
+	double candidate_threshold = 0.5;
+	double cost_threshold = 0.3;
 	int k_top_candidates = 5;
 
 	/// Suggest for next unassigned:
@@ -257,10 +271,23 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 				assignment << qMakePair(la, lb);
 				assert(la.size() && lb.size());
 
-				#pragma omp critical
-				evaluated_children.push_back(qMakePair(cost, SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy)));
+				//#pragma omp critical
+				evaluated_children.push_back(qMakePair(cost, SearchNode(modifiedShapeA, modifiedShapeB, 
+					path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy)));
 			}
 		}
+	}
+
+	// Symmetric cost: generate peer for this child
+	for (auto & cost_child : evaluated_children)
+	{
+		auto & child = cost_child.second;
+
+		child.peer = QSharedPointer<SearchNode>(Energy::SearchNode::generatePeer(&child));
+		child.peer->shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.peer->shapeA));
+		child.peer->shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.peer->shapeB));
+		child.peer->unassigned = child.peer->unassignedList();
+		child.peer->energy = path.peer->energy;
 	}
 
 	/// Thresholding [3] : only accept the 'k' top suggestions
@@ -274,6 +301,10 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	// Clean up of no longer needed data:
 	path.shapeA.clear();
 	path.shapeB.clear();
+
+	// Symmetric cost: clean up
+	path.peer->shapeA.clear();
+	path.peer->shapeB.clear();
 
 	return accepted_children;
 }
@@ -520,7 +551,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 				new_snode->property["mesh"].setValue(new_mesh_ptr);
 			}
 
-			shapeA->addNode(new_snode);
+			if (shapeA->getNode(new_snode->id) == nullptr) // this check is needed for symmetric cost
+				shapeA->addNode(new_snode);
 			new_nodes << new_snode;
 		}
 
@@ -636,4 +668,23 @@ void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> pat
 
 		applyAssignment(p, true);
 	}
+}
+
+Energy::SearchNode * Energy::SearchNode::generatePeer(SearchNode * fromNode)
+{
+	// Swapped shapes
+	Energy::SearchNode * result = new Energy::SearchNode;
+	result->isPeer = true;
+
+	// Assignments
+	for (auto a_pair : fromNode->assignments)
+		result->assignments.push_back(qMakePair(a_pair.second.toSet().toList(), a_pair.first));
+
+	// Mapping
+	for (auto key : fromNode->mapping.keys()) result->mapping[ fromNode->mapping[key] ] = key;
+	
+	// Fixed
+	for (auto key : result->mapping.keys()) result->fixed << key;
+
+	return result;
 }
