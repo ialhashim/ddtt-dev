@@ -39,7 +39,7 @@ namespace AStar
 				return rmsd;
 			}
 
-			return 0;
+			return double(unassigned.size()) / shapeA->nodes.size();
 		}
 
 		/* Actual cost (arc cost) */

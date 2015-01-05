@@ -1,6 +1,88 @@
 {
+    "isSaveReport": false,
     "isSwap": false,
     "jobs": [
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Bed"
+                    ],
+                    "target": [
+                        "object26"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed5/Bed5.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/bed_art1/bed_art1.xml",
+            "title": "Bed5-bed_art1"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Back"
+                    ],
+                    "target": [
+                        "BackBar5",
+                        "BackBar4",
+                        "BackBar3",
+                        "BackBar2",
+                        "BackBar1"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairFancy4/foldchair2.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairMetal1/MetalChair01.xml",
+            "title": "foldchair2-MetalChair01"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Leg04",
+                        "Leg03"
+                    ],
+                    "target": [
+                        "Leg01",
+                        "Leg04"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/kchair3a/kchair3a.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/other7/other7.xml",
+            "title": "kchair3a-other7"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Top"
+                    ],
+                    "target": [
+                        "Top"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table13/Table13.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table18/Table18.xml",
+            "title": "Table13-Table18"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Body"
+                    ],
+                    "target": [
+                        "Body"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/fighter4/fighter4.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/fighter6/fighter6.xml",
+            "title": "fighter4-fighter6"
+        },
         {
             "assignments": [
                 {
@@ -206,6 +288,101 @@
             "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed1/Bed1.xml",
             "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed3/Bed3.xml",
             "title": "Bed1-Bed3"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "BackLeft",
+                        "BackRight"
+                    ],
+                    "target": [
+                        "BarLeft",
+                        "BarRight"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairBasic0/chair1.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairMetal1/MetalChair01.xml",
+            "title": "chair1-MetalChair01"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "LowBoardSheet",
+                        "UpBoardSheet"
+                    ],
+                    "target": [
+                        "Bed"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed2/Bed2.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Bed4/Bed4.xml",
+            "title": "Bed2-Bed4"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Seat"
+                    ],
+                    "target": [
+                        "Seat"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairSwivel04/SwivelChair04.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/ChairSwivel05/SwivelChair05.xml",
+            "title": "SwivelChair04-SwivelChair05"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Top"
+                    ],
+                    "target": [
+                        "Top"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table17/Table17.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table15/Table15.xml",
+            "title": "Table17-Table15"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "Top"
+                    ],
+                    "target": [
+                        "Top"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table22/Table22.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/Table25/Table25.xml",
+            "title": "Table22-Table25"
+        },
+        {
+            "assignments": [
+                {
+                    "source": [
+                        "LegLeft",
+                        "LegRight"
+                    ],
+                    "target": [
+                        "LegRight",
+                        "LegLeft"
+                    ]
+                }
+            ],
+            "source": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/bench2/bench2.xml",
+            "target": "C:/Users/Ibraheem/Dropbox/DDTT-dataset/dataset/bench4/bench4.xml",
+            "title": "bench2-bench4"
         }
     ],
     "outputPath": "outputPath",

@@ -175,6 +175,8 @@ void experiment::doEnergySearch()
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
 
+	double timeElapsed = 0;
+
 	if (pw->ui->isLimitedSearch->isChecked())
 	{
 		QMap <double, Energy::SearchNode> sorted_solutions;
@@ -196,6 +198,8 @@ void experiment::doEnergySearch()
 		double cost = sorted_solutions.keys().at(0);
 
 		selected_path = new Energy::SearchNode(sorted_solutions[cost]);
+
+		timeElapsed = timer.elapsed();
 	}
 	else
 	{
@@ -204,7 +208,7 @@ void experiment::doEnergySearch()
 		// Explore path
 		egd->searchAll(graphs.front(), graphs.back(), search_roots);
 
-		auto timeElapsed = timer.elapsed();
+		timeElapsed = timer.elapsed();
 
 		// Visualize search graph
 		{
@@ -293,9 +297,10 @@ void experiment::doEnergySearch()
 		selected_path = entire_path.back();
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
-		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - solutions %3").arg(timeElapsed).arg(cost).arg(solutions.size()));
-
+		mainWindow()->setStatusBarMessage(QString("cost = %2 - solutions %3").arg(cost).arg(solutions.size()));
 	}
+
+	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timeElapsed));
 
 	setSearchPath( selected_path );
 

@@ -75,6 +75,8 @@ void BatchProcess::run()
 			title = splitTitle.size() > 1 ? splitTitle.back() + "-" + splitTitle.front() : title;
 		}
 
+		pd->setLabelText(QString("Corresponding: %1...").arg(title));
+
 		/// Initial Assignments:
 		Energy::Assignments assignments;
 		for (auto a : job["assignments"].toArray())
