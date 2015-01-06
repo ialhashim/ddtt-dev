@@ -2,7 +2,7 @@
 
 #include "hausdorff.h"
 
-int EvaluateCorrespondence::numSamples = 8;
+int EvaluateCorrespondence::numSamples = 5;
 
 Array1D_Vector3 coupledNormals(Structure::Link * l){
 	Array1D_Vector3 normals;
