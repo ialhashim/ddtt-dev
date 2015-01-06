@@ -324,7 +324,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 		if (la.size() != la_set.size() || lb.size() != lb_set.size())
 		{
-			// Experimental: allow sliding
+			// Experimental: will allow sliding
 			for (auto partID : la_set)
 			{
 				auto partA = shapeA->getNode(partID);
@@ -408,6 +408,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			lb << shapeB->addNode(new Structure::Curve(tcurve, tcurve_id))->id;
 		}
 
+		// Clean up
 		shapeA->removeNode(sheetid);
 	}
 
@@ -419,6 +420,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto tnodeID = lb.front();
 		lb.clear();
 
+		// Experimental: will allow sliding
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
@@ -436,6 +438,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto tnodeID = lb.front();
 		lb.clear();
 
+		// Experimental: will allow sliding
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
@@ -453,6 +456,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto tnodeID = lb.front();
 		lb.clear();
 
+		// Experimental: will allow sliding
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
@@ -468,6 +472,55 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
 	{
 		QString newnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
+
+		// Effectively perform a split by moving samples used for correspondence evaluation:
+		{
+			// Make a copy of the sheet
+			auto snode_sheet = shapeA->getNode(la.front());
+			auto snode_sheet_copy = snode_sheet->clone();
+			snode_sheet_copy->id += "clone";
+			shapeA->addNode(snode_sheet_copy);
+
+			// Turn curves on target to a new sheet
+			auto tnode_sheet = shapeB->getNode(newnode);
+
+			// Deform the copy to target curves
+			Structure::ShapeGraph::correspondTwoNodes(snode_sheet_copy->id, shapeA, tnode_sheet->id, shapeB);
+			DeformToFit::registerAndDeformNodes(snode_sheet_copy, tnode_sheet);
+
+			// Snap source sheet samples to closest target curve projection
+			auto samples = snode_sheet->property["samples_coords"].value<Array2D_Vector4d>();
+			assert(!samples.empty());
+
+			auto tcurve = shapeB->getNode(lb.front());
+			auto start_c = aproxProjection(tcurve->position(Eigen::Vector4d(0, 0, 0, 0)), (Structure::Sheet*)snode_sheet_copy);
+			auto end_c = aproxProjection(tcurve->position(Eigen::Vector4d(1, 0, 0, 0)), (Structure::Sheet*)snode_sheet_copy);
+			Eigen::Vector4d range = (end_c - start_c).cwiseAbs();
+			int snapIDX = range[0] > range[1] ? 1 : 0;
+
+			auto coordSnap = [&](Eigen::Vector4d coord, int dim, int samplesCount, int curvesCount){
+				if (curvesCount >= samplesCount) return coord;
+				double interval = 1.0 / curvesCount;
+				double v = coord[dim] < 0.5 ? floor(coord[dim] / interval) : ceil(coord[dim] / interval);
+				coord[dim] = v * interval;
+				return coord;
+			};
+
+			int samplesCount = samples.size();
+			int curvesCount = lb.size();
+
+			for (auto & row : samples){
+				for (auto & c : row){
+					c = coordSnap(c, snapIDX, samplesCount, curvesCount);
+				}
+			}
+
+			// Replace samples
+			snode_sheet->property["samples_coords"].setValue(samples);
+				
+			// Clean up
+			shapeA->removeNode(snode_sheet_copy->id);
+		}
 
 		lb.clear();
 		lb << newnode;
@@ -522,8 +575,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 				new_snode->property["mesh"].setValue(new_mesh_ptr);
 			}
 
-			if (shapeA->getNode(new_snode->id) == nullptr) // this check is needed for symmetric cost
-				shapeA->addNode(new_snode);
+			shapeA->addNode(new_snode);
 			new_nodes << new_snode;
 		}
 

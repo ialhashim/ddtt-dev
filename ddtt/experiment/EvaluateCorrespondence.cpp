@@ -2,6 +2,8 @@
 
 #include "hausdorff.h"
 
+int EvaluateCorrespondence::numSamples = 8;
+
 Array1D_Vector3 coupledNormals(Structure::Link * l){
 	Array1D_Vector3 normals;
 	Eigen::Vector4d c1(0,0,0,0), c2(1,1,0,0), midc(0.5,0.5,0,0);
@@ -36,8 +38,7 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * s
 
 Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution)
 {
-	double sampleDensity = 1.0 / 5;
-
+	double sampleDensity = 1.0 / numSamples;
 	if (resolution == 0) resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * sampleDensity;
 
 	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
@@ -71,8 +72,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	for (auto n : shape->nodes) sum_length += n->area();
 	double avg_length = sum_length / shape->nodes.size();
 
-	int density_count = 3;
-	double resolution = avg_length / density_count;
+	double resolution = avg_length / numSamples;
 
 	shape->property["sampling_resolution"].setValue(resolution);
 
@@ -243,36 +243,6 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			connection_weight = std::min(connection_weight_near, connection_weight_far);
 		}
 
-		/// (b) Geometric: scale by geometric (topological?) similarity
-		double split_weight = 1.0;
-		{
-			auto fixedNodeChangedType = [&](Structure::Node * n){
-				bool isFixedAlready = searchNode->mapping.contains(n->id);
-				if (!isFixedAlready) return false;
-				if (targetShape->getNode(searchNode->mapping[n->id])){
-					if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) 
-						return false;
-				} else return false;
-				return true;
-			};
-
-			auto isTopologyChange = [&](Structure::Node * n){
-				return n->property["isSplit"].toBool() || n->property["isMerged"].toBool();
-			};
-			
-			auto ratio = [&](Structure::Node * n){
-				if (fixedNodeChangedType(n) || isTopologyChange(n)){
-					double rs = 1.0 / shape->relationOf(n->id).parts.size();
-					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
-					return rs == rt ? 0 : std::min(rs, rt);
-				}
-				return 0.0;
-			};
-
-			double r = std::max( ratio(l->n1), ratio(l->n2) );
-			split_weight = 1.0 - r;
-		}
-
 		QVector < double > link_vector;
 
 		for (size_t i = 0; i < original_spokes.size(); i++)
@@ -286,7 +256,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			v = std::max(0.0, v);
 
 			// Scaling
-			v *= connection_weight * split_weight;
+			v *= connection_weight /** split_weight*/;
 
 			link_vector << v;
 		}
@@ -299,8 +269,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		// Logging:
 		qSort(link_vector);
-		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5 / w_context = %7")
-			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(split_weight).arg(1).arg(avg_link_vector).arg(1));
+		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3")
+			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight));
 	}
 
 	// Logging:
