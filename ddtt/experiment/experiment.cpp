@@ -706,6 +706,24 @@ void experiment::create()
 		BatchProcess::appendJob(job, filename);
 	});
 
+	connect(pw->ui->rotateButton, &QPushButton::released, [&]{
+		if (graphs.empty()) return;
+
+		if (pw->ui->numIterations->value() == 0)
+			graphs.front()->rotate(90, Vector3::UnitZ());
+
+		if (pw->ui->numIterations->value() == 1)
+			graphs.front()->rotate(90, Vector3::Random().normalized());
+
+		if (pw->ui->numIterations->value() == 2)
+			graphs.front()->rotate(90, Vector3::UnitX());
+
+		graphs.front()->moveBottomCenterToOrigin();
+
+		mainWindow()->setStatusBarMessage("Shape rotated");
+		drawArea()->update();
+	});
+
 	this->isReady = true;
 }
 
