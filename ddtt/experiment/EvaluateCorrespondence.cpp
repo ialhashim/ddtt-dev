@@ -339,8 +339,9 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 				return ratio;
 			};
 
-			double squeezed = 0.2 * std::min(ratio(l->n1), ratio(l->n2));
-			split_weight = 0.8 + squeezed;
+			double split_range = 0.3;
+			double squeezed = split_range * std::min(ratio(l->n1), ratio(l->n2));
+			split_weight = (1.0 - split_range) + squeezed;
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
