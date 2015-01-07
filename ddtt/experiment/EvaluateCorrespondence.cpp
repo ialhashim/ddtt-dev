@@ -264,35 +264,38 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		/// (b) Geometric: scale by geometric (topological?) similarity
 		/*double split_weight = 1.0;
 		{
-			auto volumeRatio = [&](Structure::Node * n){
-				double ratio = 1.0;
+		auto volumeRatio = [&](Structure::Node * n){
+			double ratio = 1.0;
 
-				if (n->property["isSplit"].toBool())
+			QString propertyName = "orig_volume";
+
+			if (n->property["isSplit"].toBool())
+			{
+				double partVolume = n->property[propertyName].toDouble();
+
+				QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
+				double targetVolume = 0.0;
+				for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->property[propertyName].toDouble();
+
+				ratio = targetVolume / std::max(partVolume, targetVolume);
+			}
+			if (n->property["isMerged"].toBool())
+			{
+				auto targetNode = targetShape->getNode(searchNode->mapping[n->id]);
+				double targetVolume = targetNode->property[propertyName].toDouble();
+
+				QStringList sourceIDs = n->property["groupParts"].toStringList();
+				double sourceVolume = 0.0;
+				for (auto partID : sourceIDs)
 				{
-					double partVolume = n->property["orig_volume"].toDouble();
-
-					QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
-					double targetVolume = 0.0;
-					for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->property["orig_volume"].toDouble();
-
-					ratio = std::min(partVolume, targetVolume) / std::max(partVolume, targetVolume);
+					auto nj = shape->getNode(partID);
+					sourceVolume += nj->property[propertyName].toDouble();
 				}
-				if (n->property["isMerged"].toBool())
-				{
-					double targetVolume = targetShape->getNode(searchNode->mapping[n->id])->property["orig_volume"].toDouble();
 
-					QStringList sourceIDs = n->property["groupParts"].toStringList();
-					double sourceVolume = 0.0;
-					for (auto partID : sourceIDs)
-					{
-						auto nj = shape->getNode(partID);
-						sourceVolume += nj->property["orig_volume"].toDouble();
-					}
-
-					ratio = std::min(targetVolume, sourceVolume) / std::max(targetVolume, sourceVolume);
-				}
-				return ratio;
-			};
+				ratio = sourceVolume / std::max(targetVolume, sourceVolume);
+			}
+			return ratio;
+		};
 
 			split_weight = std::min(1.0, std::max(0.0, std::min(volumeRatio(l->n1), volumeRatio(l->n2))) );
 		}*/
@@ -300,23 +303,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		/// (b) Geometric: scale by geometric (topological?) similarity
 		double split_weight = 1.0;
 		{
-			auto fixedNodeChangedType = [&](Structure::Node * n){
-				bool isFixedAlready = searchNode->mapping.contains(n->id);
-				if (!isFixedAlready) return false;
-				if (targetShape->getNode(searchNode->mapping[n->id])){
-					if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type())
-						return false;
-				}
-				else return false;
-				return true;
-			};
-
-			auto isTopologyChange = [&](Structure::Node * n){
-				return n->property["isSplit"].toBool() || n->property["isMerged"].toBool();
-			};
-
 			auto ratio = [&](Structure::Node * n){
-				if (fixedNodeChangedType(n) || isTopologyChange(n)){
+				if (n->property["isSplit"].toBool() || n->property["isMerged"].toBool()){
 					double rs = 1.0 / shape->relationOf(n->id).parts.size();
 					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
 					return rs == rt ? 0 : std::min(rs, rt);
