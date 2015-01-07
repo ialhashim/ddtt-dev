@@ -6,6 +6,13 @@
 
 SymRelationVizWidget * pw;
 
+void SymRelationViz::changeScale(double ds)
+{
+	m_scene.m_modelScale = ds;
+	m_scene.layout();
+	m_scene.buildModelDislayList();
+}
+
 void SymRelationViz::create()
 {
 	// Prepare UI
@@ -34,18 +41,30 @@ void SymRelationViz::create()
 	mainWindow()->addDockWidget(Qt::RightDockWidgetArea, dockwidget);
 
 	// UI:
-    connect(pw->ui->doButton, &QPushButton::released, [&]{
-        QMessageBox::information(0,"hello","hi");
-	});
+	pw->ui->scaleSpinBox->setValue(m_scene.m_modelScale);
+	//m_scene.m_modelScale
+	connect(pw->ui->scaleSpinBox, SIGNAL(valueChanged(double)), this, SLOT(changeScale(double)));
 
     connect(pw->ui->loadButton, &QPushButton::released, [&]{
-        auto files = QFileDialog::getOpenFileNames(mainWindow(), "");
+        //auto files = QFileDialog::getOpenFileNames(mainWindow(), "");
+		QString dirname = QFileDialog::getExistingDirectory(mainWindow(), tr("Open Directory"),
+			".",
+			QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+		
+		if (dirname.isNull() || dirname.isEmpty()) return;
+		m_scene.clearScene();
+		m_scene.loadScene(dirname);
+		m_scene.layout();
+		m_scene.buildModelDislayList();
     });
 }
 
 void SymRelationViz::decorate()
 {
+	m_scene.draw();
     // Draw stuff here:
+	//glEnable(GL_LIGHTING);
+	//glEnable(GL_POLYGON_OFFSET_FILL);
 }
 
 bool SymRelationViz::keyPressEvent(QKeyEvent * event)
