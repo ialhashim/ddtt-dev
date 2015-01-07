@@ -26,7 +26,8 @@ HEADERS +=  experiment.h \
             PropagateProximity.h \
             PropagateSymmetry.h \
             EvaluateCorrespondence.h \
-            BatchProcess.h
+            BatchProcess.h \
+            ComputeApproxMVBB.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
@@ -41,7 +42,8 @@ SOURCES +=  experiment.cpp \
             PropagateProximity.cpp \
             PropagateSymmetry.cpp \
             EvaluateCorrespondence.cpp \
-            BatchProcess.cpp
+            BatchProcess.cpp \
+            ComputeApproxMVBB.cpp
 
 FORMS       += experiment-widget.ui
 RESOURCES   += experiment.qrc

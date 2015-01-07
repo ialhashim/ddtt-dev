@@ -121,7 +121,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
-	double cost_threshold = 0.5;
+	double cost_threshold = 0.3;
 	int k_top_candidates = 5;
 
 	/// Suggest for next unassigned:
@@ -342,6 +342,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto snode = shapeA->getNode(la.front());
 		Array2D_Vector3 surface_cpts(4, snode->controlPoints());
 		auto snode_sheet = new Structure::Sheet(NURBS::NURBSRectangled::createSheetFromPoints(surface_cpts), snode->id);
+		snode_sheet->property["mesh"].setValue(snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >());
 
 		// Replace curve with a squashed sheet
 		shapeA->nodes.replace(shapeA->nodes.indexOf(snode), snode_sheet);
@@ -467,6 +468,9 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		&& shapeA->getNode(la.front())->type() == Structure::SHEET
 		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
 	{
+		auto snode = shapeA->getNode(la.front());
+		snode->property["isSplit"].setValue(true);
+
 		QString newnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
 
 		lb.clear();

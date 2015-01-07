@@ -2,6 +2,10 @@
 
 #include "hausdorff.h"
 
+#include "helpers/PhysicsHelper.h"
+
+int EvaluateCorrespondence::numSamples = 3;
+
 Array1D_Vector3 coupledNormals(Structure::Link * l){
 	Array1D_Vector3 normals;
 	Eigen::Vector4d c1(0,0,0,0), c2(1,1,0,0), midc(0.5,0.5,0,0);
@@ -36,15 +40,15 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * s
 
 Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution)
 {
-	double sampleDensity = 1.0 / 5;
-
-	if (resolution == 0) resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * sampleDensity;
+	// Auto-set resolution when asked
+	if (resolution == 0) 
+		resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * (1.0 / numSamples);
 
 	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
 
 	// Special case: degenerate sheet
 	if (n->type() == Structure::SHEET && samples_coords.empty()){
-		double step = sampleDensity;
+		double step = 1.0 / numSamples;
 		for (double u = 0; u <= 1.0; u += step){
 			Array1D_Vector4d row;
 			for (double v = 0; v <= 1.0; v += step)
@@ -60,6 +64,21 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 		n->property["orig_diagonal"].setValue(n->diagonal());
 		n->property["orig_start"].setValue(n->startPoint());
 		n->property["orig_length"].setValue(n->length());
+
+		// Volume
+		double volume = 0.0;
+		auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+		if (mesh->property("volume").isValid())
+		{
+			volume = mesh->property("volume").toDouble();
+		}
+		else
+		{
+			volume = PhysicsHelper(mesh.data()).volume();
+			mesh->setProperty("volume", volume);
+		}
+			
+		n->property["orig_volume"].setValue(volume);
 	}
 
 	return samples_coords;
@@ -71,8 +90,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	for (auto n : shape->nodes) sum_length += n->area();
 	double avg_length = sum_length / shape->nodes.size();
 
-	int density_count = 3;
-	double resolution = avg_length / density_count;
+	double resolution = avg_length / numSamples;
 
 	shape->property["sampling_resolution"].setValue(resolution);
 
@@ -244,22 +262,59 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
+		/*double split_weight = 1.0;
+		{
+			auto volumeRatio = [&](Structure::Node * n){
+				double ratio = 1.0;
+
+				if (n->property["isSplit"].toBool())
+				{
+					double partVolume = n->property["orig_volume"].toDouble();
+
+					QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
+					double targetVolume = 0.0;
+					for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->property["orig_volume"].toDouble();
+
+					ratio = std::min(partVolume, targetVolume) / std::max(partVolume, targetVolume);
+				}
+				if (n->property["isMerged"].toBool())
+				{
+					double targetVolume = targetShape->getNode(searchNode->mapping[n->id])->property["orig_volume"].toDouble();
+
+					QStringList sourceIDs = n->property["groupParts"].toStringList();
+					double sourceVolume = 0.0;
+					for (auto partID : sourceIDs)
+					{
+						auto nj = shape->getNode(partID);
+						sourceVolume += nj->property["orig_volume"].toDouble();
+					}
+
+					ratio = std::min(targetVolume, sourceVolume) / std::max(targetVolume, sourceVolume);
+				}
+				return ratio;
+			};
+
+			split_weight = std::min(1.0, std::max(0.0, std::min(volumeRatio(l->n1), volumeRatio(l->n2))) );
+		}*/
+
+		/// (b) Geometric: scale by geometric (topological?) similarity
 		double split_weight = 1.0;
 		{
 			auto fixedNodeChangedType = [&](Structure::Node * n){
 				bool isFixedAlready = searchNode->mapping.contains(n->id);
 				if (!isFixedAlready) return false;
 				if (targetShape->getNode(searchNode->mapping[n->id])){
-					if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type()) 
+					if (n->type() == targetShape->getNode(searchNode->mapping[n->id])->type())
 						return false;
-				} else return false;
+				}
+				else return false;
 				return true;
 			};
 
 			auto isTopologyChange = [&](Structure::Node * n){
 				return n->property["isSplit"].toBool() || n->property["isMerged"].toBool();
 			};
-			
+
 			auto ratio = [&](Structure::Node * n){
 				if (fixedNodeChangedType(n) || isTopologyChange(n)){
 					double rs = 1.0 / shape->relationOf(n->id).parts.size();
@@ -269,7 +324,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 				return 0.0;
 			};
 
-			double r = std::max( ratio(l->n1), ratio(l->n2) );
+			double r = std::max(ratio(l->n1), ratio(l->n2));
 			split_weight = 1.0 - r;
 		}
 

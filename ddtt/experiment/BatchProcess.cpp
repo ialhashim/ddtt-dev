@@ -26,6 +26,7 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 	pd->show();
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
     pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
+	pd->connect(this, SIGNAL(setLabelText(QString)), SLOT(setLabelText(QString)));
 }
 
 void BatchProcess::run()
@@ -75,7 +76,7 @@ void BatchProcess::run()
 			title = splitTitle.size() > 1 ? splitTitle.back() + "-" + splitTitle.front() : title;
 		}
 
-		pd->setLabelText(QString("Corresponding: %1...").arg(title));
+		emit(setLabelText(QString("Corresponding: %1...").arg(title)));
 
 		/// Initial Assignments:
 		Energy::Assignments assignments;

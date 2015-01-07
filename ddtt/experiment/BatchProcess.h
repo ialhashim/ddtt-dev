@@ -40,6 +40,7 @@ signals:
 	void jobFinished(int);
 	void allJobsFinished();
 	void reportMessage(QString,double);
+	void setLabelText(QString);
 };
 
 // Utility:

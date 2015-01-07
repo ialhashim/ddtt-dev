@@ -194,7 +194,14 @@ SurfaceMesh::Vector3 StructureAnalysis::pointReflection(const Vector3 & p, const
 
 void StructureAnalysis::removeFromGroups(Structure::ShapeGraph * shape, Structure::Node * node)
 {
-	for (auto & r : shape->relations) r.parts.removeAll(node->id);
+	for (auto & r : shape->relations)
+	{
+		QStringList origParts = r.parts;
+
+		int removeCount = r.parts.removeAll(node->id);
+
+		if (removeCount) node->property["groupParts"].setValue(origParts);
+	}
 }
 
 void StructureAnalysis::updateRelation(Structure::ShapeGraph * shape, Structure::Relation & r)
