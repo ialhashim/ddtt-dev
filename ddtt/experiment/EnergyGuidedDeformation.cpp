@@ -391,7 +391,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			coords << qMakePair(c1, c2);
 
 			snode->property["isMerged"].setValue(true);
-			snode->property["groupParts"].setValue(la);
 		}
 
 		// Should give a nice enough alignment

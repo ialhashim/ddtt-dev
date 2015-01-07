@@ -4,7 +4,9 @@
 
 #include "helpers/PhysicsHelper.h"
 
-int EvaluateCorrespondence::numSamples = 3;
+#include "convexhull.h"
+
+int EvaluateCorrespondence::numSamples = 5;
 
 Array1D_Vector3 coupledNormals(Structure::Link * l){
 	Array1D_Vector3 normals;
@@ -69,15 +71,11 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 		double volume = 0.0;
 		auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
 		if (mesh->property("volume").isValid())
-		{
 			volume = mesh->property("volume").toDouble();
-		}
-		else
-		{
+		else{
 			volume = PhysicsHelper(mesh.data()).volume();
 			mesh->setProperty("volume", volume);
 		}
-			
 		n->property["orig_volume"].setValue(volume);
 	}
 
@@ -87,7 +85,7 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 {
 	double sum_length = 0;
-	for (auto n : shape->nodes) sum_length += n->area();
+	for (auto n : shape->nodes) sum_length += n->length();
 	double avg_length = sum_length / shape->nodes.size();
 
 	double resolution = avg_length / numSamples;
@@ -102,6 +100,29 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	{
 		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(shape, l));
 		l->property["orig_centroid_dir"].setValue(Vector3((l->n1->center() - l->n2->center()).normalized()));
+	}
+
+	for (auto r : shape->relations)
+	{
+		if (r.parts.size() == 1)
+			for (auto partID : r.parts) 
+				shape->getNode(partID)->property["solidity"].setValue(1.0);
+		else
+		{
+			std::vector<Vector3> pts;
+			double sum_volume = 0.0;
+			for (auto partID : r.parts){
+				auto n = shape->getNode(partID);
+				auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				for (auto v : mesh->vertices()) pts.push_back( mesh->vertex_coordinates()[v] );
+				sum_volume += n->property["orig_volume"].toDouble();
+			}
+			ConvexHull<Vector3> chull(pts);
+			double solidity = chull.solidity(sum_volume);
+			
+			for (auto partID : r.parts)
+				shape->getNode(partID)->property["solidity"].setValue(solidity);
+		}
 	}
 }
 
@@ -262,7 +283,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
-		double split_weight = 1.0;
+		/*double split_weight = 1.0;
 		{
 			auto volumeRatio = [&](Structure::Node * n){
 				double ratio = 1.0;
@@ -300,6 +321,26 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			};
 
 			split_weight = std::min(volumeRatio(l->n1), volumeRatio(l->n2));
+		}*/
+
+		double split_weight = 1.0;
+		{
+			auto ratio = [&](Structure::Node * n){
+				double ratio = 1.0;
+
+				if (n->property["isSplit"].toBool() || n->property["isMerged"].toBool())
+				{
+					double before_ratio = n->property["solidity"].toDouble();
+					double after_ratio = targetShape->getNode(searchNode->mapping[n->id])->property["solidity"].toDouble();
+
+					ratio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
+				}
+
+				return ratio;
+			};
+
+			double squeezed = 0.2 * std::min(ratio(l->n1), ratio(l->n2));
+			split_weight = 0.8 + squeezed;
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity

@@ -141,6 +141,9 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		// Add relation to shape:
 		shape->relations.push_back(r);
 
+		for (auto partID : r.parts)
+			shape->getNode(partID)->property["groupParts"].setValue(r.parts);
+
 		// Visualize:
 		if (isDebug)
 		{
@@ -195,13 +198,7 @@ SurfaceMesh::Vector3 StructureAnalysis::pointReflection(const Vector3 & p, const
 void StructureAnalysis::removeFromGroups(Structure::ShapeGraph * shape, Structure::Node * node)
 {
 	for (auto & r : shape->relations)
-	{
-		QStringList origParts = r.parts;
-
-		int removeCount = r.parts.removeAll(node->id);
-
-		if (removeCount) node->property["groupParts"].setValue(origParts);
-	}
+		r.parts.removeAll(node->id);
 }
 
 void StructureAnalysis::updateRelation(Structure::ShapeGraph * shape, Structure::Relation & r)

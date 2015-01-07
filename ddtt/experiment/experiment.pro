@@ -1,6 +1,7 @@
 include($$[STARLAB])
 include($$[SURFACEMESH])
 include($$[NANOFLANN])
+include($$[QHULL])
 StarlabTemplate(plugin)
 
 # Build flag
@@ -27,7 +28,8 @@ HEADERS +=  experiment.h \
             PropagateSymmetry.h \
             EvaluateCorrespondence.h \
             BatchProcess.h \
-            ComputeApproxMVBB.h
+            ComputeApproxMVBB.h \
+            convexhull.h
 
 SOURCES +=  experiment.cpp \
             experiment-widget.cpp \
