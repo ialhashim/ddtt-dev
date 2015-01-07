@@ -2,6 +2,7 @@
 
 #include "SurfaceMeshPlugins.h"
 #include "interfaces/ModePluginDockWidget.h"
+#include "Scene.h"
 
 class SymRelationViz: public SurfaceMeshModePlugin{
     Q_OBJECT
@@ -28,6 +29,14 @@ public:
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;
 
+	/// @{ Access to properties
+public:
+	using StarlabPlugin::drawArea;
+	/// @}    
+
+	Scene m_scene;
+
 public slots:
+	void changeScale(double ds);
 
 };
