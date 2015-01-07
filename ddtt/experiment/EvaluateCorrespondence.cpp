@@ -262,46 +262,48 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
-		/*double split_weight = 1.0;
+		double split_weight = 1.0;
 		{
-		auto volumeRatio = [&](Structure::Node * n){
-			double ratio = 1.0;
+			auto volumeRatio = [&](Structure::Node * n){
+				double ratio = 1.0;
 
-			QString propertyName = "orig_volume";
-
-			if (n->property["isSplit"].toBool())
-			{
-				double partVolume = n->property[propertyName].toDouble();
-
-				QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
-				double targetVolume = 0.0;
-				for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->property[propertyName].toDouble();
-
-				ratio = targetVolume / std::max(partVolume, targetVolume);
-			}
-			if (n->property["isMerged"].toBool())
-			{
-				auto targetNode = targetShape->getNode(searchNode->mapping[n->id]);
-				double targetVolume = targetNode->property[propertyName].toDouble();
-
-				QStringList sourceIDs = n->property["groupParts"].toStringList();
-				double sourceVolume = 0.0;
-				for (auto partID : sourceIDs)
+				if (!n->property["isManyMany"].toBool())
 				{
-					auto nj = shape->getNode(partID);
-					sourceVolume += nj->property[propertyName].toDouble();
+					if (n->property["isSplit"].toBool())
+					{
+						double partVolume = n->length();
+
+						QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
+						double targetVolume = 0.0;
+						for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->length();
+
+						ratio = targetVolume / std::max(partVolume, targetVolume);
+					}
+					if (n->property["isMerged"].toBool())
+					{
+						auto targetNode = targetShape->getNode(searchNode->mapping[n->id]);
+						double targetVolume = targetNode->length();
+
+						QStringList sourceIDs = n->property["groupParts"].toStringList();
+						double sourceVolume = 0.0;
+						for (auto partID : sourceIDs)
+						{
+							auto nj = shape->getNode(partID);
+							sourceVolume += nj->length();
+						}
+
+						ratio = sourceVolume / std::max(targetVolume, sourceVolume);
+					}
 				}
 
-				ratio = sourceVolume / std::max(targetVolume, sourceVolume);
-			}
-			return ratio;
-		};
+				return ratio;
+			};
 
-			split_weight = std::min(1.0, std::max(0.0, std::min(volumeRatio(l->n1), volumeRatio(l->n2))) );
-		}*/
+			split_weight = std::min(volumeRatio(l->n1), volumeRatio(l->n2));
+		}
 
 		/// (b) Geometric: scale by geometric (topological?) similarity
-		double split_weight = 1.0;
+		/*double split_weight = 1.0;
 		{
 			auto ratio = [&](Structure::Node * n){
 				if (n->property["isSplit"].toBool() || n->property["isMerged"].toBool()){
@@ -314,7 +316,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 			double r = std::max(ratio(l->n1), ratio(l->n2));
 			split_weight = 1.0 - r;
-		}
+		}*/
 
 		QVector < double > link_vector;
 

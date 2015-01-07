@@ -330,6 +330,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 				auto partA = shapeA->getNode(partID);
 				QString situation = la_set.size() > lb_set.size() ? "isMerged" : "isSplit";
 				partA->property[situation].setValue(true);
+				partA->property["isManyMany"].setValue(true);
 			}
 		}
 	}
