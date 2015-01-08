@@ -28,7 +28,8 @@ public:
     SymRelationViz() : widget(NULL), dockwidget(NULL) {}
     QWidget * widget;
 	ModePluginDockWidget * dockwidget;
-
+private:
+	void buildModelTree();
 	/// @{ Access to properties
 public:
 	using StarlabPlugin::drawArea;
@@ -39,5 +40,5 @@ public:
 public slots:
 	void changeScale(double ds);
 	void changePtSize(double ds);
-
+	void changeModelOrPart(QTreeWidgetItem *item, int colNo);
 };

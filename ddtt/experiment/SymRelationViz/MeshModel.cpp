@@ -138,7 +138,7 @@ bool modded_read_obj(SurfaceMeshModel& mesh, const std::string& filename){
 	return true;
 }
 
-MeshModel::MeshModel() : m_mesh(0)
+MeshModel::MeshModel() : m_currentPartNo(-1),m_mesh(0)
 {
 	
 }
@@ -178,9 +178,11 @@ void MeshModel::loadObj(const QString &filename)
 	if (!m_mesh->has_vertex_normals())
 		h.compute_vertex_normals();
 }
-void MeshModel::loadParts(const QString &pathname)
+void MeshModel::loadParts(const QString &rootPathname, const QString &modelname)
 {
-	QDir dir(pathname);
+	m_name = modelname;
+
+	QDir dir(rootPathname + m_name);
 	if (!dir.exists())
 	{
 		return;
@@ -202,7 +204,58 @@ void MeshModel::loadParts(const QString &pathname)
 	}
 
 }
-void MeshModel::buildDisplayList(double ptSize)
+void MeshModel::setCurrentPartNo(int partNo)
+{
+	m_currentPartNo = partNo;
+}
+void MeshModel::loadCorrespondence(const QString& matchPathname, int startNo)
+{
+	QDir dir(matchPathname);
+	QString str = QString::number(startNo);
+	QStringList filters;
+	filters << str + "_*.txt";
+	dir.setNameFilters(filters);
+	dir.setSorting(QDir::Name);
+
+	m_matches.clear();
+	m_matchColIDs.clear();
+
+	QFileInfoList list = dir.entryInfoList();
+	for (int i = 0; i < list.size(); ++i)
+	{
+		if (i == startNo) continue;
+
+		m_matchColIDs.push_back(i);
+
+		QFileInfo file_info = list.at(i);
+		QVector<int> match;
+		parsePairwiseMatches(file_info.absoluteFilePath(), match);
+		m_matches.push_back(match);
+	}
+}
+void MeshModel::parsePairwiseMatches(const QString& filename, QVector<int>& match)
+{
+	QFile file(filename);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+	{
+		QString str("can't open ");
+		str.append(filename);
+		QMessageBox::warning(0, "Warnning", str, QMessageBox::Yes);
+		return;
+	}
+	match.clear();
+
+	QTextStream in(&file);
+	int i, j; float p;
+	while (!in.atEnd())
+	{
+		in >> i >> j >> p;
+		match.push_back(j);
+	}
+
+	file.close();
+}
+void MeshModel::buildDisplayList(double ptSize, bool isDrawBBox)
 {
 	if (glIsList(m_displayListID))
 	{
@@ -214,10 +267,42 @@ void MeshModel::buildDisplayList(double ptSize)
 	QColor m(128, 128, 128, 50);
 	glNewList(m_displayListID, GL_COMPILE);
 	QuickMeshDraw::drawMeshSolid(m_mesh, m);
-	for (int i = 0; i < m_parts.size(); ++i)
+
+	//////////////
+	//if (isDrawBBox)
+	//{
+	//	QColor b(0, 255, 0, 50);
+	//	QuickMeshDraw::drawAABBox(m_mesh->bbox(), b);
+	//}
+
+	////////////
+	if (m_currentPartNo == -1)
 	{
-		QuickPointsDraw::drawPoints(m_parts[i], ptSize, qRandomColor());
+		for (int i = 0; i < m_parts.size(); ++i)
+		{
+			QuickPointsDraw::drawPoints(m_parts[i], ptSize, qRandomColor());
+		}
 	}
+	else
+	{
+		QColor p;
+		for (int i = 0; i < m_parts.size(); ++i)
+		{
+			if (m_currentPartNo == i)
+			{
+				if (isDrawBBox)
+					p = QColor(255, 0, 0, 255);
+				else
+					p = QColor(255, 255, 0, 255);
+			}
+			else
+			{
+				p = QColor(125, 125, 125, 255);
+			}
+			QuickPointsDraw::drawPoints(m_parts[i], ptSize, p);
+		}
+	}
+
 	glEndList();
 }
 void MeshModel::draw()
@@ -259,6 +344,8 @@ void MeshModel::normalization(double scale)
 				(pt.z() - z) * rs);
 		}
 	}
+
+	m_mesh->updateBoundingBox();
 }
 void MeshModel::translate(double x, double y, double z)
 {
@@ -278,4 +365,6 @@ void MeshModel::translate(double x, double y, double z)
 			pt = Eigen::Vector3d(pt.x() + x, pt.y() + y, pt.z() + z);
 		}
 	}
+
+	m_mesh->updateBoundingBox();
 }
