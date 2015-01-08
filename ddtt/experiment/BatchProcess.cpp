@@ -1,6 +1,11 @@
 ﻿#include "BatchProcess.h"
 #include "myglobals.h"
-#include <QCoreApplication>
+#include <QGuiApplication>
+#include <QApplication>
+#include <QGridLayout>
+#include <QPushButton>
+#include <QDialogButtonBox>
+#include <QListWidget>
 #include <QMatrix4x4>
 #include "EncodeDecodeGeometry.h"
 
@@ -9,48 +14,100 @@
 Structure::ShapeGraph *shapeA, *shapeB;
 static QVector<QColor> myrndcolors = rndColors2(100);
 
+QDialog * dialog = nullptr;
+BatchProcess * bp = nullptr;
+
 BatchProcess::BatchProcess(QString filename) : filename(filename)
 {
+	bp = this;
+
 	// Clean up my self
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
 
 	// Rendering	
 	renderer = new RenderingWidget(512, NULL);
 	renderer->move(0, 0);
-	renderer->show();
     renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 
 	// Progress
 	pd = new QProgressDialog("Searching..", "Cancel", 0, 0);
 	pd->setValue(0);
-	pd->show();
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
     pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 	pd->connect(this, SIGNAL(setLabelText(QString)), SLOT(setLabelText(QString)));
+
+	// Load job's data
+	{
+		QFile file;
+		file.setFileName(filename);
+		if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+		QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
+		auto json = jdoc.object();
+
+		resultsCount = json["resultsCount"].toInt();
+		outputPath = json["outputPath"].toString();
+		isSwapped = json["isSwap"].toBool();
+		isSaveReport = json["isSaveReport"].toBool();
+		thumbWidth = std::max(256, json["thumbWidth"].toInt());
+		jobsArray = json["jobs"].toArray();
+
+		// Clear past results in output folder
+		QDir d(""); d.mkpath(outputPath);
+		QDir dir(outputPath);
+		for (auto filename : dir.entryList(QDir::Files))
+			if (filename.endsWith(".png") || filename.endsWith(".txt"))
+				dir.remove(dir.absolutePath() + "/" + filename);
+	}
+
+	// Selective jobs dialog
+	if (QGuiApplication::queryKeyboardModifiers().testFlag(Qt::ShiftModifier))
+	{
+		dialog = new QDialog;
+		dialog->setWindowTitle("Select jobs");
+		dialog->setModal(true);
+		QDialogButtonBox * box = new QDialogButtonBox(Qt::Horizontal);
+		auto mainLayout = new QGridLayout;
+		auto button = new QPushButton("OK");
+		button->setDefault(true);
+		box->addButton(button, QDialogButtonBox::AcceptRole);
+		mainLayout->addWidget(box, 1, 0);
+		dialog->setLayout(mainLayout);
+		dialog->connect(box, SIGNAL(accepted()), SLOT(accept()));
+		dialog->setAttribute(Qt::WA_DeleteOnClose);
+
+		// List jobs
+		QListWidget * list = new QListWidget;
+		for (auto & j : jobsArray){
+			auto job = j.toObject(); if (job.isEmpty()) continue;
+			QListWidgetItem* item = new QListWidgetItem(job["title"].toString(), list);
+			item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+			item->setCheckState(Qt::Unchecked);
+			item->setData(Qt::UserRole, job);
+		}
+		mainLayout->addWidget(list, 0, 0);
+
+		// Actions
+		dialog->connect(box, &QDialogButtonBox::accepted, [&]{
+			QJsonArray selectedJobs;
+			for (int row = 0; row < list->count(); row++){
+				QListWidgetItem *item = list->item(row);
+				if (item->checkState() == Qt::Checked) selectedJobs << item->data(Qt::UserRole).toJsonObject();
+			}
+			if (!selectedJobs.isEmpty()) bp->setJobsArray(selectedJobs);
+		});
+		dialog->connect(box, SIGNAL(accepted()), SLOT(accept()));
+
+		// Show
+		dialog->exec();
+	}	
+
+	// Show progress
+	pd->show();
+	renderer->show();
 }
 
 void BatchProcess::run()
 {
-	QFile file;
-	file.setFileName(filename);
-	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-	QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
-	auto json = jdoc.object();
-
-	int resultsCount = json["resultsCount"].toInt();
-	QString outputPath = json["outputPath"].toString();
-	auto jobsArray = json["jobs"].toArray();
-	bool isSwapped = json["isSwap"].toBool();
-	bool isSaveReport = json["isSaveReport"].toBool();
-	int thumbWidth = std::max(256, json["thumbWidth"].toInt());
-
-	// Clear past results in output folder
-	QDir d(""); d.mkpath(outputPath);
-	QDir dir(outputPath);
-	for (auto filename : dir.entryList(QDir::Files))
-		if (filename.endsWith(".png") || filename.endsWith(".txt"))
-			dir.remove(dir.absolutePath() + "/" + filename);
-		
 	QElapsedTimer allTimer; allTimer.start();
 	int allTime = 0;
 
@@ -258,25 +315,35 @@ void BatchProcess::run()
 				cur_solution_img = stitchImages(cur_solution_img, deformedImg);
 			}
 
-			cur_solution_img = drawText(QString("cost = %1").arg(cost), cur_solution_img);
-
-			img = stitchImages(img, cur_solution_img, true, 0);
-
 			// Details of solution if requested
 			if ( isSaveReport )
 			{
 				EvaluateCorrespondence::evaluate(selected_path);
 				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 				QStringList reportItems;
-				for (auto key : details.keys()) reportItems += key + " : " + details[key].toString();
+				for (auto key : details.keys())
+				{
+					auto detail = details[key].toString();
+
+					// Visualization
+					if (key == "zzShapeCost")
+						cur_solution_img = drawText(QString("[%1]").arg(detail), cur_solution_img, 12, cur_solution_img.height() - 20);
+
+					if (key == "zzShapeCost") key += QString("(%1)").arg(r);
+					reportItems += key + " : " + detail;
+				}
 				
+				// Record found correspondence
 				QString mapping;
 				for (auto key : selected_path->mapping.keys())
 					mapping += QString("(%1,%2) ").arg(key).arg(selected_path->mapping[key]);
 				reportItems += mapping;
-
 				jobReport[QString("solution-%1").arg(r)] = reportItems;
 			}
+
+			// Visualization
+			cur_solution_img = drawText(QString("s %2: cost = %1").arg(cost).arg(r), cur_solution_img);
+			img = stitchImages(img, cur_solution_img, true, 0);
 		}
 
 		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
@@ -341,6 +408,11 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	QFile saveFile(filename);
 	if (!saveFile.open(QIODevice::WriteOnly)) return;
 	saveFile.write(saveDoc.toJson());
+}
+
+void BatchProcess::setJobsArray(QJsonArray fromJobsArray)
+{
+	jobsArray = fromJobsArray;
 }
 
 QImage RenderingWidget::render(Structure::ShapeGraph * shape)
