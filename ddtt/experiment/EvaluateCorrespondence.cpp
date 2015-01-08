@@ -55,19 +55,6 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 		return samplesCoords;
 	};
 
-	// Auto-set resolution when asked
-	/*if (resolution == 0) 
-		resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * (1.0 / numSamples);
-
-	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
-
-	// Special case: degenerate sheet
-	if (n->type() == Structure::SHEET && samples_coords.empty())
-		samples_coords = regularSamples(numSamples, false);
-
-	if (samples_coords.size() < numSamples)
-		samples_coords = regularSamples(numSamples, true);*/
-
 	samples_coords = regularSamples(numSamples, n->type() != Structure::SHEET);
 
 	n->property["samples_coords"].setValue(samples_coords);
@@ -124,6 +111,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 		{
 			std::vector<Vector3> centers;
 			for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
+
 			auto line = best_line_from_points(centers);
 			Vector3 line_direction = line.second;
 			Vector3 line_start = line.first - (line_direction * 1000.0);
@@ -134,6 +122,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			{
 				auto n = shape->getNode(partID);
 				auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				mesh->updateBoundingBox();
 
 				QVector <double> part_projections;
 				for (auto v : mesh->vertices())
@@ -152,7 +141,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			double group_range = all_projections.back() - all_projections.front();
 
 			double filled = (min_part_range * r.parts.size());
-			double solidity = filled / group_range;
+			double solidity = std::min(0.9, std::max(0.0, filled / group_range));
 
 			for (auto partID : r.parts)
 				shape->getNode(partID)->property["solidity"].setValue(solidity);
@@ -321,7 +310,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
 			.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
 
-		// Avoid residency
+		// Avoid redundancy
 		if (isSeen[n->id]) continue;
 		for (auto pj : n->property["groupParts"].toStringList()) isSeen[pj] = true;
 
@@ -376,9 +365,6 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			// Bound: the original edge is broken beyond a certain point
 			v = std::max(0.0, v);
 
-			// Scaling
-			/*v *= connection_weight * split_weight*/;
-
 			link_vector << v;
 		}
 
@@ -389,7 +375,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		// Logging:
 		qSort(link_vector);
-		costMap[QString("L:") + l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3")
+		costMap[QString("L:") + l->id].setValue(QString("[%1, %2] w_conn = %3")
 			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight));
 	}
 
@@ -398,7 +384,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	double connection_cost = 1.0 - vectorSimilarity(connection_vector);
 
 	// Weights
-	double w_d = 1.0, w_s = 0.4, w_c = 0.6;
+	double w_d = 1.1, w_s = 0.4, w_c = 0.6;
 
 	// Normalize weights
 	double total_weights = w_d + w_s + w_c;

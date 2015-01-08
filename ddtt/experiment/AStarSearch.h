@@ -39,7 +39,7 @@ namespace AStar
 				return rmsd;
 			}
 
-			return 0.5 * double(unassigned.size()) / shapeA->nodes.size();
+			return 0.25 * double(unassigned.size()) / shapeA->nodes.size();
 		}
 
 		/* Actual cost (arc cost) */
@@ -71,7 +71,8 @@ namespace AStar
 		}
 	};
 
-	static inline std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, int num_solutions = 100)
+	static inline std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, 
+		int num_solutions = 100, unsigned int * steps = nullptr)
 	{
 		// Prepare shapes
 		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());
@@ -97,13 +98,14 @@ namespace AStar
 
 			astarsearch.SetStartAndGoalStates(startNode, startNode);
 
-			unsigned int SearchState;
 			unsigned int SearchSteps = 0;
+			if (!steps) steps = &SearchSteps;
+			unsigned int SearchState;
 
 			do
 			{
 				SearchState = astarsearch.SearchStep(num_solutions, max_open_set);
-				SearchSteps++;
+				(*steps)++;
 			} while (SearchState == AStarSearch<PathSearchNode>::SEARCH_STATE_SEARCHING);
 
 			// Convert to original type

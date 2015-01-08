@@ -183,9 +183,11 @@ void BatchProcess::run()
 		QElapsedTimer searchTimer; searchTimer.start();
 
 		bool isSearchAstar = true;
+		unsigned int numNodesSearched = 0;
+
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path, 100))
+			for (auto & solution : AStar::search(path, 100, &numNodesSearched))
 			{
 				egd.origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				egd.origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -204,6 +206,8 @@ void BatchProcess::run()
 			egd.searchAll(shapeA.data(), shapeB.data(), search_roots);
 
 			auto all_solutions = egd.solutions();
+			numNodesSearched = all_solutions.size();
+
 			for (auto s : all_solutions)
 			{
 				double cost = roundDecimal(s->energy, 2);
@@ -361,6 +365,7 @@ void BatchProcess::run()
 		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
 		int msgWidth = QFontMetrics(QFont()).width(msg) + 14;
 		img = drawText(msg, img, img.width() - msgWidth, 14);
+		img = drawText(QString("steps %1").arg(numNodesSearched), img, img.width() - msgWidth, 30);
 
 		auto output_file = QString("%1/%2.png").arg(outputPath).arg(title);
 		img.save(output_file);

@@ -122,7 +122,7 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
 	double cost_threshold = 0.3;
-	int k_top_candidates = 5;
+	int k_top_candidates = 6;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;
