@@ -38,5 +38,6 @@ public:
 
 public slots:
 	void changeScale(double ds);
+	void changePtSize(double ds);
 
 };

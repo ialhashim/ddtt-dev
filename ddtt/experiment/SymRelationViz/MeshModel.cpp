@@ -1,9 +1,12 @@
 #include "MeshModel.h"
 //#include "SurfaceMeshHelper.h"
 #include "SurfaceMeshNormalsHelper.h"
-
 #include "utility.h"
 #include "QuickMeshDraw.h"
+#include "QuickPointsDraw.h"
+#include <QDir>
+
+
 
 #define _unused(x) ((void)x)
 
@@ -139,14 +142,32 @@ MeshModel::MeshModel() : m_mesh(0)
 {
 	
 }
-
-
-MeshModel::~MeshModel()
+void MeshModel::clearMesh()
 {
 	if (m_mesh) delete m_mesh;
+	m_mesh = 0;
+}
+void MeshModel::clearParts()
+{
+	for (QVector<PointCloud*>::iterator it = m_parts.begin(); it != m_parts.end(); ++it)
+	{
+		delete *it;
+	}
+	m_parts.clear();
+}
+void MeshModel::clear()
+{
+	clearMesh();
+	clearParts();
+}
+MeshModel::~MeshModel()
+{
+	clear();
 }
 
-void MeshModel::loadObj(QString filename) {
+void MeshModel::loadObj(const QString &filename) 
+{
+	clearMesh();
 	m_mesh = new SurfaceMeshModel(filename);
 	modded_read_obj(*m_mesh, qPrintable(filename)); ///< ~copy/paste from Surface_mesh
 
@@ -157,8 +178,31 @@ void MeshModel::loadObj(QString filename) {
 	if (!m_mesh->has_vertex_normals())
 		h.compute_vertex_normals();
 }
+void MeshModel::loadParts(const QString &pathname)
+{
+	QDir dir(pathname);
+	if (!dir.exists())
+	{
+		return;
+	}
+	clearParts();
 
-void MeshModel::buildDisplayList()
+
+	QStringList filters;
+	filters << "*.pts";
+	dir.setNameFilters(filters);
+	dir.setSorting(QDir::Name);
+	QFileInfoList list = dir.entryInfoList();
+	for (int i = 0; i < list.size(); ++i)
+	{
+		QFileInfo file_info = list.at(i);
+		PointCloud* pts = new PointCloud();
+		pts->load(file_info.absoluteFilePath());
+		m_parts.push_back(pts);
+	}
+
+}
+void MeshModel::buildDisplayList(double ptSize)
 {
 	if (glIsList(m_displayListID))
 	{
@@ -167,10 +211,13 @@ void MeshModel::buildDisplayList()
 
 	m_displayListID = glGenLists(1);
 
-	QColor c(128, 128, 128, 255);
-	
+	QColor m(128, 128, 128, 50);
 	glNewList(m_displayListID, GL_COMPILE);
-	QuickMeshDraw::drawMeshSolid(m_mesh, c);
+	QuickMeshDraw::drawMeshSolid(m_mesh, m);
+	for (int i = 0; i < m_parts.size(); ++i)
+	{
+		QuickPointsDraw::drawPoints(m_parts[i], ptSize, qRandomColor());
+	}
 	glEndList();
 }
 void MeshModel::draw()
@@ -202,6 +249,16 @@ void MeshModel::normalization(double scale)
 		//points[vit] = points[vit];
 		//++i;
 	}
+
+	for (int i = 0; i < m_parts.size(); ++i)
+	{
+		for (int j = 0; j < m_parts[i]->size(); ++j)
+		{
+			Surface_mesh::Point & pt = m_parts[i]->points(j);
+			pt = Eigen::Vector3d((pt.x() - x) * rs, (pt.y() - y) * rs,
+				(pt.z() - z) * rs);
+		}
+	}
 }
 void MeshModel::translate(double x, double y, double z)
 {
@@ -211,5 +268,14 @@ void MeshModel::translate(double x, double y, double z)
 	for (vit = m_mesh->vertices_begin(); vit != vend; ++vit)
 	{
 		points[vit] = Eigen::Vector3d(points[vit].x() + x, points[vit].y() + y, points[vit].z()+z);
+	}
+
+	for (int i = 0; i < m_parts.size(); ++i)
+	{
+		for (int j = 0; j < m_parts[i]->size(); ++j)
+		{
+			Surface_mesh::Point & pt = m_parts[i]->points(j);
+			pt = Eigen::Vector3d(pt.x() + x, pt.y() + y, pt.z() + z);
+		}
 	}
 }

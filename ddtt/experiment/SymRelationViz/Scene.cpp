@@ -1,7 +1,8 @@
 #include "Scene.h"
 #include <cmath>
+#include <QDir>
 
-Scene::Scene() : m_modelScale(0.6)
+Scene::Scene() : m_modelScale(0.6), m_ptSize(10.0)
 {
 }
 
@@ -19,6 +20,24 @@ void Scene::clearScene()
 	m_modelList.clear();
 		
 }
+void Scene::loadConf(const QString filename)
+{
+	QFile file(filename);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+	{
+		QString str("can't open ");
+		str.append(filename);
+		QMessageBox::warning(0, "Warnning", str, QMessageBox::Yes);
+		return;
+	}
+
+	QTextStream in(&file);
+	m_name = in.readLine();
+	m_name = in.readLine(); // 2nd line
+	m_modelNum = in.readLine().toInt(); //3rd line
+
+	file.close();
+}
 void Scene::loadScene(const QString dirname)
 {
 	QDir dir(dirname);
@@ -26,31 +45,40 @@ void Scene::loadScene(const QString dirname)
 	{
 		return;
 	}
-	dir.setFilter(QDir::Files | QDir::NoSymLinks);
+
+	////////////////// parse the conf.txt
+	QString conf = dir.absolutePath();
+	conf.append("/exports/conf.txt");
+	loadConf(conf);
+	
+	////////////////////// parse 
+	QStringList filters;
+	filters << "*.obj";
+	dir.setNameFilters(filters);
+	dir.setSorting(QDir::Name);
 	QFileInfoList list = dir.entryInfoList();
 
-	int file_count = list.count();
-	if (file_count <= 0)
-	{
-		return;
-	}
-
-	QStringList string_list;
+	QString str = dir.absolutePath();
+	str.append("/exports/"); 
+	str.append(m_name); str.append("_");
 	for (int i = 0; i < list.size(); ++i)
 	{
 		QFileInfo file_info = list.at(i);
-		QString suffix = file_info.suffix();
-		if (QString::compare(suffix, QString("obj"), Qt::CaseInsensitive) == 0)
-		{
-			MeshModel *mm = new MeshModel();
-			mm->loadObj(file_info.absoluteFilePath());
-			//mm->normalization(m_modelScale);
-			mm->m_mesh->updateBoundingBox();
-			mm->m_mesh->update_face_normals();
-			mm->m_mesh->update_vertex_normals();
-			m_modelList.push_back(mm);
-		}
+		MeshModel *mm = new MeshModel();
+		mm->loadObj(file_info.absoluteFilePath());
+		//mm->normalization(m_modelScale);
+		mm->m_mesh->updateBoundingBox();
+		mm->m_mesh->update_face_normals();
+		mm->m_mesh->update_vertex_normals();
+
+		QString partFilename = str;
+		partFilename.append(QString::number(i));
+		mm->loadParts(partFilename);
+		m_modelList.push_back(mm);
 	}
+
+	if (m_modelNum != m_modelList.size())
+		QMessageBox::warning(0, "Warnning", "num of models are not equal with the num specified in the conf.txt", QMessageBox::Yes);
 }
 void Scene::layout()
 {
@@ -77,6 +105,6 @@ void Scene::buildModelDislayList()
 {
 	foreach(MeshModel *m, m_modelList)
 	{
-		m->buildDisplayList();
+		m->buildDisplayList(m_ptSize);
 	}
 }

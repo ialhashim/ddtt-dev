@@ -12,6 +12,11 @@ void SymRelationViz::changeScale(double ds)
 	m_scene.layout();
 	m_scene.buildModelDislayList();
 }
+void SymRelationViz::changePtSize(double ds)
+{
+	m_scene.m_ptSize = ds;
+	m_scene.buildModelDislayList();
+}
 
 void SymRelationViz::create()
 {
@@ -42,8 +47,9 @@ void SymRelationViz::create()
 
 	// UI:
 	pw->ui->scaleSpinBox->setValue(m_scene.m_modelScale);
-	//m_scene.m_modelScale
+	pw->ui->ptSizeSpinBox->setValue(m_scene.m_ptSize);
 	connect(pw->ui->scaleSpinBox, SIGNAL(valueChanged(double)), this, SLOT(changeScale(double)));
+	connect(pw->ui->ptSizeSpinBox, SIGNAL(valueChanged(double)), this, SLOT(changePtSize(double)));
 
     connect(pw->ui->loadButton, &QPushButton::released, [&]{
         //auto files = QFileDialog::getOpenFileNames(mainWindow(), "");
