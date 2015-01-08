@@ -142,7 +142,11 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		shape->relations.push_back(r);
 
 		for (auto partID : r.parts)
-			shape->getNode(partID)->property["groupParts"].setValue(r.parts);
+		{
+			auto node = shape->getNode(partID);
+			node->property["groupParts"].setValue(r.parts);
+			if (r.type == Structure::Relation::ROTATIONAL) node->property["isRotational"].setValue(true);
+		}
 
 		// Visualize:
 		if (isDebug)

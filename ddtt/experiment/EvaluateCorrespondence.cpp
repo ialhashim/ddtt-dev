@@ -238,15 +238,56 @@ double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
 	return 0;
 }
 
+// Value of 1 means perfect matching to original shape, anything lower is bad
+double EvaluateCorrespondence::vectorSimilarity(QVector<double> & feature_vector)
+{
+	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
+	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
+
+	double v_norm = v.norm(), original_norm = original_v.norm();
+
+	double similarity = v_norm / original_norm;
+	return similarity;
+}
+
 double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
-	QVector<double> feature_vector;
-
 	auto shape = searchNode->shapeA.data();
 	auto targetShape = searchNode->shapeB.data();
 
 	// Logging
 	QVariantMap costMap;
+
+	QVector<double> distortion_vector, split_vector, connection_vector;
+
+	// Unary properties:
+	QMap<QString, double> split_weights;
+	for (auto n : shape->nodes)
+	{
+		double volumeRatio = 1.0;
+		double before_ratio = 1.0, after_ratio = 1.0;
+
+		// Skip split copies
+		if (n->id.contains("@")) continue;
+
+		bool isApplicable = !n->property["isRotational"].toBool() 
+			&& searchNode->mapping.contains(n->id)
+			&& n->property.contains("solidity");
+
+		if ( isApplicable && (n->property["isSplit"].toBool() || n->property["isMerged"].toBool()) )
+		{
+			before_ratio = n->property["solidity"].toDouble();
+			after_ratio = targetShape->getNode(searchNode->mapping[n->id])->property["solidity"].toDouble();
+		}
+
+		volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
+		split_weights[n->id] = volumeRatio;
+
+		costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
+			.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
+
+		split_vector << volumeRatio;
+	}
 
 	// Binary properties:
 	for (auto l : shape->edges)
@@ -280,85 +321,9 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			//}
 
 			connection_weight = std::min(connection_weight_near, connection_weight_far);
+
+			connection_vector << connection_weight;
 		}
-
-		/// (b) Geometric: scale by geometric (topological?) similarity
-		/*double split_weight = 1.0;
-		{
-			auto volumeRatio = [&](Structure::Node * n){
-				double ratio = 1.0;
-
-				if (!n->property["isManyMany"].toBool())
-				{
-					if (n->property["isSplit"].toBool())
-					{
-						double partVolume = n->length();
-
-						QStringList targetIDs = targetShape->relationOf(searchNode->mapping[n->id]).parts;
-						double targetVolume = 0.0;
-						for (auto tpartID : targetIDs) targetVolume += targetShape->getNode(tpartID)->length();
-
-						ratio = targetVolume / std::max(partVolume, targetVolume);
-					}
-					if (n->property["isMerged"].toBool())
-					{
-						auto targetNode = targetShape->getNode(searchNode->mapping[n->id]);
-						double targetVolume = targetNode->length();
-
-						QStringList sourceIDs = n->property["groupParts"].toStringList();
-						double sourceVolume = 0.0;
-						for (auto partID : sourceIDs)
-						{
-							auto nj = shape->getNode(partID);
-							sourceVolume += nj->length();
-						}
-
-						ratio = sourceVolume / std::max(targetVolume, sourceVolume);
-					}
-				}
-
-				return ratio;
-			};
-
-			split_weight = std::min(volumeRatio(l->n1), volumeRatio(l->n2));
-		}*/
-
-		double split_weight = 1.0;
-		{
-			auto ratio = [&](Structure::Node * n){
-				double ratio = 1.0;
-
-				if (n->property["isSplit"].toBool() || n->property["isMerged"].toBool())
-				{
-					double before_ratio = n->property["solidity"].toDouble();
-					double after_ratio = targetShape->getNode(searchNode->mapping[n->id])->property["solidity"].toDouble();
-
-					ratio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
-				}
-
-				return ratio;
-			};
-
-			double split_range = 0.3;
-			double squeezed = split_range * std::min(ratio(l->n1), ratio(l->n2));
-			split_weight = (1.0 - split_range) + squeezed;
-		}
-
-		/// (b) Geometric: scale by geometric (topological?) similarity
-		/*double split_weight = 1.0;
-		{
-			auto ratio = [&](Structure::Node * n){
-				if (n->property["isSplit"].toBool() || n->property["isMerged"].toBool()){
-					double rs = 1.0 / shape->relationOf(n->id).parts.size();
-					double rt = 1.0 / targetShape->relationOf(searchNode->mapping[n->id]).parts.size();
-					return rs == rt ? 0 : std::min(rs, rt);
-				}
-				return 0.0;
-			};
-
-			double r = std::max(ratio(l->n1), ratio(l->n2));
-			split_weight = 1.0 - r;
-		}*/
 
 		QVector < double > link_vector;
 
@@ -373,34 +338,34 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			v = std::max(0.0, v);
 
 			// Scaling
-			v *= connection_weight * split_weight;
+			/*v *= connection_weight * split_weight*/;
 
 			link_vector << v;
 		}
 
-		for (auto v : link_vector) feature_vector << v;
+		for (auto v : link_vector) distortion_vector << v;
 
 		double sum_link_vector = 0; for (auto v : link_vector) sum_link_vector += v;
 		double avg_link_vector = sum_link_vector / link_vector.size();
-		//feature_vector << avg_link_vector;
 
 		// Logging:
 		qSort(link_vector);
-		costMap[l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3 / w_geom = %4 / w_diverse = %5 / w_context = %7")
-			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight).arg(split_weight).arg(1).arg(avg_link_vector).arg(1));
+		costMap[QString("L:") + l->id].setValue(QString("[%1, %2, avg = %6] w_conn = %3")
+			.arg(link_vector.front()).arg(link_vector.back()).arg(connection_weight));
 	}
 
+	double distortion_cost = 1.0 - vectorSimilarity(distortion_vector);
+	double split_cost = 1.0 - vectorSimilarity(split_vector);
+	double connection_cost = 1.0 - vectorSimilarity(connection_vector);
+
+	double w_d = 1.0, w_s = 0.3, w_c = 0.5;
+
+	double total_cost = (w_d * distortion_cost) + (w_s * split_cost) + (w_c * connection_cost);
+
 	// Logging:
+	costMap["zzShapeCost"].setValue(QString("Total (%1) = Distortion (%2) + Split (%3) + Connection(%4)")
+		.arg(total_cost).arg(distortion_cost).arg(split_cost).arg(connection_cost));
 	shape->property["costs"].setValue(costMap);
 
-	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
-	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
-
-	double v_norm = v.norm(), original_norm = original_v.norm();
-
-	// Value of 1 means perfect matching to original shape, anything lower is bad
-	double similarity = v_norm / original_norm;
-	double cost = 1.0 - similarity;
-
-	return cost;
+	return total_cost;
 }
