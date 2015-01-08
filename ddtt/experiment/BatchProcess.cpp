@@ -17,7 +17,7 @@ static QVector<QColor> myrndcolors = rndColors2(100);
 QDialog * dialog = nullptr;
 BatchProcess * bp = nullptr;
 
-BatchProcess::BatchProcess(QString filename) : filename(filename)
+BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
 {
 	bp = this;
 
@@ -68,7 +68,9 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 		QDialogButtonBox * box = new QDialogButtonBox(Qt::Horizontal);
 		auto mainLayout = new QGridLayout;
 		auto button = new QPushButton("OK");
+		auto buttonSave = new QPushButton("Save selected..");
 		button->setDefault(true);
+		box->addButton(buttonSave, QDialogButtonBox::NoRole);
 		box->addButton(button, QDialogButtonBox::AcceptRole);
 		mainLayout->addWidget(box, 1, 0);
 		dialog->setLayout(mainLayout);
@@ -96,6 +98,16 @@ BatchProcess::BatchProcess(QString filename) : filename(filename)
 			if (!selectedJobs.isEmpty()) bp->setJobsArray(selectedJobs);
 		});
 		dialog->connect(box, SIGNAL(accepted()), SLOT(accept()));
+		dialog->connect(buttonSave, &QPushButton::clicked, [&]{
+			QJsonArray selectedJobs;
+			for (int row = 0; row < list->count(); row++){
+				QListWidgetItem *item = list->item(row);
+				if (item->checkState() == Qt::Checked) selectedJobs << item->data(Qt::UserRole).toJsonObject();
+			}
+			if (!selectedJobs.isEmpty()) bp->setJobsArray(selectedJobs);
+			bp->exportJobFile("currentJobs.json");
+			QMessageBox::information(0, "Save", "Jobs saved.");
+		});
 
 		// Show
 		dialog->exec();
@@ -392,8 +404,8 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	if (!json.contains("outputPath"))
 	{
 		json["outputPath"] = QString("outputPath");
-		json["resultsCount"] = 10;
-		json["isSaveReport"] = false;
+		json["resultsCount"] = 6;
+		json["isSaveReport"] = true;
 	}
 
 	auto jobs = json["jobs"].toArray();
@@ -403,6 +415,23 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	jobs.push_front(jj);
 
 	json["jobs"] = jobs;
+
+	QJsonDocument saveDoc(json);
+	QFile saveFile(filename);
+	if (!saveFile.open(QIODevice::WriteOnly)) return;
+	saveFile.write(saveDoc.toJson());
+}
+
+void BatchProcess::exportJobFile(QString filename)
+{
+	if (filename.isEmpty()) filename = jobfilename;
+
+	QJsonObject json;
+
+	json["outputPath"] = outputPath;
+	json["resultsCount"] = resultsCount;
+	json["isSaveReport"] = isSaveReport;
+	json["jobs"] = jobsArray;
 
 	QJsonDocument saveDoc(json);
 	QFile saveFile(filename);

@@ -36,9 +36,10 @@ public:
 	void run();
 
 	static void appendJob(QVariantMap job, QString filename);
+	void exportJobFile(QString filename);
 
 	// Job properties:
-	QString filename; 
+	QString jobfilename;
 	int resultsCount;
 	QString outputPath;
 	bool isSwapped;

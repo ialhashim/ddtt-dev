@@ -4,8 +4,6 @@
 
 #include "helpers/PhysicsHelper.h"
 
-#include "convexhull.h"
-
 int EvaluateCorrespondence::numSamples = 5;
 
 Array1D_Vector3 coupledNormals(Structure::Link * l){
@@ -42,22 +40,35 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * s
 
 Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution)
 {
+	Array2D_Vector4d samples_coords;
+
+	auto regularSamples = [&](int num_samples, bool isCurve){
+		Array2D_Vector4d samplesCoords;
+		double step = 1.0 / num_samples;
+		for (double u = 0; u <= 1.0; u += step){
+			Array1D_Vector4d row;
+			for (double v = 0; v <= 1.0; v += step)
+				row.push_back(Eigen::Vector4d(v, u, 0, 0));
+			samplesCoords.push_back(row);
+			if (isCurve) break;
+		}
+		return samplesCoords;
+	};
+
 	// Auto-set resolution when asked
-	if (resolution == 0) 
+	/*if (resolution == 0) 
 		resolution = ((n->type() == Structure::SHEET) ? n->length() / 4.0 : n->length()) * (1.0 / numSamples);
 
 	Array2D_Vector4d samples_coords = n->discretizedPoints(resolution);
 
 	// Special case: degenerate sheet
-	if (n->type() == Structure::SHEET && samples_coords.empty()){
-		double step = 1.0 / numSamples;
-		for (double u = 0; u <= 1.0; u += step){
-			Array1D_Vector4d row;
-			for (double v = 0; v <= 1.0; v += step)
-				row.push_back(Eigen::Vector4d(u, v, 0, 0));
-			samples_coords.push_back(row);
-		}
-	}
+	if (n->type() == Structure::SHEET && samples_coords.empty())
+		samples_coords = regularSamples(numSamples, false);
+
+	if (samples_coords.size() < numSamples)
+		samples_coords = regularSamples(numSamples, true);*/
+
+	samples_coords = regularSamples(numSamples, n->type() != Structure::SHEET);
 
 	n->property["samples_coords"].setValue(samples_coords);
 
@@ -104,22 +115,45 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 
 	for (auto r : shape->relations)
 	{
-		if (r.parts.size() == 1)
-			for (auto partID : r.parts) 
-				shape->getNode(partID)->property["solidity"].setValue(1.0);
-		else
+		// Default solidity is 1.0
+		for (auto partID : r.parts)
+			shape->getNode(partID)->property["solidity"].setValue(1.0);
+
+		// Compute solidity of non rotational groups
+		if (r.parts.size() > 1 && r.type != Structure::Relation::ROTATIONAL)
 		{
-			std::vector<Vector3> pts;
-			double sum_volume = 0.0;
-			for (auto partID : r.parts){
+			std::vector<Vector3> centers;
+			for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
+			auto line = best_line_from_points(centers);
+			Vector3 line_direction = line.second;
+			Vector3 line_start = line.first - (line_direction * 1000.0);
+
+			QVector <double> all_projections;
+			double min_part_range = DBL_MAX;
+			for (auto partID : r.parts)
+			{
 				auto n = shape->getNode(partID);
 				auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
-				for (auto v : mesh->vertices()) pts.push_back( mesh->vertex_coordinates()[v] );
-				sum_volume += n->property["orig_volume"].toDouble();
+
+				QVector <double> part_projections;
+				for (auto v : mesh->vertices())
+				{
+					double t = (mesh->vertex_coordinates()[v] - line_start).dot(line_direction);
+					part_projections << t;
+					all_projections << t;
+				}
+				qSort(part_projections);
+
+				part_projections.size();
+
+				min_part_range = std::min(min_part_range, part_projections.back() - part_projections.front());
 			}
-			ConvexHull<Vector3> chull(pts);
-			double solidity = chull.solidity(sum_volume);
-			
+			qSort(all_projections);
+			double group_range = all_projections.back() - all_projections.front();
+
+			double filled = (min_part_range * r.parts.size());
+			double solidity = filled / group_range;
+
 			for (auto partID : r.parts)
 				shape->getNode(partID)->property["solidity"].setValue(solidity);
 		}
@@ -262,6 +296,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 	// Unary properties:
 	QMap<QString, double> split_weights;
+	QMap<QString, bool> isSeen;
 	for (auto n : shape->nodes)
 	{
 		double volumeRatio = 1.0;
@@ -274,7 +309,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			&& searchNode->mapping.contains(n->id)
 			&& n->property.contains("solidity");
 
-		if ( isApplicable && (n->property["isSplit"].toBool() || n->property["isMerged"].toBool()) )
+		if ( isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/ )
 		{
 			before_ratio = n->property["solidity"].toDouble();
 			after_ratio = targetShape->getNode(searchNode->mapping[n->id])->property["solidity"].toDouble();
@@ -285,6 +320,10 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
 			.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
+
+		// Avoid residency
+		if (isSeen[n->id]) continue;
+		for (auto pj : n->property["groupParts"].toStringList()) isSeen[pj] = true;
 
 		split_vector << volumeRatio;
 	}
@@ -358,8 +397,14 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	double split_cost = 1.0 - vectorSimilarity(split_vector);
 	double connection_cost = 1.0 - vectorSimilarity(connection_vector);
 
-	double w_d = 1.0, w_s = 0.3, w_c = 0.5;
+	// Weights
+	double w_d = 1.0, w_s = 0.4, w_c = 0.6;
 
+	// Normalize weights
+	double total_weights = w_d + w_s + w_c;
+	w_d /= total_weights; w_s /= total_weights; w_c /= total_weights;
+
+	// Compute energy:
 	double total_cost = (w_d * distortion_cost) + (w_s * split_cost) + (w_c * connection_cost);
 
 	// Logging:

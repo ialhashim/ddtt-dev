@@ -398,7 +398,9 @@ namespace Structure
 			NURBS::NURBSRectangled sheet = NURBS::NURBSRectangled::createSheetFromPoints(transpose(cpnts));
 			Structure::Sheet * newSheet = new Structure::Sheet(sheet, nodeIDs.join(","));
 
-			return graph->addNode(newSheet)->id;
+			if (!graph->getNode(newSheet->id)) graph->addNode(newSheet);
+			
+			return newSheet->id;
 		}
 	};
 }
