@@ -29,10 +29,12 @@ class BatchProcess : public QThread
 	Q_OBJECT
 public:
     BatchProcess(QString filename);
+	BatchProcess(QString sourceFilename, QString targetFilename);
 
 	QProgressDialog * pd;
 	RenderingWidget * renderer;
 
+	void init();
 	void run();
 
 	static void appendJob(QVariantMap job, QString filename);

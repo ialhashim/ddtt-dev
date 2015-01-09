@@ -17,9 +17,16 @@ static QVector<QColor> myrndcolors = rndColors2(100);
 QDialog * dialog = nullptr;
 BatchProcess * bp = nullptr;
 
-BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
+void BatchProcess::init()
 {
 	bp = this;
+
+	// Default options
+	resultsCount = 6;
+	outputPath = "outputPath";
+	isSwapped = false;
+	isSaveReport = true;
+	thumbWidth = 256;
 
 	// Clean up my self
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
@@ -27,14 +34,23 @@ BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
 	// Rendering	
 	renderer = new RenderingWidget(512, NULL);
 	renderer->move(0, 0);
-    renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
+	renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 
 	// Progress
 	pd = new QProgressDialog("Searching..", "Cancel", 0, 0);
 	pd->setValue(0);
 	pd->connect(this, SIGNAL(jobFinished(int)), SLOT(setValue(int)));
-    pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
+	pd->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 	pd->connect(this, SIGNAL(setLabelText(QString)), SLOT(setLabelText(QString)));
+
+	// Show progress
+	pd->show();
+	renderer->show();
+}
+
+BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
+{
+	init();
 
 	// Load job's data
 	{
@@ -112,10 +128,6 @@ BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
 		// Show
 		dialog->exec();
 	}	
-
-	// Show progress
-	pd->show();
-	renderer->show();
 }
 
 void BatchProcess::run()
@@ -370,6 +382,8 @@ void BatchProcess::run()
 		auto output_file = QString("%1/%2.png").arg(outputPath).arg(title);
 		img.save(output_file);
 
+		std::cout << " Saving image: " << qPrintable(output_file);
+
 		if ( isSaveReport )
 		{
 			auto report_file = QString("%1/%2.txt").arg(outputPath).arg(title);
@@ -416,7 +430,6 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	auto jobs = json["jobs"].toArray();
 
 	auto jj = QJsonObject::fromVariantMap(job);
-	auto tt = jj.keys();
 	jobs.push_front(jj);
 
 	json["jobs"] = jobs;
@@ -543,4 +556,19 @@ void RenderingWidget::paintGL()
 RenderingWidget::RenderingWidget(int width, QWidget * parent) : cur_shape(NULL), QOpenGLWidget(parent)
 {
 	setFixedSize(QSize(width, width));
+}
+
+// All automatic option
+BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename)
+{
+	init();
+
+	QDir d(""); d.mkpath(outputPath);
+
+	QVariantMap job;
+	job["source"].setValue(sourceFilename);
+	job["target"].setValue(targetFilename);
+	job["title"].setValue(QFileInfo(sourceFilename).baseName() + "-" + QFileInfo(targetFilename).baseName());
+
+	jobsArray.push_back(QJsonObject::fromVariantMap(job));
 }
