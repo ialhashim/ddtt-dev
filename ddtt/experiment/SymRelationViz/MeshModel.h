@@ -18,6 +18,7 @@ public:
 	void translate(double x, double y, double z);
 	void draw();
 	void buildDisplayList(double ptSize=10.0, bool isDrawBBox=false);
+	void updateBBoxParts();
 private:
 	void clear();
 	void clearMesh();
@@ -26,6 +27,7 @@ public:
 	GLuint m_displayListID;
 	SurfaceMeshModel *m_mesh;
 	QVector<PointCloud*> m_parts;
+	Eigen::AlignedBox3d m_bboxParts;
 	int m_currentPartNo;
 	// a m_parts.size()*Scene.m_modelNum matrix, 
 	//each column is a set of correspondence between this model and the model represented by the column

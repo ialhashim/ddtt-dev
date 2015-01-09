@@ -39,3 +39,11 @@ void PointCloud::load(const QString &filename)
 
 	file.close();
 }
+void PointCloud::updateBoundingBox()
+{
+	m_bbox.setNull();
+	for (std::vector<SurfaceMesh::Point>::iterator it = m_points.begin(); it != m_points.end(); ++it)
+	{
+		m_bbox.extend(*it);
+	}
+}

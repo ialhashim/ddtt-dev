@@ -193,14 +193,16 @@ void MeshModel::loadParts(const QString &rootPathname, const QString &modelname)
 	QStringList filters;
 	filters << "*.pts";
 	dir.setNameFilters(filters);
-	dir.setSorting(QDir::Name);
+	//dir.setSorting(QDir::Name);
 	QFileInfoList list = dir.entryInfoList();
+	m_parts.resize(list.size());
 	for (int i = 0; i < list.size(); ++i)
 	{
 		QFileInfo file_info = list.at(i);
 		PointCloud* pts = new PointCloud();
 		pts->load(file_info.absoluteFilePath());
-		m_parts.push_back(pts);
+		int idx = file_info.baseName().toInt();
+		m_parts[idx] = pts;
 	}
 
 }
@@ -267,12 +269,14 @@ void MeshModel::buildDisplayList(double ptSize, bool isDrawBBox)
 	QColor m(128, 128, 128, 50);
 	glNewList(m_displayListID, GL_COMPILE);
 	QuickMeshDraw::drawMeshSolid(m_mesh, m);
+	
 
 	//////////////
 	//if (isDrawBBox)
 	//{
 	//	QColor b(0, 255, 0, 50);
 	//	QuickMeshDraw::drawAABBox(m_mesh->bbox(), b);
+	//QuickMeshDraw::drawAABBox(m_bboxParts, b);
 	//}
 
 	////////////
@@ -297,7 +301,7 @@ void MeshModel::buildDisplayList(double ptSize, bool isDrawBBox)
 			}
 			else
 			{
-				p = QColor(125, 125, 125, 255);
+				p = QColor(125, 125, 125, 50);
 			}
 			QuickPointsDraw::drawPoints(m_parts[i], ptSize, p);
 		}
@@ -335,17 +339,35 @@ void MeshModel::normalization(double scale)
 		//++i;
 	}
 
+	this->updateBBoxParts();
+	x = m_bboxParts.center().x();
+	y = m_bboxParts.center().y();
+	z = m_bboxParts.center().z();
+	double len1 = m_bboxParts.diagonal().norm();
+	rs = rs * len / len1;
 	for (int i = 0; i < m_parts.size(); ++i)
 	{
-		for (int j = 0; j < m_parts[i]->size(); ++j)
+		PointCloud* pc = m_parts[i];
+		for (int j = 0; j < pc->size(); ++j)
 		{
-			Surface_mesh::Point & pt = m_parts[i]->points(j);
+			Surface_mesh::Point & pt = pc->points(j);
 			pt = Eigen::Vector3d((pt.x() - x) * rs, (pt.y() - y) * rs,
 				(pt.z() - z) * rs);
 		}
 	}
 
 	m_mesh->updateBoundingBox();
+	this->updateBBoxParts();
+}
+void MeshModel::updateBBoxParts()
+{
+	m_bboxParts.setNull();
+	for (int i = 0; i < m_parts.size(); ++i)
+	{
+		PointCloud* pc = m_parts[i];
+		pc->updateBoundingBox();
+		m_bboxParts.extend(pc->bbox());
+	}
 }
 void MeshModel::translate(double x, double y, double z)
 {
@@ -359,12 +381,14 @@ void MeshModel::translate(double x, double y, double z)
 
 	for (int i = 0; i < m_parts.size(); ++i)
 	{
-		for (int j = 0; j < m_parts[i]->size(); ++j)
+		PointCloud* pc = m_parts[i];
+		for (int j = 0; j < pc->size(); ++j)
 		{
-			Surface_mesh::Point & pt = m_parts[i]->points(j);
+			Surface_mesh::Point & pt = pc->points(j);
 			pt = Eigen::Vector3d(pt.x() + x, pt.y() + y, pt.z() + z);
 		}
 	}
 
 	m_mesh->updateBoundingBox();
+	this->updateBBoxParts();
 }
