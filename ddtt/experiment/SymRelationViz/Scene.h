@@ -8,6 +8,7 @@ public:
 	~Scene();
 	void loadScene(const QString dirname);
 	void loadConf(const QString filename);
+	void setCurrentModelAndPart(int modelNo, int partNo);
 	void clearScene();
 	void draw();
 	void buildModelDislayList();
@@ -17,5 +18,7 @@ public:
 	double m_ptSize;
 	QString m_name;
 	int m_modelNum; // number of models == m_modelList.size(), but read from the conf.txt before m_modelList is constructed
+	int m_currentModelNo;
+	int m_currentPartNo;
 };
 

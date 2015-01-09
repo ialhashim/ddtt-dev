@@ -2,7 +2,7 @@
 #include <cmath>
 #include <QDir>
 
-Scene::Scene() : m_modelScale(0.6), m_ptSize(10.0)
+Scene::Scene() : m_currentModelNo(0), m_currentPartNo(-1), m_modelScale(0.6), m_ptSize(10.0)
 {
 }
 
@@ -58,22 +58,31 @@ void Scene::loadScene(const QString dirname)
 	dir.setSorting(QDir::Name);
 	QFileInfoList list = dir.entryInfoList();
 
-	QString str = dir.absolutePath();
-	str.append("/exports/"); 
-	str.append(m_name); str.append("_");
+	QString pathname = dir.absolutePath();
+	pathname.append("/exports/");
 	for (int i = 0; i < list.size(); ++i)
 	{
 		QFileInfo file_info = list.at(i);
 		MeshModel *mm = new MeshModel();
+
+		// load model
 		mm->loadObj(file_info.absoluteFilePath());
 		//mm->normalization(m_modelScale);
 		mm->m_mesh->updateBoundingBox();
 		mm->m_mesh->update_face_normals();
 		mm->m_mesh->update_vertex_normals();
 
-		QString partFilename = str;
-		partFilename.append(QString::number(i));
-		mm->loadParts(partFilename);
+		// load parts
+		QString modelname = m_name;
+		modelname.append("_");
+		modelname.append(QString::number(i));
+		mm->loadParts(pathname, modelname);
+
+		// load correspondence
+		QString matchPathname = pathname;
+		matchPathname.append("pairwise_matches/");
+		mm->loadCorrespondence(matchPathname,i);
+
 		m_modelList.push_back(mm);
 	}
 
@@ -103,8 +112,34 @@ void Scene::draw()
 }
 void Scene::buildModelDislayList()
 {
+	MeshModel *mm = this->m_modelList[m_currentModelNo];
+	QVector<QVector<int> >::iterator itor = mm->m_matches.begin();
+	int i(0);
 	foreach(MeshModel *m, m_modelList)
 	{
-		m->buildDisplayList(m_ptSize);
+		if (i == m_currentModelNo)
+		{
+			m->setCurrentPartNo(m_currentPartNo);
+		}
+		else
+		{
+			if (m_currentPartNo == -1)
+			{
+				m->setCurrentPartNo(m_currentPartNo);
+			}
+			else
+			{
+				QVector<int> match = *itor;
+				m->setCurrentPartNo(match[m_currentPartNo]);
+			}
+			++itor;
+		}
+		m->buildDisplayList(m_ptSize, i==m_currentModelNo);
+		++i;
 	}
+}
+void Scene::setCurrentModelAndPart(int modelNo, int partNo)
+{
+	m_currentModelNo = modelNo;
+	m_currentPartNo = partNo;
 }
