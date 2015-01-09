@@ -141,6 +141,17 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			double group_range = all_projections.back() - all_projections.front();
 
 			double filled = (min_part_range * r.parts.size());
+
+			// Special case: intersection
+			if (r.parts.size() == 2){
+				double dot_val = shape->getNode(r.parts.front())->diagonal().normalized()
+					.dot(shape->getNode(r.parts.back())->diagonal().normalized());
+				if (abs(dot_val) < 0.2){
+					auto mesh = shape->getNode(r.parts.front())->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+					filled = mesh->bbox().sizes().minCoeff();
+				}
+			}
+
 			double solidity = std::min(0.9, std::max(0.0, filled / group_range));
 
 			for (auto partID : r.parts)
