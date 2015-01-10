@@ -177,132 +177,159 @@ void experiment::doEnergySearch()
 
 	double timeElapsed = 0;
 
-	if (pw->ui->isLimitedSearch->isChecked())
+	qint64 timeUsed;
+	double leastCost;
+	bool isDP = true; //using dynamic programming
+	if (!isDP)
 	{
-		QMap <double, Energy::SearchNode> sorted_solutions;
-		QVector < QVector <Energy::SearchNode> > solution_vec;
 
-		for (auto & solution : AStar::search(path, 10))
+		if (pw->ui->isLimitedSearch->isChecked())
 		{
-			egd->origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
-			egd->origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+			QMap <double, Energy::SearchNode> sorted_solutions;
+			QVector < QVector <Energy::SearchNode> > solution_vec;
 
-			solution_vec.push_back(QVector<Energy::SearchNode>());
-			for (auto & state : solution) solution_vec.back() << state;
-			QVector<Energy::SearchNode*> ptrs;
-			for (auto & node : solution_vec.back()) ptrs << &node;
-			egd->applySearchPath(ptrs);
-			sorted_solutions[solution.back().energy] = solution_vec.back().back();
+			for (auto & solution : AStar::search(path, 10))
+			{
+				egd->origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+				egd->origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+
+				solution_vec.push_back(QVector<Energy::SearchNode>());
+				for (auto & state : solution) solution_vec.back() << state;
+				QVector<Energy::SearchNode*> ptrs;
+				for (auto & node : solution_vec.back()) ptrs << &node;
+				egd->applySearchPath(ptrs);
+				sorted_solutions[solution.back().energy] = solution_vec.back().back();
+			}
+
+			double cost = sorted_solutions.keys().at(0);
+
+			selected_path = new Energy::SearchNode(sorted_solutions[cost]);
+
+			timeElapsed = timer.elapsed();
 		}
+		else
+		{
+			search_roots << path;
 
-		double cost = sorted_solutions.keys().at(0);
+			// Explore path
+			egd->searchAll(graphs.front(), graphs.back(), search_roots);
 
-		selected_path = new Energy::SearchNode(sorted_solutions[cost]);
+			timeElapsed = timer.elapsed();
 
-		timeElapsed = timer.elapsed();
+			// Visualize search graph
+			{
+				exprmnt = this;
+
+				v = new Viewer;
+				v->show();
+
+				connect(v->wv, &QWebView::loadFinished, [&](){
+					v->addCSS(".source{color:red} .target{color:blue} .energy{color:#006400} .cost{color:gray} .children{color:gray}");
+
+					auto & path = *egd->searchTrees.front().begin();
+					int idx = v->addNode(pathToHtml(path));
+					Energy::SearchNode* path_ptr = &path;
+					v->nodeProperties[idx]["path"].setValue(path_ptr);
+
+					v->updateGraph();
+
+					connect(v, &Viewer::nodeSelected, [&](int nid){
+						auto node = v->nodeProperties[nid]["path"].value<Energy::SearchNode*>();
+						if (!node) return;
+
+						egd->applySearchPath(egd->getEntirePath(node));
+
+						selected_path = node;
+						exprmnt->setSearchPath(selected_path);
+
+						// Details of evaluation
+						double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
+						QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+
+						v->clearLogItems();
+						for (auto key : details.keys()) v->addLogItem(key + " : " + details[key].toString());
+
+						auto shape = node->shapeA;
+						if (!shape) return;
+						node->property["nid"].setValue(nid);
+
+						// Expand children
+						if (!v->nodeProperties[nid]["expanded"].toBool())
+						{
+							// Expand children
+							for (auto child : egd->childrenOf(selected_path))
+							{
+								int child_idx = v->addNode(pathToHtml(*child));
+								v->addEdge(nid, child_idx);
+								v->nodeProperties[child_idx]["path"].setValue(child);
+							}
+
+							v->updateGraph();
+							v->nodeProperties[nid]["expanded"].setValue(true);
+						}
+
+						exprmnt->drawArea()->update();
+					});
+				});
+
+				connect(v, &Viewer::goingToExpand, [&](){
+					auto toExpand = egd->getEntirePath(selected_path);
+
+					int nid = toExpand.front()->property["nid"].value<int>();
+
+					toExpand.removeFirst();
+
+					for (auto element : toExpand)
+					{
+						int child_nid = v->addNode(pathToHtml(*element));
+						v->addEdge(nid, child_nid);
+						v->nodeProperties[child_nid]["path"].setValue(element);
+
+						nid = child_nid;
+					}
+
+					v->updateGraph();
+				});
+			}
+
+			// Select least cost path
+			auto all_solutions = egd->solutions();
+			QList < QPair<double, Energy::SearchNode*> > solutions;
+			for (auto s : all_solutions) solutions << qMakePair(s->energy, s);
+			qSort(solutions.begin(), solutions.end());
+
+			auto entire_path = egd->getEntirePath(solutions.front().second);
+			egd->applySearchPath(entire_path);
+			selected_path = entire_path.back();
+
+			double cost = EvaluateCorrespondence::evaluate(selected_path);
+			mainWindow()->setStatusBarMessage(QString("cost = %2 - solutions %3").arg(cost).arg(solutions.size()));
+		}
+		mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timeElapsed));
+
+		setSearchPath( selected_path );
 	}
 	else
 	{
-		search_roots << path;
+		egd->searchDP(graphs.front(), graphs.back(), search_roots);
+		auto timeElapsed = timer.elapsed();
 
-		// Explore path
-		egd->searchAll(graphs.front(), graphs.back(), search_roots);
+		selected_path = &(search_roots.back());
+		setSearchPath(selected_path);
 
-		timeElapsed = timer.elapsed();
-
-		// Visualize search graph
-		{
-			exprmnt = this;
-
-			v = new Viewer;
-			v->show();
-
-			connect(v->wv, &QWebView::loadFinished, [&](){
-				v->addCSS(".source{color:red} .target{color:blue} .energy{color:#006400} .cost{color:gray} .children{color:gray}");
-
-				auto & path = *egd->searchTrees.front().begin();
-				int idx = v->addNode(pathToHtml(path));
-				Energy::SearchNode* path_ptr = &path;
-				v->nodeProperties[idx]["path"].setValue(path_ptr);
-
-				v->updateGraph();
-
-				connect(v, &Viewer::nodeSelected, [&](int nid){
-					auto node = v->nodeProperties[nid]["path"].value<Energy::SearchNode*>();
-					if (!node) return;
-
-					egd->applySearchPath(egd->getEntirePath(node));
-
-					selected_path = node;
-					exprmnt->setSearchPath(selected_path);
-
-					// Details of evaluation
-					double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
-					QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
-
-					v->clearLogItems();
-					for (auto key : details.keys()) v->addLogItem(key + " : " + details[key].toString());
-
-					auto shape = node->shapeA;
-					if (!shape) return;
-					node->property["nid"].setValue(nid);
-
-					// Expand children
-					if (!v->nodeProperties[nid]["expanded"].toBool())
-					{
-						// Expand children
-						for (auto child : egd->childrenOf(selected_path))
-						{
-							int child_idx = v->addNode(pathToHtml(*child));
-							v->addEdge(nid, child_idx);
-							v->nodeProperties[child_idx]["path"].setValue(child);
-						}
-
-						v->updateGraph();
-						v->nodeProperties[nid]["expanded"].setValue(true);
-					}
-
-					exprmnt->drawArea()->update();
-				});
-			});
-
-			connect(v, &Viewer::goingToExpand, [&](){
-				auto toExpand = egd->getEntirePath(selected_path);
-
-				int nid = toExpand.front()->property["nid"].value<int>();
-
-				toExpand.removeFirst();
-
-				for (auto element : toExpand)
-				{
-					int child_nid = v->addNode(pathToHtml(*element));
-					v->addEdge(nid, child_nid);
-					v->nodeProperties[child_nid]["path"].setValue(element);
-
-					nid = child_nid;
-				}
-
-				v->updateGraph();
-			});
-		}
-
-		// Select least cost path
-		auto all_solutions = egd->solutions();
-		QList < QPair<double, Energy::SearchNode*> > solutions;
-		for (auto s : all_solutions) solutions << qMakePair(s->energy, s);
-		qSort(solutions.begin(), solutions.end());
-
-		auto entire_path = egd->getEntirePath(solutions.front().second);
-		egd->applySearchPath(entire_path);
-		selected_path = entire_path.back();
+		QApplication::restoreOverrideCursor();
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
-		mainWindow()->setStatusBarMessage(QString("cost = %2 - solutions %3").arg(cost).arg(solutions.size()));
+
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(search_roots.back().energy));
+
+		timeUsed = timeElapsed;
+		leastCost = search_roots.back().energy;
+
+		QMessageBox tbox;
+		tbox.setText(QString("%1 ms - cost = %2").arg(timeUsed).arg(leastCost));
+		tbox.exec();
 	}
-
-	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timeElapsed));
-
-	setSearchPath( selected_path );
 
 	QApplication::restoreOverrideCursor();
 }

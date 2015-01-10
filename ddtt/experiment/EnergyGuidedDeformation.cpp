@@ -1,5 +1,6 @@
 #include <deque>
 #include <stack>
+#include <unordered_set>
 
 #include "EnergyGuidedDeformation.h"
 
@@ -698,4 +699,389 @@ void Energy::GuidedDeformation::applySearchPath(QVector<Energy::SearchNode*> pat
 
 		applyAssignment(p, true);
 	}
+}
+
+
+int scoringBySymh(std::vector<int>& symhA, int groupNumA, std::vector<int>& symhB, int groupNumB, std::vector<int>& groupsA, std::vector<int>& groupsB)
+{
+	std::vector<std::vector<int> > groupInds(groupNumA); //collecting groups
+	for (int i = 0; i < groupsA.size(); i++)
+		groupInds[symhA[groupsA[i]]].push_back(i);
+
+	unsigned scores = 0;
+	for (int i = 0; i < groupInds.size(); i++)
+	{
+		if (groupInds[i].size() < 2) continue;
+
+		int gsize = groupInds[i].size();
+		std::vector<int> counting(groupNumB, 0);
+		for (int j = 0; j < gsize; j++)
+			counting[symhB[groupsB[groupInds[i][j]]]] ++;
+
+		int maxG = *std::max_element(counting.begin(), counting.end());
+		if (maxG == gsize){
+			scores += (maxG - 1) * 2;
+
+			std::unordered_set<int> tnodes;
+			for (int j = 0; j < gsize; j++)
+				tnodes.insert(groupsB[groupInds[i][j]]);
+			scores -= gsize - tnodes.size();
+		}
+		else{
+			scores = -1;
+			break; //bad matching... well, only if we're confident about this case, 
+		}
+	}
+	return scores;
+}
+void Energy::GuidedDeformation::symhPruning(Energy::SearchNode & path, QVector < QPair<Structure::Relation, Structure::Relation> > & pairings, std::vector<int>& pairAward)
+{
+	if (!isInitTest){
+		//string to int == part name to part id map
+		for (int i = 0; i < (int)path.shapeA->relations.size(); i++)
+			for (auto r : path.shapeA->relations[i].parts)
+				nidMapA[r] = i;
+		for (int i = 0; i < (int)path.shapeB->relations.size(); i++)
+			for (auto r : path.shapeB->relations[i].parts)
+				nidMapB[r] = i;
+
+		//help manually grouping
+		// 		std::vector<std::string> partNamesA, partNamesB;
+		//  		for (int i = 0; i < (int)path.shapeA->relations.size(); i++)
+		// 			partNamesA.push_back(path.shapeA->relations[i].parts.first().toStdString());
+		//  		for (int i = 0; i < (int)path.shapeB->relations.size(); i++)
+		//  			partNamesB.push_back(path.shapeB->relations[i].parts.first().toStdString());
+		//for chair
+		// 		int inSymhA[] = { 0, 1, 0, 1 }; //just for test
+		// 		int inSymhB[] = { 1, 0, 1, 0, 0 };
+		// 		symhA.assign(inSymhA, inSymhA + 4);
+		// 		symhB.assign(inSymhB, inSymhB + 5);
+		//for cart
+// 		 		int inSymhA[] = { 0, 0, 0, 1, 1, 1, 1, 1 }; //just for test
+// 		 		int inSymhB[] = { 0, 0, 1, 1, 1, 1, 0 };
+// 		 		symhA.assign(inSymhA, inSymhA + 8);
+// 		 		symhB.assign(inSymhB, inSymhB + 7);
+		//for tricycle
+// 		 		int inSymhA[] = { 0, 1, 1, 2, 3, 1, 0, 3, 2, 3, 3, 0 };
+// 		 		int inSymhB[] = { 0, 0, 0, 1, 1, 1, 2, 3, 3, 3, 0, 2, 3, 3 }; //just for test
+// 		 		symhB.assign(inSymhA, inSymhA + 12);
+// 		 		symhA.assign(inSymhB, inSymhB + 14);
+
+		//random grouping
+// 		for (int i = 0; i < (int)nidMapA.size(); i++)
+// 			symhA.push_back((i) % 4);
+// 		for (int i = 0; i < (int)nidMapB.size(); i++)
+// 			symhB.push_back((i) % 4);
+
+		symhGroupSizeA = *std::max_element(symhA.begin(), symhA.end()) + 1;
+		symhGroupSizeB = *std::max_element(symhB.begin(), symhB.end()) + 1;
+
+		isInitTest = true;
+	}
+
+	//loading assigned pairs;
+	std::vector<int> groupsA, groupsB;
+	for (QMap<QString, QString>::iterator mapit = path.mapping.begin(); mapit != path.mapping.end(); ++mapit)
+	{
+		int  tkey = nidMapA[mapit.key()];
+		if (std::find(groupsA.begin(), groupsA.end(), tkey) == groupsA.end())
+		{
+			groupsA.push_back(tkey);
+			groupsB.push_back(nidMapB[mapit.value()]);
+		}
+	}
+
+#pragma omp parallel for
+	for (int r = 0; r < pairings.size(); r++)
+	{
+		std::vector<int> gA(groupsA.begin(), groupsA.end());
+		std::vector<int> gB(groupsB.begin(), groupsB.end());
+		gA.push_back(nidMapA[pairings[r].first.parts.first()]);
+		gB.push_back(nidMapB[pairings[r].second.parts.first()]);
+
+		pairAward[r] = std::min(
+			scoringBySymh(symhA, symhGroupSizeA, symhB, symhGroupSizeB, gA, gB),
+			scoringBySymh(symhB, symhGroupSizeB, symhA, symhGroupSizeA, gB, gA)
+			);
+	}
+
+	//only best mapping is kept
+	int maxAward = *std::max_element(pairAward.begin(), pairAward.end());
+	for (int i = 0; i < pairAward.size(); i++)
+		pairAward[i] -= maxAward;
+}
+void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors,
+	std::vector<double>& costs, std::vector<Energy::SearchNode>& res)
+{
+	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
+	for (auto & mirror : mirrors)
+		pairings.push_back(qMakePair(frontParts, mirror));
+
+	// pruning pairs by SYMH
+	std::vector<int> pairAward(pairings.size(), 0);
+	if (isApplySYMH)
+		symhPruning(path, pairings, pairAward);
+
+	auto boxA = path.shapeA->bbox(), boxB = path.shapeB->bbox();
+
+	for (int r = 0; r < pairings.size(); r++)
+	{
+		if (pairAward[r] < 0){ costs[r] = DBL_MAX;  continue; }
+
+		//////////////////////////////////////////////////////////////////////////
+		auto & pairing = pairings[r];
+
+		auto & relationA = pairing.first;
+		auto & relationB = pairing.second;
+
+
+		// Relative position of centroid
+		auto rboxA = path.shapeA->relationBBox(relationA);
+		Vector3 rboxCenterA = (rboxA.center() - boxA.min()).array() / boxA.sizes().array();
+
+		auto rboxB = path.shapeB->relationBBox(relationB);
+		Vector3 rboxCenterB = (rboxB.center() - boxB.min()).array() / boxB.sizes().array();
+
+		/// Thresholding [1]: Skip assignment if spatially too far
+		auto dist = (rboxCenterA - rboxCenterB).norm();
+		//if (dist < 1/*candidate_threshold*/)
+		{
+			double curEnergy = 0;
+			QStringList la = relationA.parts, lb = relationB.parts;
+
+			// Case: many-to-many, find best matching between two sets
+			if (la.size() != 1 && lb.size() != 1)
+			{
+				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+
+				lb.clear();
+
+				for (size_t i = 0; i < relationA.parts.size(); i++)
+				{
+					auto partID = relationA.parts[i];
+					auto partA = path.shapeA->getNode(partID);
+					Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+
+					QMap<double, QString> dists;
+					for (auto tpartID : relationB.parts)
+					{
+						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+						dists[(partCenterA - partCenterB).norm()] = tpartID;
+					}
+
+					lb << dists.values().front();
+				}
+			}
+			else
+			{
+				la = relationA.parts;
+				lb = relationB.parts;
+			}
+
+			// Make copies
+			auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+			auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+
+			// Apply then evaluate cost of current suggestion
+			auto copy_la = la, copy_lb = lb;
+			topologicalOpeartions(shapeA.data(), shapeB.data(), copy_la, copy_lb);
+			//applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la);
+			applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la.toSet());
+
+			// Evaluate:
+			{
+				SearchNode tempNode;
+				tempNode.shapeA = shapeA;
+				tempNode.shapeB = shapeB;
+				//tempNode.fixed = path.fixed + path.current + copy_la;
+				tempNode.fixed = path.fixed + path.current + copy_la.toSet();
+				tempNode.mapping = path.mapping;
+				for (size_t i = 0; i < la.size(); i++) tempNode.mapping[copy_la[i]] = copy_lb[i].split(",").front();
+				tempNode.unassigned = path.unassigned;
+				//for (auto p : la) tempNode.unassigned.removeAll(p);
+				for (auto p : la) tempNode.unassigned.remove(p);
+				curEnergy = EvaluateCorrespondence::evaluate(&tempNode);
+			}
+
+			/// Thresholding [2]: Skip really bad assignments
+			double cost = curEnergy - path.energy;
+			//if (cost < 1/*cost_threshold*/)
+			{
+				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+
+				auto unassigned = path.unassigned;
+				//for (auto p : la) unassigned.removeAll(p);
+				for (auto p : la) unassigned.remove(p);
+
+				Assignments assignment;
+				assignment << qMakePair(la, lb);
+				assert(la.size() && lb.size());
+
+				costs[r] = cost;
+				res[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+
+			}
+		}
+	}
+}
+std::vector<std::pair<int, int> > TopKAlgorithm(std::vector < std::vector<double> >& vals, int K)
+//find the top K values with index;
+{
+	struct tempStruct
+	{
+		tempStruct() :val(DBL_MAX), i(-1), j(-1){};
+		tempStruct(int& ti, int& tj, double& tval){ i = ti; j = tj; val = tval; };
+		bool operator< (const tempStruct& t2) const
+		{
+			return val < t2.val;
+		};
+		double val;
+		int i, j;
+	};
+	std::multiset<tempStruct> kVals;
+	std::multiset<tempStruct>::iterator kit;
+	for (int i = 0; i < K; i++)
+		kVals.insert(tempStruct());
+
+	for (int i = 0; i < vals.size(); i++)
+	{
+		for (int j = 0; j < vals[i].size(); j++)
+		{
+			if (vals[i][j] < kVals.rbegin()->val)
+			{
+				kit = kVals.end(); kit--;
+				kVals.erase(kit); //replace the last one
+				kVals.insert(tempStruct(i, j, vals[i][j]));
+			}
+
+		}
+	}
+
+	std::vector<std::pair<int, int> > inds(K);
+	int ids = 0;
+	for (kit = kVals.begin(); kit != kVals.end(); kit++)
+	{
+		inds[ids].first = kit->i;
+		inds[ids].second = kit->j;
+		ids++;
+	}
+	return inds;
+}
+void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots)
+{
+	// Preprocessing
+	{
+		origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+		origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+
+		preprocess(origShapeA.data(), origShapeB.data());
+	}
+
+	//initial state
+	SearchNode root;
+	root.shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeA));
+	root.shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeB));
+	root.unassigned = root.unassignedList();
+	applyAssignment(&root, false);
+
+
+	int N, M;
+	N = (int)root.shapeA->relations.size();
+	M = (int)root.shapeB->relations.size();
+	std::vector<Structure::Relation> unvisitedParts, mirrors;
+	for (auto rel : root.shapeA->relations)
+		unvisitedParts.push_back(rel);
+	for (auto rel : root.shapeB->relations)
+		mirrors.push_back(rel);
+
+	std::vector<SearchNode> topK(K);			//stores top K solution
+	std::vector<double> topKScore(K, DBL_MAX);	//and the top K best cost
+
+	//initial space; DP is order sensitive, different order of visiting returns different solution
+	std::vector<double> initCost(M);
+	std::vector<SearchNode> initStates(M);
+	propagateDP(root, unvisitedParts.front(), mirrors, initCost, initStates);
+
+	for (int j = 0; j < M; j++)
+	{
+		topK[j] = initStates[j];
+		topKScore[j] = initCost[j];
+	}
+
+	std::vector<Structure::Relation> visitedParts(1, unvisitedParts.front());
+	unvisitedParts.erase(unvisitedParts.begin());
+
+	// complexity = N * K*M; 
+	std::vector< std::vector< SearchNode > > allPaths(K, std::vector< SearchNode >(M));
+	while (!unvisitedParts.empty())
+	{
+		//find parts in the same group of visited.
+		int frontId = 0;
+		if (isApplySYMH && isInitTest)
+		{
+			std::vector<bool> usedGroups(symhGroupSizeA, false);
+			for (auto & rel : visitedParts)
+				usedGroups[symhA[nidMapA[rel.parts.first()]]] = true;
+
+			for (int i = 0; i < unvisitedParts.size(); i++)
+			{
+				if (usedGroups[symhA[nidMapA[unvisitedParts[i].parts.first()]]])
+				{
+					frontId = i;
+					break;
+				}
+			}
+		}
+		Structure::Relation frontParts = unvisitedParts[frontId];
+		visitedParts.push_back(frontParts);
+		unvisitedParts.erase(unvisitedParts.begin() + frontId);
+
+		//propagate front;
+		std::vector < std::vector<double> > newCost(K, std::vector < double >(M, DBL_MAX));
+#pragma omp parallel for
+		for (int i = 0; i < K; i++)
+		{
+			if (topKScore[i] != DBL_MAX)
+			{
+				applyAssignment(&topK[i], false);
+				propagateDP(topK[i], frontParts, mirrors, newCost[i], allPaths[i]);
+			}
+		}
+
+		//top K paths;
+		std::vector < std::pair<int, int> > td = TopKAlgorithm(newCost, K);
+		for (int i = 0; i < K; i++)
+		{
+			if (td[i].first > -1 && newCost[td[i].first][td[i].second] != DBL_MAX)
+			{
+				topKScore[i] = newCost[td[i].first][td[i].second];
+				topK[i] = allPaths[td[i].first][td[i].second];
+			}
+			else
+			{
+				topKScore[i] = DBL_MAX;
+			}
+		}
+	}
+
+	for (int i = 0; i < K; i++)
+	{
+		if (topKScore[i] != DBL_MAX)
+		{
+			applyAssignment(&topK[i], false);
+		}
+	}
+
+	std::vector<double> energies(K);
+	for (int i = 0; i < topKScore.size(); i++)
+	{
+		if (topKScore[i] == DBL_MAX)
+			energies[i] = DBL_MAX;
+		else
+			energies[i] = topK[i].energy;
+	}
+
+	//only return the top one;
+	roots.push_back(topK[std::min_element(energies.begin(), energies.end()) - energies.begin()]);
 }
