@@ -768,10 +768,10 @@ void Energy::GuidedDeformation::symhPruning(Energy::SearchNode & path, QVector <
 // 		 		symhA.assign(inSymhB, inSymhB + 14);
 
 		//random grouping
-// 		for (int i = 0; i < (int)nidMapA.size(); i++)
-// 			symhA.push_back((i) % 4);
-// 		for (int i = 0; i < (int)nidMapB.size(); i++)
-// 			symhB.push_back((i) % 4);
+		for (int i = 0; i < (int)nidMapA.size(); i++)
+			symhA.push_back((i) % 4);
+		for (int i = 0; i < (int)nidMapB.size(); i++)
+			symhB.push_back((i) % 4);
 
 		symhGroupSizeA = *std::max_element(symhA.begin(), symhA.end()) + 1;
 		symhGroupSizeB = *std::max_element(symhB.begin(), symhB.end()) + 1;
@@ -995,6 +995,7 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	for (auto rel : root.shapeB->relations)
 		mirrors.push_back(rel);
 
+	if (K < M) K = M;
 	std::vector<SearchNode> topK(K);			//stores top K solution
 	std::vector<double> topKScore(K, DBL_MAX);	//and the top K best cost
 
