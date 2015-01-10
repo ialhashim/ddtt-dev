@@ -69,5 +69,25 @@ namespace Energy
 		QVector<Energy::SearchNode*> getEntirePath(Energy::SearchNode * path);
 
 		void applySearchPath(QVector<Energy::SearchNode*> path);
+
+		//////////////////////////////////////////////////////////////////////////
+
+		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(100){}
+
+		//SYMH
+		bool isInitTest, isApplySYMH;
+		QMap<QString, int> nidMapA, nidMapB;
+		std::vector<int> symhA, symhB;
+		int symhGroupSizeA, symhGroupSizeB;
+		std::vector<int> symhSubgraphSizeA, symhSubgraphSizeB;
+
+		//Dynamic programming
+		int K;
+
+		void symhPruning(Energy::SearchNode & path, QVector < QPair<Structure::Relation, Structure::Relation> > & pairings, std::vector<int>& pairAward);
+		void propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors, std::vector<double>& costs, std::vector<Energy::SearchNode>& res);
+		void searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots);
+		//////////////////////////////////////////////////////////////////////////
+
 	};
 }
