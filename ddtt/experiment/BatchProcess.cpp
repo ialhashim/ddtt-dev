@@ -32,7 +32,7 @@ void BatchProcess::init()
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
 
 	// Rendering	
-	renderer = new RenderingWidget(512, NULL);
+    renderer = new RenderingWidget(1024, NULL);
 	renderer->move(0, 0);
 	renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 
