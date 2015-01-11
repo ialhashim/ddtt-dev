@@ -186,6 +186,16 @@ void BatchProcess::run()
 
 		if (shapeA->nodes.isEmpty() || shapeB->nodes.isEmpty()) continue;
 
+        if(job["isAnisotropy"].toBool())
+        {
+            QMatrix4x4 mat;
+            auto bboxA = shapeA->bbox();
+            auto bboxB = shapeB->bbox();
+            Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
+            mat.scale(s.x(), s.y(), s.z());
+            shapeB->transform(mat, true);
+        }
+
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
 		Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);

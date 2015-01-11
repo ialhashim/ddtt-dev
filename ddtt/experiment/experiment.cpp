@@ -731,6 +731,11 @@ void experiment::create()
 		}
 		job["assignments"].setValue(assignments);
 
+        if (pw->ui->isAnisotropy->isChecked())
+        {
+            job["isAnisotropy"].setValue(true);
+        }
+
 		BatchProcess::appendJob(job, filename);
 	});
 
