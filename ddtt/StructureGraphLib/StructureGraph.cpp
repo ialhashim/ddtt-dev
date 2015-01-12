@@ -2079,6 +2079,83 @@ void Graph::moveCenterTo( Vector3 newCenter, bool isKeepMeshes )
     }
 }
 
+bool Graph::hasDoubleEdges(QString nodeID)
+{
+    Node * n = getNode(nodeID);
+    QVector<Link*> links = getEdges(nodeID);
+    if(n == nullptr || links.isEmpty() || n->type() == Structure::SHEET) return false;
+
+    QMap<QString,int> numEdges;
+    for(Link * l : links){
+        QString otherNodeID = l->otherNode(nodeID)->id;
+        numEdges[otherNodeID]++;
+        if(numEdges[otherNodeID] > 1) return true;
+    }
+    return false;
+}
+
+void Graph::cutNode(QString nodeID, int cutCount)
+{
+    Node * n = getNode(nodeID);
+    if(n == nullptr) return;
+
+    if(n->type() == Structure::SHEET)
+        return; // no support for sheets for now..
+    else
+    {
+        Structure::Curve * c = (Structure::Curve *) n;
+
+        // Split into several curves
+        int count = std::max((cutCount * 4) + cutCount, c->numCtrlPnts());
+        int cptsCount = cutCount * std::ceil(double(count) / cutCount);
+        int cptsPerCut = cptsCount / cutCount;
+        c->refineControlPoints(cptsCount, cptsCount);
+        Array1D_Vector3 cpts = c->controlPoints();
+        Array2D_Vector3 cutsGeometry;
+        for(int i = 0; i < cutCount; i++)
+        {
+            Array1D_Vector3 curCut;
+            curCut.insert(curCut.begin(), cpts.begin() + (i * cptsPerCut), cpts.begin() + ((i+1) * cptsPerCut));
+            if(cutCount == 2 && i == 1) std::reverse(curCut.begin(), curCut.end());
+            cutsGeometry.push_back(curCut);
+        }
+
+        // Add nodes
+        QColor groupColor = starlab::qRandomColor2();
+        QVector<Structure::Node*> newNodes;
+        for(int i = 0; i < cutCount; i++)
+        {
+            QString cutNodeID = QString("%1Cut%2").arg(n->id).arg(i);
+            auto cutNode = addNode(new Structure::Curve(NURBS::NURBSCurved::createCurveFromPoints(cutsGeometry[i]), cutNodeID, groupColor));
+            cutNode->property["mesh"].setValue(c->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >());
+            newNodes << cutNode;
+        }
+
+        // Create new group
+        QVector<QString> newNodesIDs;
+        for(auto n : newNodes) newNodesIDs << n->id;
+        addGroup(newNodesIDs);
+
+        // Reconnect edges
+        QVector<Link*> links = getEdges(nodeID);
+        for(Link* l : links)
+        {
+            auto otherNode = l->otherNode(nodeID);
+            auto otherCoords = l->getCoordOther(nodeID);
+
+			auto origPos = l->position(nodeID);
+			QMap < double, int > dists;
+			for (int i = 0; i < cutCount; i++) dists[(newNodes[i]->approxProjection(origPos) - origPos).norm()] = i;
+
+			auto cutNode = newNodes[ dists.values().front() ];
+            addEdge(cutNode, otherNode, Array1D_Vector4d(1, cutNode->approxCoordinates(origPos)), otherCoords);
+        }
+
+        // Remove original node
+        removeNode(nodeID);
+    }
+}
+
 Array2D_Vector3 Graph::getAllControlPoints()
 {
     Array2D_Vector3 result;

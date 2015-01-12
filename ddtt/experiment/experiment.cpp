@@ -181,7 +181,6 @@ void experiment::doEnergySearch()
 	double leastCost;
 	if (!pw->ui->isUseDP->isChecked())
 	{
-
 		if (pw->ui->isLimitedSearch->isChecked())
 		{
 			QMap <double, Energy::SearchNode> sorted_solutions;
@@ -200,9 +199,9 @@ void experiment::doEnergySearch()
 				sorted_solutions[solution.back().energy] = solution_vec.back().back();
 			}
 
-			double cost = sorted_solutions.keys().at(0);
+			leastCost = sorted_solutions.keys().at(0);
 
-			selected_path = new Energy::SearchNode(sorted_solutions[cost]);
+			selected_path = new Energy::SearchNode(sorted_solutions[leastCost]);
 
 			timeElapsed = timer.elapsed();
 		}
@@ -304,7 +303,7 @@ void experiment::doEnergySearch()
 			double cost = EvaluateCorrespondence::evaluate(selected_path);
 			mainWindow()->setStatusBarMessage(QString("cost = %2 - solutions %3").arg(cost).arg(solutions.size()));
 		}
-		mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timeElapsed));
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost %2").arg(timeElapsed).arg(leastCost));
 
 		setSearchPath( selected_path );
 	}
@@ -1037,6 +1036,40 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 			//mainWindow()->setStatusBarMessage(QString("index [%1], t=%2").arg(index).arg(t));
 		});
 		timer->start(25);
+	}
+
+	if (event->key() == Qt::Key_C)
+	{
+		for (auto g : graphs)
+		{
+			QVector<QString> toCutIDs;
+			for (auto n : g->nodes){
+				if (g->hasDoubleEdges(n->id)){
+					Structure::Node * otherDouble = nullptr;
+					for (auto l : g->getEdges(n->id)){
+						if (g->hasDoubleEdges(l->otherNode(n->id)->id)){
+							otherDouble = l->otherNode(n->id);
+							break;
+						}
+					}
+
+					if (!otherDouble){
+						toCutIDs << n->id;
+					}
+					else
+					{
+						if (n->length() > otherDouble->length())
+							toCutIDs << n->id;
+					}
+				}
+			}
+
+			for (auto nid : toCutIDs)
+				g->cutNode(nid, 2);
+
+			if (!toCutIDs.isEmpty())
+				g->property["hasCuts"].setValue(true);
+		}
 	}
 
 	drawArea()->update();

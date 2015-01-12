@@ -140,6 +140,10 @@ namespace Structure{
         void transform(QMatrix4x4 mat,bool isKeepMeshes = false);
 		void moveCenterTo( Vector3 newCenter, bool isKeepMeshes );
 
+        // Topology modifiers
+        bool hasDoubleEdges(QString nodeID);
+        void cutNode(QString nodeID, int cutCount);
+
         Array2D_Vector3 getAllControlPoints();
         void setAllControlPoints(Array2D_Vector3 all_points);
 
