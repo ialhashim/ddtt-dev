@@ -72,7 +72,7 @@ namespace Energy
 
 		//////////////////////////////////////////////////////////////////////////
 
-		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(100){}
+		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1){}
 
 		//SYMH
 		bool isInitTest, isApplySYMH;
@@ -82,7 +82,7 @@ namespace Energy
 		std::vector<int> symhSubgraphSizeA, symhSubgraphSizeB;
 
 		//Dynamic programming
-		int K;
+		int K, K_2;
 
 		void symhPruning(Energy::SearchNode & path, QVector < QPair<Structure::Relation, Structure::Relation> > & pairings, std::vector<int>& pairAward);
 		void propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors, std::vector<double>& costs, std::vector<Energy::SearchNode>& res);

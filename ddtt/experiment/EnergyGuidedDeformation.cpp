@@ -813,6 +813,10 @@ void Energy::GuidedDeformation::symhPruning(Energy::SearchNode & path, QVector <
 void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors,
 	std::vector<double>& costs, std::vector<Energy::SearchNode>& res)
 {
+	double candidate_threshold = 0.5;
+	double cost_threshold = 0.3;
+	int k_top_candidates = std::min(K_2, (int)mirrors.size());
+
 	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
 	for (auto & mirror : mirrors)
 		pairings.push_back(qMakePair(frontParts, mirror));
@@ -826,14 +830,13 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 	for (int r = 0; r < pairings.size(); r++)
 	{
-		if (pairAward[r] < 0){ costs[r] = DBL_MAX;  continue; }
+		costs[r] = DBL_MAX;
+		if (pairAward[r] < 0){ continue; }
 
-		//////////////////////////////////////////////////////////////////////////
 		auto & pairing = pairings[r];
 
 		auto & relationA = pairing.first;
 		auto & relationB = pairing.second;
-
 
 		// Relative position of centroid
 		auto rboxA = path.shapeA->relationBBox(relationA);
@@ -844,7 +847,7 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
-		//if (dist < 1/*candidate_threshold*/)
+		if (dist < candidate_threshold)
 		{
 			double curEnergy = 0;
 			QStringList la = relationA.parts, lb = relationB.parts;
@@ -852,7 +855,14 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 			// Case: many-to-many, find best matching between two sets
 			if (la.size() != 1 && lb.size() != 1)
 			{
-				Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+				//Eigen::Vector4d centroid_coordinate(0.5, 0.5, 0, 0);
+				auto intrestingCentroid = [&](Structure::ShapeGraph * shape, QString nodeID){
+					Eigen::Vector4d c(0, 0, 0, 0);
+					auto edges = shape->getEdges(nodeID);
+					if (edges.empty()) return Eigen::Vector4d(0.5, 0.5, 0, 0);
+					for (auto e : edges) c += e->getCoord(nodeID).front();
+					return Eigen::Vector4d(c / edges.size());
+				};
 
 				lb.clear();
 
@@ -860,12 +870,20 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 				{
 					auto partID = relationA.parts[i];
 					auto partA = path.shapeA->getNode(partID);
-					Vector3 partCenterA = (partA->position(centroid_coordinate) - rboxA.center()).array() / rboxA.sizes().array();
+
+					auto centroid_coordinateA = intrestingCentroid(path.shapeA.data(), partID);
+					Vector3 partCenterA = (partA->position(centroid_coordinateA) - rboxA.min()).array() / rboxA.sizes().array();
+
+					partCenterA.array() *= rboxA.diagonal().normalized().array();
 
 					QMap<double, QString> dists;
 					for (auto tpartID : relationB.parts)
 					{
-						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinate) - rboxB.center()).array() / rboxB.sizes().array();
+						auto centroid_coordinateB = intrestingCentroid(path.shapeB.data(), tpartID);
+						Vector3 partCenterB = (path.shapeB->getNode(tpartID)->position(centroid_coordinateB) - rboxB.min()).array() / rboxB.sizes().array();
+
+						partCenterB.array() *= rboxA.diagonal().normalized().array();
+
 						dists[(partCenterA - partCenterB).norm()] = tpartID;
 					}
 
@@ -885,7 +903,6 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 			// Apply then evaluate cost of current suggestion
 			auto copy_la = la, copy_lb = lb;
 			topologicalOpeartions(shapeA.data(), shapeB.data(), copy_la, copy_lb);
-			//applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la);
 			applyDeformation(shapeA.data(), shapeB.data(), copy_la, copy_lb, path.fixed + path.current + copy_la.toSet());
 
 			// Evaluate:
@@ -893,36 +910,39 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 				SearchNode tempNode;
 				tempNode.shapeA = shapeA;
 				tempNode.shapeB = shapeB;
-				//tempNode.fixed = path.fixed + path.current + copy_la;
 				tempNode.fixed = path.fixed + path.current + copy_la.toSet();
 				tempNode.mapping = path.mapping;
 				for (size_t i = 0; i < la.size(); i++) tempNode.mapping[copy_la[i]] = copy_lb[i].split(",").front();
 				tempNode.unassigned = path.unassigned;
-				//for (auto p : la) tempNode.unassigned.removeAll(p);
 				for (auto p : la) tempNode.unassigned.remove(p);
 				curEnergy = EvaluateCorrespondence::evaluate(&tempNode);
 			}
 
 			/// Thresholding [2]: Skip really bad assignments
 			double cost = curEnergy - path.energy;
-			//if (cost < 1/*cost_threshold*/)
+			if (cost < cost_threshold)
 			{
 				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
 				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
 
 				auto unassigned = path.unassigned;
-				//for (auto p : la) unassigned.removeAll(p);
 				for (auto p : la) unassigned.remove(p);
 
 				Assignments assignment;
 				assignment << qMakePair(la, lb);
 				assert(la.size() && lb.size());
 
-				costs[r] = cost;
+				costs[r] = curEnergy;
 				res[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
-
 			}
 		}
+	}
+	std::vector<double> tc = costs;
+	std::sort(tc.begin(), tc.end());
+	double thresbyK = tc[k_top_candidates - 1];
+	for (int i = 0; i < costs.size(); i++){
+		if (costs[i]>thresbyK)
+			costs[i] = DBL_MAX;
 	}
 }
 std::vector<std::pair<int, int> > TopKAlgorithm(std::vector < std::vector<double> >& vals, int K)
@@ -999,10 +1019,39 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	std::vector<SearchNode> topK(K);			//stores top K solution
 	std::vector<double> topKScore(K, DBL_MAX);	//and the top K best cost
 
+
+	//connectivity group
+	QMap<QString, int> relationIds;
+	for (int i = 0; i < root.shapeA->relations.size(); i++)
+		relationIds[root.shapeA->relations[i].parts.front()] = i;
+	std::vector<std::vector<bool> > connectGraph(root.shapeA->relations.size(), std::vector<bool>(root.shapeA->relations.size(), false));
+	std::vector<int > connectStrength(root.shapeA->relations.size(), 0);
+	for (auto edg : root.shapeA->edges)
+	{
+		if (!root.shapeA->hasRelation(edg->n1->id)) continue;
+		if (!root.shapeA->hasRelation(edg->n2->id)) continue;
+		auto r1 = root.shapeA->relationOf(edg->n1->id);
+		auto r2 = root.shapeA->relationOf(edg->n2->id);
+		connectGraph[relationIds[r1.parts.front()]][relationIds[r2.parts.front()]] = true;
+		connectGraph[relationIds[r2.parts.front()]][relationIds[r1.parts.front()]] = true;
+	}
+	for (int i = 0; i < connectGraph.size(); i++)
+	{
+		for (int j = i + 1; j < connectGraph[i].size(); j++)
+		{
+			if (connectGraph[i][j])
+			{
+				connectStrength[i]++;
+				connectStrength[j]++;
+			}
+		}
+	}
+	int firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
+
 	//initial space; DP is order sensitive, different order of visiting returns different solution
 	std::vector<double> initCost(M);
 	std::vector<SearchNode> initStates(M);
-	propagateDP(root, unvisitedParts.front(), mirrors, initCost, initStates);
+	propagateDP(root, unvisitedParts[firstfrontId], mirrors, initCost, initStates);
 
 	for (int j = 0; j < M; j++)
 	{
@@ -1010,8 +1059,8 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 		topKScore[j] = initCost[j];
 	}
 
-	std::vector<Structure::Relation> visitedParts(1, unvisitedParts.front());
-	unvisitedParts.erase(unvisitedParts.begin());
+	std::vector<Structure::Relation> visitedParts(1, unvisitedParts[firstfrontId]);
+	unvisitedParts.erase(unvisitedParts.begin() + firstfrontId);
 
 	// complexity = N * K*M; 
 	std::vector< std::vector< SearchNode > > allPaths(K, std::vector< SearchNode >(M));
@@ -1032,6 +1081,29 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 					frontId = i;
 					break;
 				}
+			}
+		}
+		else
+		{
+			//find neighbor
+			std::vector<int> frontPrior(unvisitedParts.size(), 0);
+			for (int i = 0; i < unvisitedParts.size(); i++){
+				for (auto & rel2 : visitedParts){
+					if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+					{
+						frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+						break;
+					}
+				}
+			}
+			frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+			if (frontId == 0)
+			{
+				std::vector<int> frontPrior2(unvisitedParts.size());
+				for (int i = 0; i < unvisitedParts.size(); i++)
+					frontPrior2[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+
+				frontId = std::max_element(frontPrior2.begin(), frontPrior2.end()) - frontPrior2.begin();
 			}
 		}
 		Structure::Relation frontParts = unvisitedParts[frontId];
@@ -1065,7 +1137,7 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 			}
 		}
 	}
-
+#pragma omp parallel for
 	for (int i = 0; i < K; i++)
 	{
 		if (topKScore[i] != DBL_MAX)
@@ -1073,16 +1145,5 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 			applyAssignment(&topK[i], false);
 		}
 	}
-
-	std::vector<double> energies(K);
-	for (int i = 0; i < topKScore.size(); i++)
-	{
-		if (topKScore[i] == DBL_MAX)
-			energies[i] = DBL_MAX;
-		else
-			energies[i] = topK[i].energy;
-	}
-
-	//only return the top one;
-	roots.push_back(topK[std::min_element(energies.begin(), energies.end()) - energies.begin()]);
+	roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);
 }
