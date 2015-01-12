@@ -593,13 +593,13 @@ void experiment::create()
 	{
 		graphs << new Structure::ShapeGraph(shapeLeft);
 		graphs << new Structure::ShapeGraph(shapeRight);
+
+		//graphs.front()->loadLandmarks("front.landmarks");
+		//graphs.back()->loadLandmarks("back.landmarks");
+
+		graphs.front()->setColorAll(Qt::blue);
+		graphs.back()->setColorAll(Qt::green);
 	}
-
-	//graphs.front()->loadLandmarks("front.landmarks");
-	//graphs.back()->loadLandmarks("back.landmarks");
-
-	graphs.front()->setColorAll(Qt::blue);
-	graphs.back()->setColorAll(Qt::green);
 
 	// Setup viewer
 	{
