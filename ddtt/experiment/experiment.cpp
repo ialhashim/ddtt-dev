@@ -73,14 +73,24 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 
 	// Grey out
 	for (auto n : graphs.front()->nodes){
-		graphs.front()->setColorFor(n->id, QColor(255, 255, 255, 10));
-		n->vis_property["meshSolid"].setValue(false);
+		graphs.front()->setColorFor(n->id, QColor(100, 100, 100, 255));
+		n->vis_property["meshSolid"].setValue(true);
 		if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 	}
 	for (auto n : graphs.back()->nodes){
-		graphs.back()->setColorFor(n->id, QColor(255, 255, 255, 10));
-		n->vis_property["meshSolid"].setValue(false);
+		graphs.back()->setColorFor(n->id, QColor(100, 100, 100, 255));
+		n->vis_property["meshSolid"].setValue(true);
 		if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
+	}
+
+	// Matched target nodes
+	QSet<QString> matchedTargetNodes;
+	for (auto spart : selected_path->mapping.keys())
+	{
+		auto tpart = selected_path->mapping[spart];
+		for (auto group : graphs.back()->groupsOf(tpart))
+			for (auto part : group)
+				matchedTargetNodes << part;
 	}
 
 	// Assign colors based on target
@@ -90,6 +100,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 		QColor color = colors[ci++];
 		for (auto nid : relation.parts)
 		{
+			if (!matchedTargetNodes.contains(nid)) continue;
 			graphs.back()->setColorFor(nid, color);
 			graphs.back()->getNode(nid)->vis_property["meshSolid"].setValue(true);
 		}

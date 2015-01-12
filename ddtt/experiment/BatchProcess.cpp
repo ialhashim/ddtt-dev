@@ -32,7 +32,7 @@ void BatchProcess::init()
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
 
 	// Rendering	
-    renderer = new RenderingWidget(1024, NULL);
+    renderer = new RenderingWidget(512, NULL);
 	renderer->move(0, 0);
 	renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
 
@@ -44,8 +44,8 @@ void BatchProcess::init()
 	pd->connect(this, SIGNAL(setLabelText(QString)), SLOT(setLabelText(QString)));
 
 	// Show progress
-	pd->show();
 	renderer->show();
+	pd->show();
 }
 
 BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
@@ -268,18 +268,28 @@ void BatchProcess::run()
 			{
 				// Grey out
 				for (auto n : shapeA->nodes){
-					shapeA->setColorFor(n->id, QColor(255, 255, 255, 10));
-					n->vis_property["meshSolid"].setValue(false);
+					shapeA->setColorFor(n->id, QColor(100, 100, 100, 255));
+					n->vis_property["meshSolid"].setValue(true);
 					if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 				}
 				for (auto n : shapeB->nodes){
-					shapeB->setColorFor(n->id, QColor(255, 255, 255, 10));
-					n->vis_property["meshSolid"].setValue(false);
+					shapeB->setColorFor(n->id, QColor(100, 100, 100, 255));
+					n->vis_property["meshSolid"].setValue(true);
 					if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
 				}
 
 				shapeA->property["showNodes"].setValue(false);
 				shapeB->property["showNodes"].setValue(false);
+
+				// Matched target nodes
+				QSet<QString> matchedTargetNodes;
+				for (auto spart : selected_path->mapping.keys())
+				{
+					auto tpart = selected_path->mapping[spart];
+					for (auto group : shapeB->groupsOf(tpart))
+						for (auto part : group)
+							matchedTargetNodes << part;
+				}
 
 				// Assign colors based on target
 				int ci = 0;
@@ -288,6 +298,7 @@ void BatchProcess::run()
 					QColor color = myrndcolors[ci++];
 					for (auto nid : relation.parts)
 					{
+						if (!matchedTargetNodes.contains(nid)) continue;
 						shapeB->setColorFor(nid, color);
 						shapeB->getNode(nid)->vis_property["meshSolid"].setValue(true);
 					}
