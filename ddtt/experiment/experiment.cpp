@@ -578,8 +578,11 @@ void experiment::create()
 	QString shapeRight = settingsFile.value("shapeRight", "C:/Temp/dataset/ChairBasic2/shortChair01.xml").toString();
 	settingsFile.sync();
 
-	graphs << new Structure::ShapeGraph(shapeLeft);
-	graphs << new Structure::ShapeGraph(shapeRight);
+	if (QFileInfo(shapeLeft).exists() && QFileInfo(shapeRight).exists())
+	{
+		graphs << new Structure::ShapeGraph(shapeLeft);
+		graphs << new Structure::ShapeGraph(shapeRight);
+	}
 
 	//graphs.front()->loadLandmarks("front.landmarks");
 	//graphs.back()->loadLandmarks("back.landmarks");
@@ -595,7 +598,7 @@ void experiment::create()
 		double worldRadius = 1;
 		drawArea()->camera()->setUpVector(qglviewer::Vec(0, 0, 1));
 		drawArea()->camera()->setPosition(qglviewer::Vec(-0.36, -2.2, 1.3));
-		auto center = qglviewer::Vec(0.5, 0, 0.5);
+		auto center = qglviewer::Vec(0, 0, 0.5);
 		drawArea()->setSceneCenter(center);
 		drawArea()->camera()->lookAt(center);
 		drawArea()->camera()->setSceneRadius(worldRadius);
@@ -658,9 +661,18 @@ void experiment::create()
 		}
 	});
 	connect(pw->ui->loadShapes, &QPushButton::released, [&]{
+		isReady = false;
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Shape"), "", tr("Shape File (*.xml)"));
 		if (!filename.size()) return;
-		graphs << new Structure::ShapeGraph(filename);
+
+		auto newG = new Structure::ShapeGraph(filename);
+		for (auto n : newG->nodes){
+			auto m = newG->getMesh(n->id);
+			m->updateBoundingBox();
+		}
+
+		graphs << newG;
+		isReady = true;
 		drawArea()->update();
 
 		// Save last used shapes:
@@ -865,7 +877,8 @@ void experiment::decorate()
 		glPopMatrix();
 
 		// Spacing between models:
-		if (i + 1 < graphs.size()){
+		if (i + 1 < graphs.size())
+		{
 			auto & g2 = graphs[i + 1];
 			Eigen::AlignedBox3d bbox = g2->bbox();
 			if (!g2->property.contains("width"))
@@ -878,15 +891,16 @@ void experiment::decorate()
 				}
 				g2->property["width"].setValue(bbox.sizes().x());
 
-				drawArea()->setSceneRadius(g->property["width"].toDouble() * 4);
+				drawArea()->setSceneRadius(g->property["width"].toDouble() * 6);
 			}
 			double g1_width = g->property["width"].toDouble();
 			double g2_width = g2->property["width"].toDouble();
 
 			startX += (g1_width * 0.3) + g2_width + 0.05;
 		}
-		else{
-			Eigen::AlignedBox3d bbox = g->bbox();
+		else
+		{
+			Eigen::AlignedBox3d bbox = g->robustBBox();
 			for (auto n : g->nodes){
 				auto m = g->getMesh(n->id);
 				if (!m)
