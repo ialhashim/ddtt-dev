@@ -95,8 +95,12 @@ void PartCorresponder::correspondSegments(const QPair<size_t,size_t> & segmentsP
 										  QVector<Particles> & particles)
 {
 	QVector<Slices> slices;
-	slices << input[0]->property["segments"].value<Segments>()[segmentsPair.first].property["slices"].value<Slices>();
-	slices << input[1]->property["segments"].value<Segments>()[segmentsPair.second].property["slices"].value<Slices>();
+
+	auto segs1 = input[0]->property["segments"].value<Segments>();
+	auto segs2 = input[1]->property["segments"].value<Segments>();
+
+	slices << segs1[segmentsPair.first].property["slices"].value<Slices>();
+	slices << segs2[segmentsPair.second].property["slices"].value<Slices>();
 
 	auto ii = 0, ij = 1;
 
@@ -332,7 +336,9 @@ void PartCorresponder::matchChunk( QVector<SliceChunk> chunk, const QVector<Part
 		for(int i = 0; i < (int)chunk[si].vmap.size(); i++)
 		{
 			auto vi = chunk[si].vmap[i];
-			auto vj = chunk[sj].vmap[chunk[sj].tree->closest( particles[si][vi].relativePos )];
+			vi = std::min(vi, particles[si].size() - 1);
+
+			auto vj = chunk[sj].vmap[chunk[sj].tree->closest(particles[si][vi].relativePos)];
 
 			closestMap[i] = vj;
 		}
@@ -341,7 +347,10 @@ void PartCorresponder::matchChunk( QVector<SliceChunk> chunk, const QVector<Part
 		for(int i = 0; i < (int)chunk[si].vmap.size(); i++)
 		{
 			auto vi = chunk[si].vmap[i];
+			vi = std::min(vi, particles[si].size() - 1);
+
 			auto vj = closestMap[i];
+			vj = std::min(vj, particles[sj].size() - 1);
 
 			auto pi = &particles[si][vi];
 			auto pj = &particles[sj][vj];

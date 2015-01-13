@@ -9,7 +9,7 @@ CorrespondencePrepare::CorrespondencePrepare( std::vector<ParticleMesh*> meshes 
 	QVector<ParticleMesh*> input;
 	for(auto pm : meshes) input << pm;
 
-	#pragma omp parallel for
+	//#pragma omp parallel for
 	for(int i = 0; i < input.size(); i++)
 	{
 		/// Combine segments from discovered groups:

@@ -72,7 +72,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 			applyAssignment(&path, false);
 
 			// Collect valid suggestions
-			auto suggested_children = suggestChildren(path);
+			auto suggested_children = suggestChildren(path, 5);
 			for (auto & child : suggested_children)
 				searchTree.append_child(pathItr, child);
 			path.num_children = suggested_children.size();
@@ -118,12 +118,12 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 	path->energy = path->energy + path->cost;
 }
 
-QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path)
+QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path, int k_top)
 {
 	// Hard coded thresholding to limit search space
 	double candidate_threshold = 0.5;
 	double cost_threshold = 0.3;
-	int k_top_candidates = 6;
+	int k_top_candidates = k_top;
 
 	/// Suggest for next unassigned:
 	QVector<Structure::Relation> candidatesA;

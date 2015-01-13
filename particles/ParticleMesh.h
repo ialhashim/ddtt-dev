@@ -45,6 +45,8 @@ public:
 	VoxelContainer<VoxelVector> grid;
 	std::map<uint64_t,size_t> mortonToParticleID;
 
+	QMap<QString,size_t> partNames;
+
 public:
 	void init( bool isAssignedSegment = false );
 	void process();

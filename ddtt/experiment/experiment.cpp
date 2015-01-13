@@ -197,7 +197,7 @@ void experiment::doEnergySearch()
 			QMap <double, Energy::SearchNode> sorted_solutions;
 			QVector < QVector <Energy::SearchNode> > solution_vec;
 
-			for (auto & solution : AStar::search(path, 10))
+			for (auto & solution : AStar::search(path, pw->ui->dpTopK->text().toInt(), pw->ui->dpTopK_2->text().toInt()))
 			{
 				egd->origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				egd->origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -732,7 +732,7 @@ void experiment::create()
 		});
 	});
 	connect(pw->ui->saveJob, &QPushButton::released, [&]{
-		if (graphs.size() < 2 || graphs.front()->landmarks.isEmpty()) return;
+		if (graphs.size() < 2) return;
 		auto g1 = graphs.front(), g2 = graphs.back();
 
 		QString filename = QFileDialog::getSaveFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));

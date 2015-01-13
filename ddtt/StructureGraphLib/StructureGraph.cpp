@@ -2128,6 +2128,7 @@ void Graph::cutNode(QString nodeID, int cutCount)
             QString cutNodeID = QString("%1Cut%2").arg(n->id).arg(i);
             auto cutNode = addNode(new Structure::Curve(NURBS::NURBSCurved::createCurveFromPoints(cutsGeometry[i]), cutNodeID, groupColor));
             cutNode->property["mesh"].setValue(c->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >());
+            cutNode->property["realOriginalID"].setValue(nodeID);
             newNodes << cutNode;
         }
 

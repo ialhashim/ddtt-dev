@@ -95,6 +95,8 @@ ParticleMesh::ParticleMesh(QString mesh_filename, int gridsize) : surface_mesh(N
 	{
 		auto & part = parts[i];
 
+		partNames[part.name] = i;
+
 		SurfaceMeshModel mesh;
 		for(auto & v : part.verts) mesh.add_vertex(v);
 		for(auto & f : part.faces){

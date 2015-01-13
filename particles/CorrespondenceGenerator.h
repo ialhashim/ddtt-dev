@@ -7,8 +7,7 @@ typedef QVector< QVector<size_t> > Assignments;
 class CorrespondenceGenerator
 {
 public:
-    CorrespondenceGenerator( ParticleMesh * pmeshA, ParticleMesh * pmeshB);
-
+	CorrespondenceGenerator(ParticleMesh * pmeshA, ParticleMesh * pmeshB, bool isNoCompute = false);
     ParticleMesh *sA, *sB;
 	QVector<Pairings> computedAssignments;
 

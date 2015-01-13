@@ -4,8 +4,9 @@
 #include "myglobals.h"
 #include "BasicTable.h"
 
-CorrespondenceGenerator::CorrespondenceGenerator(ParticleMesh * pmeshA, ParticleMesh * pmeshB) : sA(pmeshA), sB(pmeshB)
+CorrespondenceGenerator::CorrespondenceGenerator(ParticleMesh * pmeshA, ParticleMesh * pmeshB, bool isNoCompute) : sA(pmeshA), sB(pmeshB)
 {
+	if (isNoCompute) return;
 	computedAssignments = segmentAssignFromGroupAssign( generateGroupAssignments() );
 }
 

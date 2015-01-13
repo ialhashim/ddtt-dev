@@ -46,6 +46,7 @@ public:
 	QString outputPath;
 	bool isSwapped;
 	bool isSaveReport;
+	bool isOutputMatching;
 	int thumbWidth;
 	QJsonArray jobsArray;
 

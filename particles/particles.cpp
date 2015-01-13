@@ -841,6 +841,8 @@ void particles::create()
 		cs = new CorrespondenceSearch( cg );
 		connect(cs, SIGNAL(done()), SLOT(postCorrespond()));
 
+        cg = new CorrespondenceGenerator(pw->pmeshes.front(), pw->pmeshes.back());
+
 		cs->start();
 	});
 
@@ -854,6 +856,76 @@ void particles::create()
 			pmesh->property["tree"].setValue( (void*)tree );
 		}
 	});
+
+    connect(pw->ui->loadPrecomputed, &QPushButton::released, [=]{
+        drawArea()->clear();
+
+        for(auto filename : QFileDialog::getOpenFileNames(mainWindow(), "Load mesh", "", "OBJ meshes (*.obj)"))
+        {
+            pw->pmeshes.push_back( new ParticleMesh( filename, pw->ui->gridsize->value() ) );
+        }
+
+		// Identify segments
+		{
+			for (size_t i = 0; i < pw->pmeshes.size(); i++)
+			{
+				//SegmentGraph neiGraph;
+				//auto & segments = pw->pmeshes[i]->segmentToComponents(pw->pmeshes[i]->toGraph(), neiGraph, true);
+
+				QMap< unsigned int, SegmentGraph > segments;
+				auto pgraph = pw->pmeshes[i]->toGraph();
+
+				for (auto e : pgraph.GetEdgesSet())
+				{
+					auto p1 = pw->pmeshes[i]->particles[e.index];
+					auto p2 = pw->pmeshes[i]->particles[e.target];
+
+					if (p1.segment == p2.segment)
+						segments[p1.segment].AddEdge(p1.id, p2.id, 1);
+				}
+
+				for (auto & seg : segments)
+					seg.property["slices"].setValue(PartCorresponder::computeSlices(pw->pmeshes[i], seg));
+
+				for (auto & seg : segments)
+					seg.property["bbox"].setValue(pw->pmeshes[i]->segmentBoundingBox(seg));
+
+				pw->pmeshes[i]->property["segments"].setValue(segments);
+			}
+		}
+
+        cg = new CorrespondenceGenerator(pw->pmeshes.front(), pw->pmeshes.back(), true);
+        cs = new CorrespondenceSearch( cg );
+
+		isBlendingReady = false;
+
+		PartsCorrespondence corr;
+
+		QString matching_file = QFileDialog::getOpenFileName(mainWindow(), "Load matches", "", "Segment matching (*.match)");
+
+		QFile file(matching_file);
+		file.open(QIODevice::ReadOnly);
+		QTextStream in(&file);
+		QStringList assignments = in.readAll().split("\n", QString::SkipEmptyParts);
+
+		for (auto line : assignments)
+		{
+			QStringList assignment = line.split(" ");
+			QString snode = assignment.front().split("@").front().trimmed();
+			QString tnode = assignment.back().split("@").front().trimmed();
+
+			cs->bestCorrespondence << qMakePair(pw->pmeshes.front()->partNames.value(snode, -1), pw->pmeshes.back()->partNames.value(tnode, -1));
+		}
+
+		// Apply best correspondence
+		cs->applyCorrespondence(cs->bestCorrespondence);
+
+		ParticlesWidget * pwidget = (ParticlesWidget*)widget;
+		isBlendingReady = true; 
+		pwidget->isReady = true;
+
+		drawArea()->update();
+    });
 
 	// Post-processing
 	connect(pw, SIGNAL(shapesLoaded()), SLOT(processShapes()));

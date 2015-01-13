@@ -61,8 +61,7 @@ namespace Energy
 		static void postDeformation(Structure::ShapeGraph * shape, const QSet<QString> & fixed);
 
 		static void applyAssignment(Energy::SearchNode * path, bool isSaveKeyframes);
-		static QVector<Energy::SearchNode> suggestChildren(Energy::SearchNode & path);
-
+		static QVector<Energy::SearchNode> suggestChildren(Energy::SearchNode & path, int k_top);
 		QVector<Energy::SearchNode*> solutions();
 		QVector<Energy::SearchNode*> parents();
 		QVector<Energy::SearchNode*> childrenOf(Energy::SearchNode * path);

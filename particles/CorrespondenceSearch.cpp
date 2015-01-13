@@ -10,6 +10,7 @@ CorrespondenceSearch::CorrespondenceSearch(CorrespondenceGenerator *generator) :
 {
 	int pathsCount = (int)generator->computedAssignments.size();
 	property["pathsCount"].setValue( pathsCount );
+	if (pathsCount == 0) return;
 
     pd = new QProgressDialog( "Searching..", "Cancel", 0, pathsCount );
 	pd->show();

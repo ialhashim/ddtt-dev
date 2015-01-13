@@ -11,6 +11,8 @@ namespace AStar
 	public:
 		PathSearchNode(const Energy::SearchNode & n = Energy::SearchNode()) : Energy::SearchNode(n){}
 
+		static int k_top;
+
 		/* Heuristic */
 		double GoalDistanceEstimate( PathSearchNode & )
 		{
@@ -51,7 +53,7 @@ namespace AStar
 
 		bool GetSuccessors( AStarSearch<PathSearchNode> *astarsearch )
 		{
-			auto suggestions = Energy::GuidedDeformation::suggestChildren(*this);
+			auto suggestions = Energy::GuidedDeformation::suggestChildren(*this, k_top);
 
 			for (auto suggestion : suggestions)
 				astarsearch->AddSuccessor(PathSearchNode(suggestion));
@@ -72,7 +74,7 @@ namespace AStar
 	};
 
 	static inline std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, 
-		int num_solutions = 100, unsigned int * steps = nullptr)
+		int num_solutions = 100, int k_top = 5, unsigned int * steps = nullptr)
 	{
 		// Prepare shapes
 		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());
@@ -85,6 +87,8 @@ namespace AStar
 		Energy::GuidedDeformation::applyAssignment(&start, true);
 
 		auto startCopy = QSharedPointer<Energy::SearchNode>(new Energy::SearchNode(start));
+
+		PathSearchNode::k_top = k_top;
 
 		PathSearchNode startNode(*startCopy);
 

@@ -10,6 +10,7 @@
 #include "EncodeDecodeGeometry.h"
 
 #include "AStarSearch.h"
+int AStar::PathSearchNode::k_top = 5;
 
 Structure::ShapeGraph *shapeA, *shapeB;
 static QVector<QColor> myrndcolors = rndColors2(100);
@@ -26,6 +27,7 @@ void BatchProcess::init()
 	outputPath = "outputPath";
 	isSwapped = false;
 	isSaveReport = true;
+	isOutputMatching = true;
 	thumbWidth = 256;
 
 	// Clean up my self
@@ -64,6 +66,7 @@ BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
 		outputPath = json["outputPath"].toString();
 		isSwapped = json["isSwap"].toBool();
 		isSaveReport = json["isSaveReport"].toBool();
+		isOutputMatching = json["isOutputMatching"].toBool();
 		thumbWidth = std::max(256, json["thumbWidth"].toInt());
 		jobsArray = json["jobs"].toArray();
 
@@ -196,6 +199,39 @@ void BatchProcess::run()
             shapeB->transform(mat, true);
         }
 
+		if (job["isTestCut"].toBool())
+		{
+			auto performCuts = [&](Structure::ShapeGraph * g){
+				QVector<QString> toCutIDs;
+				for (auto n : g->nodes){
+					if (g->hasDoubleEdges(n->id)){
+						Structure::Node * otherDouble = nullptr;
+						for (auto l : g->getEdges(n->id)){
+							if (g->hasDoubleEdges(l->otherNode(n->id)->id)){
+								otherDouble = l->otherNode(n->id);
+								break;
+							}
+						}
+
+						if (!otherDouble){
+							toCutIDs << n->id;
+						}
+						else
+						{
+							if (n->length() > otherDouble->length())
+								toCutIDs << n->id;
+						}
+					}
+				}
+
+				for (auto nid : toCutIDs)
+					g->cutNode(nid, 2);
+			};
+
+			performCuts(shapeA.data());
+			performCuts(shapeB.data());
+		}
+
 		// Set initial correspondence
 		QVector<Energy::SearchNode> search_roots;
 		Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
@@ -207,9 +243,11 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		unsigned int numNodesSearched = 0;
 
+		int k_top = 5;
+
 		if ( isSearchAstar )
 		{
-			for (auto & solution : AStar::search(path, 100, &numNodesSearched))
+			for (auto & solution : AStar::search(path, 100, k_top, &numNodesSearched))
 			{
 				egd.origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				egd.origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -393,6 +431,31 @@ void BatchProcess::run()
 			// Visualization
 			cur_solution_img = drawText(QString("s %2: cost = %1").arg(cost).arg(r), cur_solution_img);
 			img = stitchImages(img, cur_solution_img, true, 0);
+
+			if (isOutputMatching)
+			{
+				// Only output best match:
+				if (r == 0)
+				{
+					auto match_file = QString("%1/%2.match").arg(outputPath).arg(title);
+					QFile file(match_file);
+					file.open(QFile::WriteOnly | QFile::Text);
+					QTextStream out(&file);
+
+					for (auto key : selected_path->mapping.keys())
+					{
+						auto sn = selected_path->shapeA->getNode(key);
+						auto tn = selected_path->shapeB->getNode(selected_path->mapping[key]);
+
+						auto realID = [&](Structure::Node * n){
+							if (n->property.contains("realOriginalID")) return n->property["realOriginalID"].toString();
+							return n->id;
+						};
+
+						out << QString("%1 %2\n").arg(realID(sn)).arg(realID(tn));
+					}
+				}
+			}
 		}
 
 		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
