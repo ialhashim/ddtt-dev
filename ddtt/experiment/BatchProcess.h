@@ -44,11 +44,14 @@ public:
 	QString jobfilename;
 	int resultsCount;
 	QString outputPath;
+	bool isDPsearch;
 	bool isSwapped;
 	bool isSaveReport;
 	bool isOutputMatching;
 	int thumbWidth;
 	QJsonArray jobsArray;
+
+	int dpTopK, dpTopK_2;
 
 public slots:
 	void setJobsArray(QJsonArray);

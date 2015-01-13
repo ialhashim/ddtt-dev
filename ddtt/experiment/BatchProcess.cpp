@@ -25,6 +25,7 @@ void BatchProcess::init()
 	// Default options
 	resultsCount = 6;
 	outputPath = "outputPath";
+	isDPsearch = false;
 	isSwapped = false;
 	isSaveReport = true;
 	isOutputMatching = true;
@@ -64,11 +65,18 @@ BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
 
 		resultsCount = json["resultsCount"].toInt();
 		outputPath = json["outputPath"].toString();
+		isDPsearch = json["isDPsearch"].toBool();
 		isSwapped = json["isSwap"].toBool();
 		isSaveReport = json["isSaveReport"].toBool();
 		isOutputMatching = json["isOutputMatching"].toBool();
 		thumbWidth = std::max(256, json["thumbWidth"].toInt());
 		jobsArray = json["jobs"].toArray();
+
+		if (isDPsearch)
+		{
+			dpTopK = json.contains("dpTopK") ? json["dpTopK"].toInt() : 20;
+			dpTopK_2 = json.contains("dpTopK_2") ? json["dpTopK_2"].toInt() : 1;
+		}
 
 		// Clear past results in output folder
 		QDir d(""); d.mkpath(outputPath);
@@ -245,7 +253,19 @@ void BatchProcess::run()
 
 		int k_top = 5;
 
-		if ( isSearchAstar )
+		if ( isDPsearch )
+		{
+			auto sourceShape = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA.data()));
+			auto targetShape = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB.data()));
+
+			egd.K = dpTopK;
+			egd.K_2 = dpTopK_2;
+			//egd.isApplySYMH = pw->ui->isUseSYMH->isChecked();
+			egd.searchDP(sourceShape.data(), targetShape.data(), search_roots);
+
+			sorted_solutions[EvaluateCorrespondence::evaluate(&search_roots.back())] = search_roots.back();
+		}
+		else if ( isSearchAstar )
 		{
 			for (auto & solution : AStar::search(path, 100, k_top, &numNodesSearched))
 			{
@@ -533,6 +553,7 @@ void BatchProcess::exportJobFile(QString filename)
 	json["outputPath"] = outputPath;
 	json["resultsCount"] = resultsCount;
 	json["isSaveReport"] = isSaveReport;
+	json["isOutputMatching"] = isOutputMatching;
 	json["jobs"] = jobsArray;
 
 	QJsonDocument saveDoc(json);
