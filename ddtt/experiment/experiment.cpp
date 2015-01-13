@@ -197,7 +197,7 @@ void experiment::doEnergySearch()
 			QMap <double, Energy::SearchNode> sorted_solutions;
 			QVector < QVector <Energy::SearchNode> > solution_vec;
 
-			for (auto & solution : AStar::search(path, pw->ui->dpTopK->text().toInt(), pw->ui->dpTopK_2->text().toInt()))
+			for (auto & solution : AStar::search(path, pw->ui->dpTopK->value(), pw->ui->dpTopK_2->value()))
 			{
 				egd->origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 				egd->origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -320,8 +320,8 @@ void experiment::doEnergySearch()
 	}
 	else
 	{
-		egd->K = pw->ui->dpTopK->text().toInt();
-		egd->K_2 = pw->ui->dpTopK_2->text().toInt();
+		egd->K = pw->ui->dpTopK->value();
+		egd->K_2 = pw->ui->dpTopK_2->value();
 		egd->isApplySYMH = pw->ui->isUseSYMH->isChecked();
 		egd->searchDP(graphs.front(), graphs.back(), search_roots);
 		auto timeElapsed = timer.elapsed();
