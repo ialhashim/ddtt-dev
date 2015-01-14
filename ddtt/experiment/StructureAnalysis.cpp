@@ -82,7 +82,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			}
 
 			// Rotational relations have consistent distance
-			double threshold = avg_dist * 0.4;
+			double threshold = avg_dist * 0.45;
 			if (mad < threshold) 
 				r.type = Structure::Relation::ROTATIONAL;
 			else 

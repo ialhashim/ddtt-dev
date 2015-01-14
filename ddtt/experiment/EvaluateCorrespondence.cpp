@@ -75,6 +75,11 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 			mesh->setProperty("volume", volume);
 		}
 		n->property["orig_volume"].setValue(volume);
+
+		// Check if is a loop
+		double loopDist = n->diagonal().norm();
+		double threshold = n->length() * 0.01;
+		if (loopDist < threshold) n->property["isLoop"].setValue(true);
 	}
 
 	return samples_coords;
@@ -107,14 +112,22 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			shape->getNode(partID)->property["solidity"].setValue(1.0);
 
 		// Compute solidity of non rotational groups
-		if (r.parts.size() > 1 && r.type != Structure::Relation::ROTATIONAL)
+		if (r.type == Structure::Relation::ROTATIONAL)
+		{
+			for (auto partID : r.parts)
+				shape->getNode(partID)->property["solidity"].setValue(1.0 / r.parts.size());
+		}
+		else if (r.parts.size() > 1 && r.type != Structure::Relation::ROTATIONAL)
 		{
 			std::vector<Vector3> centers;
 			for (auto part : r.parts) centers.push_back(shape->getNode(part)->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
 
 			auto line = best_line_from_points(centers);
+			Vector3 centroid = line.first;
 			Vector3 line_direction = line.second;
 			Vector3 line_start = line.first - (line_direction * 1000.0);
+
+			Eigen::AlignedBox3d groupBox;
 
 			QVector <double> all_projections;
 			double min_part_range = DBL_MAX;
@@ -305,9 +318,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		// Skip split copies
 		if (n->id.contains("@")) continue;
 
-		bool isApplicable = !n->property["isRotational"].toBool() 
-			&& searchNode->mapping.contains(n->id)
-			&& n->property.contains("solidity");
+		bool isApplicable = searchNode->mapping.contains(n->id) && n->property.contains("solidity");
 
 		if ( isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/ )
 		{
@@ -316,6 +327,13 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		}
 
 		volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
+
+		// Special case: disconnection of loop has fixed penalty
+		if (searchNode->mapping.contains(n->id) && ( n->property["isLoop"].toBool() != 
+			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
+			volumeRatio = 0.2;
+		}
+
 		split_weights[n->id] = volumeRatio;
 
 		costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")

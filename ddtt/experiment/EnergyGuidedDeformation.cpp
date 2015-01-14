@@ -345,6 +345,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		Array2D_Vector3 surface_cpts(4, snode->controlPoints());
 		auto snode_sheet = new Structure::Sheet(NURBS::NURBSRectangled::createSheetFromPoints(surface_cpts), snode->id);
 		snode_sheet->property["mesh"].setValue(snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >());
+		snode_sheet->property["solidity"].setValue(1.0);
 
 		// Replace curve with a squashed sheet
 		shapeA->nodes.replace(shapeA->nodes.indexOf(snode), snode_sheet);
@@ -365,7 +366,17 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		// Remove from all relations
 		StructureAnalysis::removeFromGroups(shapeA, snode);
 
+		snode_sheet->property["isConverted"].setValue(true);
+
 		delete snode;
+	}
+	
+	// CONVERT Case: sheet to curve (squeezing)
+	if (la.size() == lb.size() && la.size() == 1
+		&& shapeA->getNode(la.front())->type() == Structure::SHEET
+		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
+	{
+		shapeA->getNode(la.front())->property["isConverted"].setValue(true);
 	}
 
 	// MERGE Case: many curves - one sheet
@@ -410,7 +421,9 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			auto tcurve = tnode_sheet->convertToNURBSCurve(start_point, direction);
 			auto tcurve_id = tnode_sheet->id + "," + la[i];
 
-			lb << shapeB->addNode(new Structure::Curve(tcurve, tcurve_id))->id;
+			auto newCurve = shapeB->addNode(new Structure::Curve(tcurve, tcurve_id));
+			newCurve->property["solidity"].setValue(1.0);
+			lb << newCurve->id;
 		}
 
 		// Clean up
@@ -479,7 +492,12 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto snode = shapeA->getNode(la.front());
 		snode->property["isSplit"].setValue(true);
 
-		QString newnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
+		QString newtnode = Structure::ShapeGraph::convertCurvesToSheet(shapeB, lb, Structure::ShapeGraph::computeSideCoordinates());
+
+		// Turn curves on target to a new sheet
+		auto tnode_sheet = shapeB->getNode(newtnode);
+		double solidity_curves = shapeB->getNode(lb.front())->property["solidity"].toDouble();
+		tnode_sheet->property["solidity"].setValue(solidity_curves);
 
 		// Effectively perform a split by moving samples used for correspondence evaluation:
 		{
@@ -488,9 +506,6 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			auto snode_sheet_copy = snode_sheet->clone();
 			snode_sheet_copy->id += "clone";
 			shapeA->addNode(snode_sheet_copy);
-
-			// Turn curves on target to a new sheet
-			auto tnode_sheet = shapeB->getNode(newnode);
 
 			// Deform the copy to target curves
 			Structure::ShapeGraph::correspondTwoNodes(snode_sheet_copy->id, shapeA, tnode_sheet->id, shapeB);
@@ -531,7 +546,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		}
 
 		lb.clear();
-		lb << newnode;
+		lb << newtnode;
 	}
 
 	// SPLIT Case: one curve - many curves
