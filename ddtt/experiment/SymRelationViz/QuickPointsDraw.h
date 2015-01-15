@@ -47,27 +47,28 @@ struct QuickPointsDraw
 		glPointSize(size);
 		glColorQt(c);
 		glDisable(GL_LIGHTING);
-		if (pts->hasNormals())
-		{
-			glEnable(GL_LIGHTING);
+		//if (pts->hasNormals())
+		//{
+		//	glEnable(GL_LIGHTING);
+		//	glBegin(GL_POINTS);
+		//	for (int i = 0; i < pts->size(); ++i)
+		//	{
+		//		SurfaceMesh::Point& n = pts->normals(i);
+		//		glNormal3d(n.x(), n.y(), n.z());
+		//		glVertQt(pts->points(i));
+		//	}
+		//	glEnd();
+		//}
+		//else
+		//{
+		    //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 			glBegin(GL_POINTS);
 			for (int i = 0; i < pts->size(); ++i)
 			{
-				SurfaceMesh::Point& n = pts->normals(i);
-				glNormal3d(n.x(), n.y(), n.z());
 				glVertQt(pts->points(i));
 			}
 			glEnd();
-		}
-		else
-		{
-			glBegin(GL_POINTS);
-			for (int i = 0; i < pts->size(); ++i)
-			{
-				glVertQt(pts->points(i));
-			}
-			glEnd();
-		}
+		//}
 
 		glEnable(GL_LIGHTING);
 	}

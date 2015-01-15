@@ -12,7 +12,7 @@ public:
 	void loadObj(const QString &filename);
 	void loadParts(const QString &rootPathname, const QString &modelname);
 	void setCurrentPartNo(int partNo);
-	void loadCorrespondence(const QString& matchPathname, int startNo);
+	void loadCorrespondence(const QString& matchPathname, int startNo, int modelNum);
 	void parsePairwiseMatches(const QString& filename, QVector<int>& match);
 	void normalization(double scale);
 	void translate(double x, double y, double z);

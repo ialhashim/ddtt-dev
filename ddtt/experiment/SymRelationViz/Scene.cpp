@@ -60,7 +60,7 @@ void Scene::loadScene(const QString dirname)
 
 	QString pathname = dir.absolutePath();
 	pathname.append("/exports/");
-	for (int i = 0; i < list.size(); ++i)
+	for (int i = 0; i < list.size() && i < this->m_modelNum; ++i)
 	{
 		QFileInfo file_info = list.at(i);
 		MeshModel *mm = new MeshModel();
@@ -81,7 +81,7 @@ void Scene::loadScene(const QString dirname)
 		// load correspondence
 		QString matchPathname = pathname;
 		matchPathname.append("pairwise_matches/");
-		mm->loadCorrespondence(matchPathname,i);
+		mm->loadCorrespondence(matchPathname, i, this->m_modelNum);
 
 		m_modelList.push_back(mm);
 	}
@@ -99,7 +99,7 @@ void Scene::layout()
 	{	
 		m->normalization(m_modelScale);
 		int row = i / ncol, col = i % ncol;
-		m->translate(col,row,0.0);
+		m->translate(col,0.0,row);
 		++i;
 	}
 }

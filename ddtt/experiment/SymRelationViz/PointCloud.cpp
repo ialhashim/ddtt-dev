@@ -29,8 +29,10 @@ void PointCloud::load(const QString &filename)
 		str = in.readLine();
 	}
 	float x,y,z,nx,ny,nz;
+	//int i(4);
 	while (!in.atEnd())
 	{
+		//i=i+1;
 		in >> x >> y >> z >> nx >> ny >> nz;
 		m_points.push_back(Surface_mesh::Point(x, y, z));
 		m_normals.push_back(Surface_mesh::Point(nx, ny, nz));

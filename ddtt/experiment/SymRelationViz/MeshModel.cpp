@@ -210,7 +210,7 @@ void MeshModel::setCurrentPartNo(int partNo)
 {
 	m_currentPartNo = partNo;
 }
-void MeshModel::loadCorrespondence(const QString& matchPathname, int startNo)
+void MeshModel::loadCorrespondence(const QString& matchPathname, int startNo, int modelNum)
 {
 	QDir dir(matchPathname);
 	QString str = QString::number(startNo);
@@ -223,7 +223,7 @@ void MeshModel::loadCorrespondence(const QString& matchPathname, int startNo)
 	m_matchColIDs.clear();
 
 	QFileInfoList list = dir.entryInfoList();
-	for (int i = 0; i < list.size(); ++i)
+	for (int i = 0; i < list.size() && i < modelNum; ++i)
 	{
 		if (i == startNo) continue;
 
@@ -298,12 +298,14 @@ void MeshModel::buildDisplayList(double ptSize, bool isDrawBBox)
 					p = QColor(255, 0, 0, 255);
 				else
 					p = QColor(255, 255, 0, 255);
+
+				QuickPointsDraw::drawPoints(m_parts[i], 10, p);
 			}
 			else
 			{
-				p = QColor(125, 125, 125, 50);
+				p = QColor(125, 125, 125, 10);
+				QuickPointsDraw::drawPoints(m_parts[i], ptSize, p);
 			}
-			QuickPointsDraw::drawPoints(m_parts[i], ptSize, p);
 		}
 	}
 

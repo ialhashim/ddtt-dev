@@ -84,6 +84,8 @@ void SymRelationViz::buildModelTree()
 		treeItem->setText(0, mm->m_name);
 		for (int j = 0; j < mm->m_parts.size(); ++j)
 		{
+			QVector<int> &tmp = mm->m_matches[0];
+			if ( j+1 >= tmp.size()) continue;
 			QTreeWidgetItem *treeItemPart = new QTreeWidgetItem();
 			treeItemPart->setText(0, QString::number(j));
 			QString str;
