@@ -91,6 +91,8 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 {
 	double prevEnergy = path->energy;
 
+	QSet<QString> mappedParts;
+
 	// Go over and apply the suggested assignments:
 	for (auto ap : path->assignments)
 	{
@@ -108,7 +110,12 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 		applyDeformation(path->shapeA.data(), path->shapeB.data(), la, lb, path->fixed + path->current, isSaveKeyframes);
 
 		// Track established correspondence
-		for (size_t i = 0; i < la.size(); i++) path->mapping[la[i]] = lb[i].split(",").front();
+		for (size_t i = 0; i < la.size(); i++)
+		{
+			auto targetPartID = lb[i].split(",").front();
+			path->mapping[la[i]] = targetPartID;
+			mappedParts << la[i];
+		}
 	}
 
 	// Evaluate distortion of shape
@@ -116,6 +123,9 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 
 	path->cost = curEnergy - prevEnergy;
 	path->energy = path->energy + path->cost;
+
+	// Assign costs to mapping:
+	for (auto partID : mappedParts) path->mappingCost[partID] = path->cost;
 }
 
 QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::SearchNode & path, int k_top)
@@ -272,7 +282,13 @@ QVector<Energy::SearchNode> Energy::GuidedDeformation::suggestChildren(Energy::S
 	sorted_children.resize(std::min(sorted_children.size(), k_top_candidates));
 
 	QVector < Energy::SearchNode > accepted_children;
-	for (auto & child : sorted_children) accepted_children.push_back(child.second);
+	for (auto & child : sorted_children)
+	{
+		// Copy parent's mapping cost
+		child.second.mappingCost = path.mappingCost;
+
+		accepted_children.push_back(child.second);
+	}
 
 	// Clean up of no longer needed data:
 	path.shapeA.clear();

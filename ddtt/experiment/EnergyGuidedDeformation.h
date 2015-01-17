@@ -19,6 +19,7 @@ namespace Energy
 		QSetString fixed, current, unassigned;
 		Assignments assignments;
 		QMap<QString, QString> mapping;
+		QMap<QString, double> mappingCost;
 		QSharedPointer<Structure::ShapeGraph> shapeA, shapeB;
 		QMap<QString, QVariant> property;
 		int num_children;

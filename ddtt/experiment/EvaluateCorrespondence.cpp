@@ -322,17 +322,30 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		if ( isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/ )
 		{
+			auto tn = targetShape->getNode(searchNode->mapping[n->id]);
 			before_ratio = n->property["solidity"].toDouble();
-			after_ratio = targetShape->getNode(searchNode->mapping[n->id])->property["solidity"].toDouble();
+			after_ratio = tn->property["solidity"].toDouble();
+
+			// Experimental: for reflectional symmetry minimize split factor
+			if (n->property["groupParts"].toStringList().size() == tn->property["groupParts"].toStringList().size() &&
+				n->property["groupParts"].toStringList().size() == 2)
+				before_ratio = after_ratio = 1.0;
 		}
 
 		volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
 
-		// Special case: disconnection of loop has fixed penalty
+		// Experimental: special case: disconnection of loop has fixed penalty
 		if (searchNode->mapping.contains(n->id) && ( n->property["isLoop"].toBool() != 
 			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
 			volumeRatio = 0.2;
 		}
+
+		// Experimental: extra penality from sheet to single curve
+		if (isApplicable && 
+			n->type() == Structure::SHEET && 
+			!n->property["isSplit"].toBool() &&
+			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE)
+			volumeRatio *= 0.8;
 
 		split_weights[n->id] = volumeRatio;
 

@@ -50,7 +50,7 @@ QString pathToHtml(Energy::SearchNode & p)
 		html << QString("<span class=source>%1</span>").arg(a.first.join("-"));
 		html << "<br/>";
 		html << QString("<span class=target>%1</span>").arg(a.second.join("-"));
-		if(p.assignments.size() > 1 && a != p.assignments.back()) html << "<br/>";
+		if (p.assignments.size() > 1 && a != p.assignments.back()) html << "<br/>";
 	}
 
 	html << "<br/>";
@@ -93,6 +93,23 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 				matchedTargetNodes << part;
 	}
 
+	std::set<QString> selected;
+	int topParts = pw->ui->topParts->value();
+	if (topParts)
+	{
+		QSet<double> costs;
+		for (auto spart : selected_path->mappingCost.keys())
+			costs << selected_path->mappingCost[spart];
+		
+		auto costsVector = costs.toList().toVector();
+		qSort(costsVector);
+		costsVector.resize(std::min(costsVector.size(), topParts));
+
+		for (auto spart : selected_path->mappingCost.keys())
+			if (costsVector.contains(selected_path->mappingCost[spart]))
+				selected.insert(spart);
+	}
+
 	// Assign colors based on target
 	int ci = 0;
 	for (auto & relation : graphs.back()->relations)
@@ -109,10 +126,20 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 	// Color matching source
 	for (auto spart : selected_path->mapping.keys())
 	{
-		auto tpart = selected_path->mapping[spart];
-		if (tpart == Structure::null_part) continue;
+		auto tpart = graphs.back()->getNode(selected_path->mapping[spart]);
+		if (tpart == nullptr) continue;
 
-		auto color = graphs.back()->getNode(tpart)->vis_property["meshColor"].value<QColor>();
+		auto color = tpart->vis_property["meshColor"].value<QColor>();
+
+		if (topParts) {
+			if (selected.find(spart) == selected.end()){
+				if (graphs.back()->hasRelation(tpart->id)){
+					//for (auto tpartID : graphs.back()->relationOf(tpart->id).parts)
+					//	graphs.back()->setColorFor(tpartID, QColor(100, 100, 100, 255));
+				}
+				continue;
+			}
+		}
 
 		graphs.front()->setColorFor(spart, color);
 		graphs.front()->getNode(spart)->vis_property["meshSolid"].setValue(true);
@@ -316,7 +343,7 @@ void experiment::doEnergySearch()
 		}
 		mainWindow()->setStatusBarMessage(QString("%1 ms - cost %2").arg(timeElapsed).arg(leastCost));
 
-		setSearchPath( selected_path );
+		setSearchPath(selected_path);
 	}
 	else
 	{
@@ -445,8 +472,8 @@ void experiment::showCorrespond(int idx)
 		}
 		else
 		{
-            //DeformEnergy d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
-            //for (auto debug : d.debug) drawArea()->addRenderObject(debug);
+			//DeformEnergy d(shapeA, shapeB, nidA, nidB, pw->ui->isVisualize->isChecked());
+			//for (auto debug : d.debug) drawArea()->addRenderObject(debug);
 		}
 	}
 }
@@ -457,7 +484,7 @@ void experiment::postCorrespond()
 
 	mainWindow()->setStatusBarMessage(QString("Search done in (%1 ms)").arg(mysearch->property["allSearchTime"].toInt()));
 
-    //bool isVisualize = pw->ui->isVisualize->isChecked();
+	//bool isVisualize = pw->ui->isVisualize->isChecked();
 
 	if (pw->ui->isShowParts->isChecked())
 		showCorrespond(mysearch->bestCorrespondence);
@@ -571,9 +598,9 @@ void experiment::doCorrespond2()
 
 	int num_solver_iterations = ((ExperimentWidget*)widget)->ui->numIterations->value();
 
-    //Deformer d(graphs.front(), graphs.back(), num_solver_iterations);
+	//Deformer d(graphs.front(), graphs.back(), num_solver_iterations);
 
-    //for (auto debug : d.debug)drawArea()->addRenderObject(debug);
+	//for (auto debug : d.debug)drawArea()->addRenderObject(debug);
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
 }
@@ -724,10 +751,10 @@ void experiment::create()
 	connect(pw->ui->loadJobs, &QPushButton::released, [&]{
 		QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
 		if (filename.isEmpty()) return;
-		QTimer::singleShot(0, [=] { 
+		QTimer::singleShot(0, [=] {
 			BatchProcess * bp = new BatchProcess(filename);
 			QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
-			mainWindow()->connect(bp, SIGNAL(reportMessage(QString,double)), SLOT(setStatusBarMessage(QString, double)));
+			mainWindow()->connect(bp, SIGNAL(reportMessage(QString, double)), SLOT(setStatusBarMessage(QString, double)));
 			bp->start();
 		});
 	});
@@ -754,10 +781,10 @@ void experiment::create()
 		}
 		job["assignments"].setValue(assignments);
 
-        if (pw->ui->isAnisotropy->isChecked())
-        {
-            job["isAnisotropy"].setValue(true);
-        }
+		if (pw->ui->isAnisotropy->isChecked())
+		{
+			job["isAnisotropy"].setValue(true);
+		}
 
 		BatchProcess::appendJob(job, filename);
 	});
@@ -826,7 +853,7 @@ void experiment::decorate()
 		{
 			if (!g->animation_debug.isEmpty())
 			{
-				int idx = std::min(g->animation_debug.size()-1, g->animation_index);
+				int idx = std::min(g->animation_debug.size() - 1, g->animation_index);
 				auto dbg = g->animation_debug[idx];
 				for (auto d : dbg) d->draw(*drawArea());
 			}
@@ -1040,12 +1067,12 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 				else
 				{
 					auto n = graphs.front()->nodes[i];
-					pts_cur.resize(n->numCtrlPnts(), Vector3(0,0,0));
+					pts_cur.resize(n->numCtrlPnts(), Vector3(0, 0, 0));
 
 					ptsCurrent.push_back(pts_cur);
 				}
 			}
-			
+
 			graphs.front()->setAllControlPoints(ptsCurrent);
 
 			for (auto n : graphs.front()->nodes) if (n->type() == Structure::SHEET) ((Structure::Sheet*)n)->surface.quads.clear();
