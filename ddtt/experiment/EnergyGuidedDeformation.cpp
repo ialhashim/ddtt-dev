@@ -1178,3 +1178,29 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	}
 	roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);
 }
+
+Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energy::SearchNode &path, int bestK)
+{
+	Energy::SearchNode newPath = path;
+	int reapeatTimes = path.mapping.size() - bestK;
+	while (reapeatTimes>0)
+	{
+		QVector<Energy::SearchNode> newPaths(newPath.mapping.size(), newPath);
+		for (int i = 0; i < newPaths.size(); i++)
+		{
+			newPaths[i].mapping.erase(newPaths[i].mapping.begin() + i);
+		}
+
+		std::vector<double> newCosts(newPaths.size());
+#pragma omp parallel for
+		for (int i = 0; i < newPaths.size(); i++)
+		{
+			newCosts[i] = EvaluateCorrespondence::evaluate(&newPaths[i]);
+		}
+
+		newPath = newPaths[std::min_element(newCosts.begin(),newCosts.end())-newCosts.begin()];
+
+		reapeatTimes--;
+	}
+	return newPath;
+}
