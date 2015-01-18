@@ -391,13 +391,9 @@ void experiment::doEnergySearch()
 		if (false)
 		{
 			//partial correspondence
-			int topParts = pw->ui->topParts->value();
-			search_roots.back() = egd->partialSelectionGreedy(search_roots.back(), topParts);
+			search_roots.back() = egd->partialSelectionGreedy(path, search_roots.back(), pw->ui->topParts->value());
 			selected_path = &(search_roots.back());
-
-			pw->ui->topParts->setValue(0);
 			setSearchPath(selected_path);
-			pw->ui->topParts->setValue(topParts);
 		}
 		else
 		{
