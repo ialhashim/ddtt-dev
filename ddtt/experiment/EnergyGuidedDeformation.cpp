@@ -965,6 +965,8 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 				costs[r] = curEnergy;
 				res[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+
+				res[r].mappingCost = path.mappingCost;
 			}
 		}
 	}
