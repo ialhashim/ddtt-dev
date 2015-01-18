@@ -388,14 +388,22 @@ void experiment::doEnergySearch()
 
 		auto timeElapsed = timer.elapsed();
 
-		//partial correspondence
-		int topParts = pw->ui->topParts->value();
-		search_roots.back() = egd->partialSelectionGreedy(search_roots.back(), topParts);
-		selected_path = &(search_roots.back());
+		if (false)
+		{
+			//partial correspondence
+			int topParts = pw->ui->topParts->value();
+			search_roots.back() = egd->partialSelectionGreedy(search_roots.back(), topParts);
+			selected_path = &(search_roots.back());
 
-		pw->ui->topParts->setValue(0);
-		setSearchPath(selected_path);
-		pw->ui->topParts->setValue(topParts);
+			pw->ui->topParts->setValue(0);
+			setSearchPath(selected_path);
+			pw->ui->topParts->setValue(topParts);
+		}
+		else
+		{
+			selected_path = &(search_roots.back());
+			setSearchPath(selected_path);
+		}
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
 
