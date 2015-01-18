@@ -1,6 +1,7 @@
 #include "StructureAnalysis.h"
 #include "ShapeGraph.h"
 #include "GenericGraph.h"
+#include "helpers/PhysicsHelper.h"
 
 void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebug)
 {
@@ -136,6 +137,16 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				for (size_t i = 0; i < r.parts.size(); i++)
 					r.deltas.push_back(centroid - shape->getNode(r.parts[i])->position(Eigen::Vector4d(0.5, 0.5, 0, 0)));
 			}
+		}
+
+		// Record volume of relation
+		{
+			double relationVolume = 0.0;
+			for (auto partID : r.parts){
+				auto mesh = shape->getNode(partID)->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				relationVolume += PhysicsHelper(mesh.data()).volume();
+			}
+			r.property["volume"].setValue(relationVolume);
 		}
 
 		// Add relation to shape:

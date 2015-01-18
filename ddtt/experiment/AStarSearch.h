@@ -83,7 +83,16 @@ namespace AStar
 		start.shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*root.shapeA.data()));
 		start.shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*root.shapeB.data()));
 		start.assignments = root.assignments;
-		start.unassigned = root.unassignedList();
+
+		if(root.unassigned.empty()) 
+		{
+			start.unassigned = root.unassignedList();
+		}
+		else
+		{
+			start.unassigned = root.unassigned;
+		}
+
 		Energy::GuidedDeformation::applyAssignment(&start, true);
 
 		auto startCopy = QSharedPointer<Energy::SearchNode>(new Energy::SearchNode(start));

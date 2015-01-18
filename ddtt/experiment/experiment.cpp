@@ -93,7 +93,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 				matchedTargetNodes << part;
 	}
 
-	std::set<QString> selected;
+	/*std::set<QString> selected;
 	int topParts = pw->ui->topParts->value();
 	if (topParts)
 	{
@@ -108,7 +108,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 		for (auto spart : selected_path->mappingCost.keys())
 			if (costsVector.contains(selected_path->mappingCost[spart]))
 				selected.insert(spart);
-	}
+	}*/
 
 	// Assign colors based on target
 	int ci = 0;
@@ -131,7 +131,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 
 		auto color = tpart->vis_property["meshColor"].value<QColor>();
 
-		if (topParts) {
+		/*if (topParts) {
 			if (selected.find(spart) == selected.end()){
 				if (graphs.back()->hasRelation(tpart->id)){
 					//for (auto tpartID : graphs.back()->relationOf(tpart->id).parts)
@@ -139,7 +139,7 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 				}
 				continue;
 			}
-		}
+		}*/
 
 		graphs.front()->setColorFor(spart, color);
 		graphs.front()->getNode(spart)->vis_property["meshSolid"].setValue(true);
@@ -212,6 +212,39 @@ void experiment::doEnergySearch()
 
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
+
+	// Partial search
+	int topParts = pw->ui->topParts->value();
+	if (topParts)
+	{
+		// Make copies
+		Structure::ShapeGraph a(*path.shapeA.data());
+		Structure::ShapeGraph b(*path.shapeB.data());
+
+		// Will compute volumes of groups
+		Energy::GuidedDeformation::preprocess(&a, &b);
+
+		// Sort by volume
+		QVector < QPair<double, Structure::Relation*> > volumeRelation;
+
+		for (auto & r : a.relations)
+			volumeRelation << qMakePair( r.property["volume"].toDouble(), &r );
+
+		qSort(volumeRelation);
+
+		std::reverse(volumeRelation.begin(), volumeRelation.end());
+
+		volumeRelation.resize(std::min(volumeRelation.size(), topParts));
+
+		for (auto vr : volumeRelation)
+		{
+			auto relation = vr.second;
+			for (auto partID : relation->parts)
+			{
+				path.unassigned << partID;
+			}
+		}
+	}
 
 	double timeElapsed = 0;
 

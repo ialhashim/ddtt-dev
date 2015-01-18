@@ -15,6 +15,7 @@ namespace Structure
         enum RelationType{ REFLECTIONAL, ROTATIONAL, TRANSLATIONAL, SELF, NULLRELATION } type;
         Vector3 axis, point;
 		Array1D_Vector3 deltas;
+		PropertyMap property;
 		Relation(Vector3 axis = Vector3(0, 0, 0), Vector3 point = Vector3(0, 0, 0), RelationType type = SELF) 
 			: axis(axis), point(point), type(type) {}
 		bool operator==(const Relation & other){ return this->parts == other.parts; }

@@ -53,6 +53,7 @@ namespace Energy
 	{
 		QSharedPointer<Structure::ShapeGraph> origShapeA, origShapeB;
 		QVector< SearchTree > searchTrees;
+		PropertyMap property;
 
 		static void preprocess(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB);
 		void searchAll(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots);
