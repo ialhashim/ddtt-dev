@@ -1181,16 +1181,64 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);
 }
 
-Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energy::SearchNode &path, int bestK)
+Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energy::SearchNode &initpath, const Energy::SearchNode &path, int bestK)
 {
-	Energy::SearchNode newPath = path;
-	int reapeatTimes = path.mapping.size() - bestK;
-	while (reapeatTimes>0)
+	//get volume size.
+	QMap<QString, double> partsToVolume;
+	Structure::ShapeGraph a(*initpath.shapeA.data());
+	Structure::ShapeGraph b(*initpath.shapeB.data());
+
+	// Will compute volumes of groups
+	Energy::GuidedDeformation::preprocess(&a, &b);
+
+	// Sort by volume
+	QVector < QPair<double, Structure::Relation*> > volumeRelation;
+
+	for (auto & r : a.relations)
+		volumeRelation << qMakePair(r.property["volume"].toDouble(), &r);
+
+	for (auto vr : volumeRelation)
 	{
-		QVector<Energy::SearchNode> newPaths(newPath.mapping.size(), newPath);
-		for (int i = 0; i < newPaths.size(); i++)
+		auto relation = vr.second;
+		for (auto partID : relation->parts)
 		{
-			newPaths[i].mapping.erase(newPaths[i].mapping.begin() + i);
+			partsToVolume[partID] = vr.first/* / (double)relation->parts.size()*/;
+		}
+	}
+
+	//
+	QMap<QString, QString> newMapping = path.mapping;
+	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+	SearchNode newPath = SearchNode(shapeA, shapeB, QSetString(), Energy::Assignments(), QSetString(), newMapping, 0);
+
+	int reapeatTimes = path.shapeA->relations.size() - bestK;
+	//everytime, select a relation;
+	while (reapeatTimes > 0)
+	{
+		double cost = EvaluateCorrespondence::evaluate(&newPath);
+
+		QVector<Structure::Relation> remainRelations = path.shapeA->relations;
+		for (QVector<Structure::Relation>::iterator irel = remainRelations.begin(); irel != remainRelations.end(); irel++)
+		{
+			if (partsToVolume.find(irel->parts.first()) == partsToVolume.end())
+			{
+				remainRelations.erase(irel); irel--;
+			}
+		}
+
+		QVector<Energy::SearchNode> newPaths;
+		for (int i = 0; i < remainRelations.size(); i++)
+		{
+			auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+			auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+
+			newPaths.push_back(SearchNode(shapeA, shapeB, QSetString(), Energy::Assignments(), QSetString(), newMapping, 0));
+			//remove mappings of the relation
+			for (auto &p : remainRelations[i].parts)
+			{
+				newPaths.back().mapping.erase(newPaths[i].mapping.find(p));
+			}
 		}
 
 		std::vector<double> newCosts(newPaths.size());
@@ -1198,11 +1246,70 @@ Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energ
 		for (int i = 0; i < newPaths.size(); i++)
 		{
 			newCosts[i] = EvaluateCorrespondence::evaluate(&newPaths[i]);
+			newCosts[i] = cost - newCosts[i];
 		}
 
-		newPath = newPaths[std::min_element(newCosts.begin(),newCosts.end())-newCosts.begin()];
+		//weighted cost for a possibly removed relation
+		for (int i = 0; i < newCosts.size(); i++)
+		{
+			newCosts[i] = newCosts[i] / partsToVolume[remainRelations[i].parts.first()];
+		}
+
+		int ind = std::max_element(newCosts.begin(), newCosts.end()) - newCosts.begin();
+		newMapping = newPaths[ind].mapping;
+
+		//update volume mapping
+		for (auto &p : remainRelations[ind].parts)
+		{
+			partsToVolume.erase(partsToVolume.find(p));
+		}
+
+		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+		newPath = SearchNode(shapeA, shapeB, QSetString(), Energy::Assignments(), QSetString(), newMapping, 0);
 
 		reapeatTimes--;
 	}
+
+	//everytime, select a part;
+	// 	int reapeatTimes = path.mapping.size() - bestK;
+	// 	while (reapeatTimes>0)
+	// 	{
+	// 		double cost = EvaluateCorrespondence::evaluate(&newPath);
+	// 
+	// 		QVector<Energy::SearchNode> newPaths(newMapping.size());
+	// 		for (int i = 0; i < newPaths.size(); i++)
+	// 		{
+	// 			auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+	// 			auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+	// 
+	// 			newPaths[i] = SearchNode(shapeA, shapeB, QSetString(), Energy::Assignments(), QSetString(), newMapping, 0);
+	// 			newPaths[i].mapping.erase(newPaths[i].mapping.begin() + i);
+	// 		}
+	// 
+	// 		std::vector<double> newCosts(newPaths.size());
+	// #pragma omp parallel for
+	// 		for (int i = 0; i < newPaths.size(); i++)
+	// 		{
+	// 			newCosts[i] = EvaluateCorrespondence::evaluate(&newPaths[i]);
+	// 			newCosts[i] = cost - newCosts[i];
+	// 		}
+	// 
+	// 		//weighted cost.
+	// 		int ind = 0;
+	// 		for (QMap<QString, QString>::iterator imap = newMapping.begin(); imap != newMapping.end(); imap++)
+	// 		{
+	// 			newCosts[ind] = newCosts[ind] / partsToVolume[imap.key()];
+	// 			ind++;
+	// 		}
+	// 
+	// 		newMapping = newPaths[std::min_element(newCosts.begin(), newCosts.end()) - newCosts.begin()].mapping;
+	// 
+	// 		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
+	// 		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
+	// 		newPath = SearchNode(shapeA, shapeB, QSetString(), Energy::Assignments(), QSetString(), newMapping, 0);
+	// 
+	// 		reapeatTimes--;
+	// 	}
 	return newPath;
 }
