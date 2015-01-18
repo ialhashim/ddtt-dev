@@ -350,23 +350,26 @@ void experiment::doEnergySearch()
 		egd->K = pw->ui->dpTopK->value();
 		egd->K_2 = pw->ui->dpTopK_2->value();
 		egd->isApplySYMH = pw->ui->isUseSYMH->isChecked();
+
 		egd->searchDP(graphs.front(), graphs.back(), search_roots);
+
 		auto timeElapsed = timer.elapsed();
 
+		//partial correspondence
+		int topParts = pw->ui->topParts->value();
+		search_roots.back() = egd->partialSelectionGreedy(search_roots.back(), topParts);
 		selected_path = &(search_roots.back());
-		setSearchPath(selected_path);
 
-		QApplication::restoreOverrideCursor();
+		pw->ui->topParts->setValue(0);
+		setSearchPath(selected_path);
+		pw->ui->topParts->setValue(topParts);
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
 
-		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(search_roots.back().energy));
-
-		timeUsed = timeElapsed;
-		leastCost = search_roots.back().energy;
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
 
 		QMessageBox tbox;
-		tbox.setText(QString("%1 ms - cost = %2").arg(timeUsed).arg(leastCost));
+		tbox.setText(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
 		tbox.exec();
 	}
 
