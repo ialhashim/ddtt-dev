@@ -4,6 +4,8 @@
 #include <QCommandLineParser>
 #include "BatchProcess.h"
 
+QVariantMap options;
+
 enum CommandLineParseResult{
     CommandLineOk,
     CommandLineError,
@@ -50,67 +52,90 @@ int main(int argc, char *argv[])
 			QString sourceShape = parser.value("sourceShape");
 			QString targetShape = parser.value("targetShape");
 
-            QVariantMap options;
-
             if(parser.isSet("g")) options["align"].setValue(true);
             if(parser.isSet("o")) options["roundtrip"].setValue(true);
             if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
 
-			int numJobs = 0;
-
             if(options["roundtrip"].toBool() || options["align"].toBool())
             {
-                QVector< QVector<QVariantMap> > reports;
+				QTimer::singleShot(1000, [sourceShape, targetShape] {
+					int numJobs = 0;
 
-                options["isManyTypesJobs"].setValue(QString("isManyTypesJobs"));
+					QVector< QVector<QVariantMap> > reports;
 
-                int numIter = 1;
+					options["isManyTypesJobs"].setValue(QString("isManyTypesJobs"));
 
-                // Command line now only supports two tests.. GUI has more options
-                if(options["align"].toBool()) numIter = 2;
+					int numIter = 1;
 
-                for(int iter = 0; iter < numIter; iter++)
-                {
-					auto bp = new BatchProcess(sourceShape, targetShape, options);
-					QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
-					QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
-					
-					bp->jobUID = numJobs++;
-					bp->start();
-					while (bp->isRunning());
+					// Command line now only supports two tests.. GUI has more options
+					if (options["align"].toBool()) numIter = 2;
 
-					reports << bp->jobReports;
-
-                    if(options["roundtrip"].toBool())
+					for (int iter = 0; iter < numIter; iter++)
 					{
-						auto bp2 = new BatchProcess(sourceShape, targetShape, options);
-						bp2->jobUID = numJobs++;
-						bp2->start();
-						while (bp2->isRunning());
+						auto bp = new BatchProcess(sourceShape, targetShape, options);
+						//QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
+						QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
 
-						reports << bp2->jobReports;
-                    }
+						bp->jobUID = numJobs++;
+						bp->start();
+						while (bp->isRunning())
+						{
+							qApp->processEvents();
+						}
+                        qApp->processEvents();
 
-                    options["isFlip"].setValue(true);
-                }
+						reports << bp->jobReports;
 
-				// Look at reports
-				double minEnergy = 1.0;
-				QVariantMap minJob;
-				for (auto reportVec : reports)
-				{
-					for (auto report : reportVec)
+						if (options["roundtrip"].toBool())
+						{
+                            auto bp2 = new BatchProcess(targetShape, sourceShape, options);
+
+							bp2->jobUID = numJobs++;
+							bp2->start();
+                            while (bp2->isRunning())
+                            {
+                                qApp->processEvents();
+                            }
+                            qApp->processEvents();
+
+							reports << bp2->jobReports;
+						}
+
+						options["isFlip"].setValue(true);
+					}
+
+					// Look at reports
+					double minEnergy = 1.0;
+					int totalTime = 0;
+					QVariantMap minJob;
+					for (auto reportVec : reports)
 					{
-						double c = report["min_cost"].toDouble();
-						if (c < minEnergy){
-							minEnergy = c;
-							minJob = report;
+						for (auto report : reportVec)
+						{
+							totalTime += report["search_time"].toInt();
+
+							double c = report["min_cost"].toDouble();
+							if (c < minEnergy){
+								minEnergy = c;
+								minJob = report;
+							}
 						}
 					}
-				}
 
-                std::cout << "\nJobs computed: " << numJobs << "\n";
-				std::cout << minEnergy << " - " << qPrintable(minJob["img_file"].toString());
+					std::cout << "\nJobs computed: " << numJobs << "\n";
+					std::cout << minEnergy << " - " << qPrintable(minJob["img_file"].toString());
+
+					// Aggregate results
+					{
+						QFile file("log.txt");
+						if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append))
+						{
+							QTextStream out(&file);
+							out << sourceShape << "," << targetShape << "," << minJob["min_cost"].toDouble() << "\n";
+						}
+					}
+					
+				});
             }
             else
             {

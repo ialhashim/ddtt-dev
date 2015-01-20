@@ -215,6 +215,15 @@ void BatchProcess::run()
 		}
 
         jobReports.push_back(jobReport);
+
+		// Log results
+		{
+			QFile file("log.txt");
+			if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)){
+				QTextStream out(&file);
+				out << source << "," << target << "," << jobReport["min_cost"].toDouble() << "\n";
+			}
+		}
 	}
 
 	allTime = allTimer.elapsed();
@@ -493,6 +502,7 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 			ShapeGeometry::decodeGeometry(shapeAcopy.data());
 
 			auto deformedImg = renderer->render(shapeAcopy.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
+            renderer->cur_shape = NULL;
 			deformedImg = drawText("[Deformed source]", deformedImg, 14, deformedImg.height() - 20);
 
 			cur_solution_img = stitchImages(cur_solution_img, deformedImg);
@@ -579,10 +589,11 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 	auto output_file = QString("%1/%2.job%3.png").arg(outputPath).arg(title).arg(jobUID);
 	img.save(output_file);
 
-	std::cout << " Saving image: " << qPrintable(output_file);
+    std::cout << " Saving image: " << qPrintable(output_file) << "\n";
 
     jobReport["img_file"].setValue(output_file);
 	jobReport["min_cost"].setValue(minCostResult);
+	jobReport["search_time"].setValue(searchTime);
 
 	return minCostResult;
 }
@@ -650,9 +661,8 @@ QImage RenderingWidget::render(Structure::ShapeGraph * shape)
 
 	// hack blocking to render shapes..
 	timer.start();
-	while (buffer.isNull())
-	{
-		if (timer.elapsed() > 1500)
+    while (buffer.isNull()){
+        if (timer.elapsed() > 2000)
 			break;
 	}
 	
@@ -767,7 +777,7 @@ BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVari
 	job["source"].setValue(sourceFilename);
 	job["target"].setValue(targetFilename);
 	job["title"].setValue(QFileInfo(sourceFilename).baseName() + "-" + QFileInfo(targetFilename).baseName());
-    job["isFlip"].setValue(true);
+    job["isFlip"].setValue(options["isFlip"].toBool());
 
 	jobsArray.push_back(QJsonObject::fromVariantMap(job));
 }
