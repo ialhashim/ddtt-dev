@@ -25,13 +25,10 @@ void computePerformance(double threshold = 0.8)
 {
 	QVector<Record> records;
 
-    QString datasetPath = "C:/Users/Ibraheem/Dropbox/DDTT-dataset/evaluation/userstudy/most recent";
+    QString datasetPath = "C:/Users/Yixin/Dropbox/DDTT-dataset/evaluation/userstudy/group matching";
 
-    QString endText = ".match";
-    QString extension = "*.match";
-
-    if(true) extension = QString("*g%1").arg(endText);
-
+    QString endText = ".gmatch";
+    QString extension = "*.gmatch";
 
 	QDir datasetDir(datasetPath);
 	QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
@@ -140,10 +137,12 @@ void computePerformance(double threshold = 0.8)
 
 	// Ground truth
 	// ShapePair/part_p/part_q
-	QMap <QString, QMap<QString, QString> > ground_truth;
+	QMap <QString, QMap<QString, QStringList> > ground_truth;
 	for (Record r : C)
 	{
-		ground_truth[r.shapeA + "|" + r.shapeB][r.p] = r.q;
+		QStringList tstr = ground_truth[r.shapeA + "|" + r.shapeB][r.p];
+		tstr.push_back(r.q);
+		ground_truth[r.shapeA + "|" + r.shapeB][r.p] = tstr;
 	}
 
 	// Test set:
@@ -152,8 +151,11 @@ void computePerformance(double threshold = 0.8)
 
 	int wins = 0;
 	int loss = 0;
+	int testPairs = 0;
 
-    auto matchFiles = testDir.entryList(QStringList() << extension, QDir::Files);
+// 	endText = ".match";
+// 	extension = "*.match";
+	auto matchFiles = testDir.entryList(QStringList() << extension, QDir::Files);
 	for (auto matches_filename : matchFiles)
 	{
 		// Get matches from file
@@ -184,20 +186,21 @@ void computePerformance(double threshold = 0.8)
 
 			if (ground_truth[shapeA + "|" + shapeB].contains(p))
 			{
-				QString truth = ground_truth[shapeA + "|" + shapeB][p];
+				QStringList truth = ground_truth[shapeA + "|" + shapeB][p];
 
-				if (truth == q)
+				if (truth.contains(q))
 					wins++;
 				else
 					loss++;
 			}
+			testPairs++;
 		}
 	}
 
 	double performance = (double(wins) / (wins + loss));
 
-	QString result = QString("Performance = %1, agreement %6%, selected = %4, wins = %2, loss = %3, all pairs = %5")
-		.arg(performance).arg(wins).arg(loss).arg(C.size()).arg(records.size()).arg(threshold * 100);
+	QString result = QString("Performance = %1, agreement %6%, selected = %4, wins = %2, loss = %3, all pairs = %5, test = %7")
+		.arg(performance).arg(wins).arg(loss).arg(C.size()).arg(records.size()).arg(threshold * 100).arg(testPairs);
 
 	QMessageBox::information(0, "Performance", result);
 

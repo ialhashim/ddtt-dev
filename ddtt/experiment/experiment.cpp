@@ -1165,6 +1165,15 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 		}
 	}
 
+	if (event->key() == Qt::Key_S + Qt::Key_Control)
+	{
+		groupReMatchingBatch();
+	}
+	if (event->key() == Qt::Key_S)
+	{
+		groupReMatching();
+	}
+
 	drawArea()->update();
 	return false;
 }
@@ -1255,4 +1264,140 @@ void experiment::decodeGeometry()
 		ShapeGeometry::decodeGeometry(g);
 		break; // only decode source
 	}
+}
+
+void experiment::groupReMatchingBatch()
+{
+	QString jobfilename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Jobs"), "", tr("Jobs File (*.json)"));
+	if (jobfilename.isEmpty()) return;
+
+	QFile jobfile;
+	jobfile.setFileName(jobfilename);
+	if (!jobfile.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+	QJsonDocument jdoc = QJsonDocument::fromJson(jobfile.readAll());
+	auto json = jdoc.object();
+
+	auto datasetPath = json["orig"].toString();
+	QJsonArray jobsArray= json["pairs"].toArray();
+
+	for (auto & j : jobsArray){		//for each pair of models
+
+		auto job = j.toObject(); if (job.isEmpty()) continue;
+		auto pathSrc = job["source"].toString();
+		auto pathDes = job["target"].toString();
+
+		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(pathSrc));
+		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(pathDes));
+		Structure::ShapeGraph a(*shapeA.data());
+		Structure::ShapeGraph b(*shapeB.data());
+		Energy::GuidedDeformation::preprocess(&a, &b);
+		auto& relationA = a.relations;
+		auto& relationB = b.relations;
+
+		//for each user
+		QDir datasetDir(datasetPath);
+		QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
+		QStringList users;
+		for (QString subdir : subdirs)
+		{
+			QString d(datasetPath + "/" + subdir + "/");
+			QString wholePath = d + job["title"].toString() + ".match";
+
+			QFile infile(wholePath);
+			if (!infile.open(QIODevice::ReadOnly)) {
+				QMessageBox::information(0, "error", infile.errorString());
+			}
+			QTextStream in(&infile);
+
+			QVector<QString> partsA, partsB;
+			QString partNameA, partNameB;
+			while (!in.atEnd())	{
+				in >> partNameA >> partNameB;
+				if (partNameA.isEmpty()) break;
+
+				partsA.push_back(partNameA);
+				partsB.push_back(partNameB);
+			}
+			infile.close();
+
+			QMap<QString, int> newMatch;
+			for (int i = 0; i < partsA.size(); i++){
+				auto groupNameA = a.relationOf(partsA[i]).parts.first();
+				auto groupNameB = b.relationOf(partsB[i]).parts.first();
+				newMatch[QString("%1. %2").arg(groupNameA).arg(groupNameB)] = i;
+			}
+
+			//write group match to file
+			auto newFileName = wholePath.split(".");
+			auto filename = newFileName.front() + ".g" + newFileName.back();
+			QFile newfile(filename);
+			if (!newfile.open(QIODevice::WriteOnly)) {
+				QMessageBox::information(0, "error", newfile.errorString());
+			}
+			QTextStream out(&newfile);
+
+			for (QMap<QString, int>::iterator imap = newMatch.begin(); imap != newMatch.end(); imap++){
+				auto splitName = imap.key().split(".");
+				out << splitName.front() << splitName.back() << endl;
+			}
+			newfile.close();
+		}
+	}
+}
+void experiment::groupReMatching()
+{
+	//1.get our groups;
+	auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.front()));
+	auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*graphs.back()));
+	Structure::ShapeGraph a(*shapeA.data());
+	Structure::ShapeGraph b(*shapeB.data());
+	// Will compute volumes of groups
+	Energy::GuidedDeformation::preprocess(&a, &b);
+	auto& relationA = a.relations;
+	auto& relationB = b.relations;
+
+
+	//2.get user matching
+	QString filename = QFileDialog::getOpenFileName(mainWindow(), tr("Load Matching"), "", tr("Match File (*.match)"));
+	if (filename.isEmpty()) return;
+
+	QFile file(filename);
+	if (!file.open(QIODevice::ReadOnly)) {
+		QMessageBox::information(0, "error", file.errorString());
+	}
+	QTextStream in(&file);
+
+	QVector<QString> partsA, partsB;
+	QString partNameA, partNameB;
+	while (!in.atEnd())	{
+		in >> partNameA >> partNameB;
+		if (partNameA.isEmpty()) break;
+
+		partsA.push_back(partNameA);
+		partsB.push_back(partNameB);
+	}
+	file.close();
+
+	//3.make our matching
+	QMap<QString, int> newMatch;
+	for (int i = 0; i < partsA.size(); i++){
+		auto groupNameA = a.relationOf(partsA[i]).parts.first();
+		auto groupNameB = b.relationOf(partsB[i]).parts.first();
+		newMatch[QString("%1. %2").arg(groupNameA).arg(groupNameB)] = i;
+	}
+
+	//4. write group match to file
+	auto newFileName = filename.split(".");
+	filename = newFileName.front() + ".g" + newFileName.back();
+	QFile newfile(filename);
+	if (!newfile.open(QIODevice::WriteOnly)) {
+		QMessageBox::information(0, "error", newfile.errorString());
+	}
+	QTextStream out(&newfile);
+
+	for (QMap<QString, int>::iterator imap = newMatch.begin(); imap != newMatch.end(); imap++){
+		auto splitName = imap.key().split(".");
+		out << splitName.front() << splitName.back() << endl;
+	}
+	newfile.close();
 }
