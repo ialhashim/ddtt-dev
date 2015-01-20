@@ -608,10 +608,14 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 			// Clone underlying geometry
 			{
-				auto orig_mesh = new_snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >().data();
-				QSharedPointer<SurfaceMeshModel> new_mesh_ptr(orig_mesh->clone());
-				new_mesh_ptr->updateBoundingBox();
-				new_snode->property["mesh"].setValue(new_mesh_ptr);
+				auto orig_mesh_ptr = new_snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				if (!orig_mesh_ptr.isNull())
+				{
+					auto orig_mesh = orig_mesh_ptr.data();
+					QSharedPointer<SurfaceMeshModel> new_mesh_ptr(orig_mesh->clone());
+					new_mesh_ptr->updateBoundingBox();
+					new_snode->property["mesh"].setValue(new_mesh_ptr);
+				}
 			}
 
 			shapeA->addNode(new_snode);

@@ -526,6 +526,8 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 				reportItems += key + " : " + detail;
 			}
 
+			reportItems += QString("Total number of parts = %1").arg(egd.origShapeA->nodes.size() + egd.origShapeB->nodes.size());
+
 			// Record found correspondence
 			QString mapping;
 			for (auto key : selected_path->mapping.keys())

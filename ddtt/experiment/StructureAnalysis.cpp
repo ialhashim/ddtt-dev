@@ -144,8 +144,10 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			double relationVolume = 0.0;
 			for (auto partID : r.parts){
 				auto mesh = shape->getNode(partID)->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				if (mesh.isNull()) continue;
 				relationVolume += PhysicsHelper(mesh.data()).volume();
 			}
+			if (relationVolume == 0.0) relationVolume = 1.0;
 			r.property["volume"].setValue(relationVolume);
 		}
 

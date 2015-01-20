@@ -68,12 +68,17 @@ Array2D_Vector4d EvaluateCorrespondence::sampleNode(Structure::ShapeGraph * shap
 		// Volume
 		double volume = 0.0;
 		auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
-		if (mesh->property("volume").isValid())
-			volume = mesh->property("volume").toDouble();
-		else{
-			volume = PhysicsHelper(mesh.data()).volume();
-			mesh->setProperty("volume", volume);
+
+		if (!mesh.isNull())
+		{
+			if (mesh->property("volume").isValid())
+				volume = mesh->property("volume").toDouble();
+			else{
+				volume = PhysicsHelper(mesh.data()).volume();
+				mesh->setProperty("volume", volume);
+			}
 		}
+
 		n->property["orig_volume"].setValue(volume);
 
 		// Check if is a loop
@@ -135,6 +140,8 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			{
 				auto n = shape->getNode(partID);
 				auto mesh = n->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >();
+				if (mesh.isNull()) continue;
+
 				mesh->updateBoundingBox();
 
 				QVector <double> part_projections;
@@ -150,8 +157,18 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 
 				min_part_range = std::min(min_part_range, part_projections.back() - part_projections.front());
 			}
+
+			// When no meshes exist..
+			if (!all_projections.size())
+			{
+				for (auto partID : r.parts) shape->getNode(partID)->property["solidity"].setValue(1);
+				continue;
+			}
+
 			qSort(all_projections);
 			double group_range = all_projections.back() - all_projections.front();
+
+			if (min_part_range == DBL_MAX) min_part_range = 1.0;
 
 			double filled = (min_part_range * r.parts.size());
 

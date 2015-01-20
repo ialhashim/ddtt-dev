@@ -746,7 +746,7 @@ void experiment::create()
 		auto newG = new Structure::ShapeGraph(filename);
 		for (auto n : newG->nodes){
 			auto m = newG->getMesh(n->id);
-			m->updateBoundingBox();
+			if(m) m->updateBoundingBox();
 		}
 
 		graphs << newG;
@@ -964,8 +964,11 @@ void experiment::decorate()
 				for (auto n : g2->nodes){
 					auto m = g2->getMesh(n->id);
 					if (!m) g2->property["width"].setValue(bbox.sizes().x());
-					m->updateBoundingBox();
-					bbox.extend(m->bbox());
+					else
+					{
+						m->updateBoundingBox();
+						bbox.extend(m->bbox());
+					}
 				}
 				g2->property["width"].setValue(bbox.sizes().x());
 
