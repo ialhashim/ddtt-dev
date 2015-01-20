@@ -251,8 +251,6 @@ void BatchProcess::run()
 		bool isSearchAstar = true;
 		unsigned int numNodesSearched = 0;
 
-		int k_top = 5;
-
 		if ( isDPsearch )
 		{
 			auto sourceShape = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA.data()));
@@ -260,6 +258,10 @@ void BatchProcess::run()
 
 			egd.K = dpTopK;
 			egd.K_2 = dpTopK_2;
+
+			if (job.contains("dpTopK")) egd.K = job["dpTopK"].toInt();
+			if (job.contains("dpTopK_2")) egd.K_2 = job["dpTopK_2"].toInt();
+
 			//egd.isApplySYMH = pw->ui->isUseSYMH->isChecked();
 			egd.searchDP(sourceShape.data(), targetShape.data(), search_roots);
 
@@ -267,6 +269,8 @@ void BatchProcess::run()
 		}
 		else if ( isSearchAstar )
 		{
+			int k_top = 5;
+
 			for (auto & solution : AStar::search(path, 100, k_top, &numNodesSearched))
 			{
 				egd.origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
