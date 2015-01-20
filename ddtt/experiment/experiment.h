@@ -50,4 +50,8 @@ public slots:
 
 	void encodeGeometry();
 	void decodeGeometry();
+
+	//temp use
+	void groupReMatching();
+	void groupReMatchingBatch();
 };
