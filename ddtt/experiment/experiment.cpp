@@ -388,7 +388,7 @@ void experiment::doEnergySearch()
 
 		auto timeElapsed = timer.elapsed();
 
-		if (false)
+		if (pw->ui->topParts->value())
 		{
 			//partial correspondence
 			search_roots.back() = egd->partialSelectionGreedy(path, search_roots.back(), pw->ui->topParts->value());

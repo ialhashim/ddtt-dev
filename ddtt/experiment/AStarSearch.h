@@ -74,7 +74,7 @@ namespace AStar
 	};
 
 	static inline std::vector< std::vector<Energy::SearchNode> > search(Energy::SearchNode & root, 
-		int num_solutions = 100, int k_top = 5, unsigned int * steps = nullptr)
+		int num_solutions = 100, int k_top = 4, unsigned int * steps = nullptr)
 	{
 		// Prepare shapes
 		Energy::GuidedDeformation::preprocess(root.shapeA.data(), root.shapeB.data());

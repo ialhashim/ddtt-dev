@@ -72,7 +72,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 			applyAssignment(&path, false);
 
 			// Collect valid suggestions
-			auto suggested_children = suggestChildren(path, 5);
+			auto suggested_children = suggestChildren(path, 3);
 			for (auto & child : suggested_children)
 				searchTree.append_child(pathItr, child);
 			path.num_children = suggested_children.size();
@@ -1221,7 +1221,7 @@ Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energ
 		QVector<Structure::Relation> remainRelations = path.shapeA->relations;
 		for (QVector<Structure::Relation>::iterator irel = remainRelations.begin(); irel != remainRelations.end(); irel++)
 		{
-			if (partsToVolume.find(irel->parts.first()) == partsToVolume.end())
+			if (!irel->parts.empty() && partsToVolume.find(irel->parts.first()) == partsToVolume.end())
 			{
 				remainRelations.erase(irel); irel--;
 			}

@@ -308,6 +308,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	QVector<double> distortion_vector, split_vector, connection_vector;
 
 	// Unary properties:
+	/// Splitting term:
 	QMap<QString, double> split_weights;
 	QMap<QString, bool> isSeen;
 	for (auto n : shape->nodes)
@@ -334,18 +335,19 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
 
-		// Experimental: special case: disconnection of loop has fixed penalty
+		// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
 		if (searchNode->mapping.contains(n->id) && ( n->property["isLoop"].toBool() != 
 			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
 			volumeRatio = 0.2;
 		}
 
-		// Experimental: extra penality from sheet to single curve
+		// Experimental: extra penalty from sheet to single curve
 		if (isApplicable && 
 			n->type() == Structure::SHEET && 
 			!n->property["isSplit"].toBool() &&
-			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE)
+			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
 			volumeRatio *= 0.8;
+		}
 
 		split_weights[n->id] = volumeRatio;
 
@@ -365,7 +367,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
 
-		/// (a) Connection: scale by difference in closeness distance
+		/// (a) Connection: difference in closeness distance
 		double connection_weight = 1.0;
 		{
 			auto minMaxDist = [](Array1D_Vector3& vectors){
@@ -397,6 +399,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 		QVector < double > link_vector;
 
+		// Deformation of structural rods
 		for (size_t i = 0; i < original_spokes.size(); i++)
 		{
 			double v = original_spokes[i].normalized().dot(current_spokes[i].normalized());

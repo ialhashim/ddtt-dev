@@ -77,6 +77,8 @@ MainWindow::MainWindow(QWidget *parent) :
     {
         qDebug() << record.p << " " << record.q << " " << record.shapeA << " " << record.shapeB << " " << record.user ;
     }
+
+     qDebug() << "Num records =" << records.size();
 }
 
 MainWindow::~MainWindow()
