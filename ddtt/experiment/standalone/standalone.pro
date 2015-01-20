@@ -3,7 +3,8 @@ include($$[SURFACEMESH])
 include($$[NANOFLANN])
 StarlabTemplate(none)
 
-QT       += core gui
+QT     += core gui
+CONFIG += console
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 

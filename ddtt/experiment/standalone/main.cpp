@@ -18,12 +18,16 @@ int main(int argc, char *argv[])
     //w.show();
 
     QCommandLineParser parser;
+    parser.addHelpOption();
     parser.addOptions({
 			{ "nogui", QString("Using command line arguments, do not show GUI.") },
-			{ { "p", "path" }, QString("Path for job files or shape files."), QString("path") },
-			{ { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
-			{ { "s", "sourceShape" }, QString("Path for job files or shape files."), QString("source") },
-			{ { "t", "targetShape" }, QString("Path for job files or shape files."), QString("target") },
+            { { "p", "path" }, QString("Path for job files or shape files."), QString("path") },
+            { { "g", "align" }, QString("Input is not aligned. Find lowest cost alignment.") },
+            { { "o", "roundtrip" }, QString("Compute least cost from source to target, and target to source.") },
+            { { "s", "sourceShape" }, QString("Path for source shape file."), QString("source") },
+            { { "t", "targetShape" }, QString("Path for target shape file."), QString("target") },
+            { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
+            { { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
 	});
 
@@ -39,17 +43,82 @@ int main(int argc, char *argv[])
 	QDir::setCurrent(path);
 
     QString jobs_filename;
-    if(parser.isSet("nogui") || parser.isSet("auto"))
+    if(parser.isSet("nogui") || parser.isSet("auto") || parser.isSet("sourceShape"))
     {
-		if (parser.isSet("auto") && parser.isSet("sourceShape") && parser.isSet("targetShape"))
+        if (parser.isSet("auto") || parser.isSet("sourceShape") || parser.isSet("targetShape"))
 		{
 			QString sourceShape = parser.value("sourceShape");
 			QString targetShape = parser.value("targetShape");
 
-			BatchProcess * bp = new BatchProcess(sourceShape, targetShape);
-			QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
-			QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
-			bp->start();
+            QVariantMap options;
+
+            if(parser.isSet("g")) options["align"].setValue(true);
+            if(parser.isSet("o")) options["roundtrip"].setValue(true);
+            if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
+
+			int numJobs = 0;
+
+            if(options["roundtrip"].toBool() || options["align"].toBool())
+            {
+                QVector< QVector<QVariantMap> > reports;
+
+                options["isManyTypesJobs"].setValue(QString("isManyTypesJobs"));
+
+                int numIter = 1;
+
+                // Command line now only supports two tests.. GUI has more options
+                if(options["align"].toBool()) numIter = 2;
+
+                for(int iter = 0; iter < numIter; iter++)
+                {
+					auto bp = new BatchProcess(sourceShape, targetShape, options);
+					QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
+					QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
+					
+					bp->jobUID = numJobs++;
+					bp->start();
+					while (bp->isRunning());
+
+					reports << bp->jobReports;
+
+                    if(options["roundtrip"].toBool())
+					{
+						auto bp2 = new BatchProcess(sourceShape, targetShape, options);
+						bp2->jobUID = numJobs++;
+						bp2->start();
+						while (bp2->isRunning());
+
+						reports << bp2->jobReports;
+                    }
+
+                    options["isFlip"].setValue(true);
+                }
+
+				// Look at reports
+				double minEnergy = 1.0;
+				QVariantMap minJob;
+				for (auto reportVec : reports)
+				{
+					for (auto report : reportVec)
+					{
+						double c = report["min_cost"].toDouble();
+						if (c < minEnergy){
+							minEnergy = c;
+							minJob = report;
+						}
+					}
+				}
+
+                std::cout << "\nJobs computed: " << numJobs << "\n";
+				std::cout << minEnergy << " - " << qPrintable(minJob["img_file"].toString());
+            }
+            else
+            {
+                auto bp = new BatchProcess(sourceShape, targetShape, options);
+                QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
+                QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
+                bp->start();
+            }
 
 			return a.exec();
 		}

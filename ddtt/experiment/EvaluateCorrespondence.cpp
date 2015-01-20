@@ -439,7 +439,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	double total_cost = (w_d * distortion_cost) + (w_s * split_cost) + (w_c * connection_cost);
 
 	// Logging:
-	costMap["zzShapeCost"].setValue(QString("Total (%1) = Distortion (%2) + Split (%3) + Connection(%4)")
+    costMap["zzShapeCost"].setValue(QString("Total (%1) = Distortion (%2) + (w_s) Split (%3) + (w_c) Connection(%4)")
 		.arg(total_cost).arg(distortion_cost).arg(split_cost).arg(connection_cost));
  	shape->property["costs"].setValue(costMap);
 

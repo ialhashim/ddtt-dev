@@ -29,16 +29,20 @@ class BatchProcess : public QThread
 	Q_OBJECT
 public:
     BatchProcess(QString filename);
-	BatchProcess(QString sourceFilename, QString targetFilename);
+	BatchProcess(QString sourceFilename, QString targetFilename, QVariantMap options = QVariantMap());
 
 	QProgressDialog * pd;
 	RenderingWidget * renderer;
+	int jobUID;
 
 	void init();
 	void run();
 
 	static void appendJob(QVariantMap job, QString filename);
 	void exportJobFile(QString filename);
+
+	double executeJob(QString sourceFile, QString targetFile, QJsonObject & job, 
+		Energy::Assignments & assignments, QVariantMap & jobReport, int jobIdx);
 
 	// Job properties:
 	QString jobfilename;
@@ -48,10 +52,14 @@ public:
 	bool isSwapped;
 	bool isSaveReport;
 	bool isOutputMatching;
+	bool isShowDeformed;
+	bool isManyTypesJobs;
 	int thumbWidth;
 	QJsonArray jobsArray;
 
 	int dpTopK, dpTopK_2;
+
+    QVector<QVariantMap> jobReports;
 
 public slots:
 	void setJobsArray(QJsonArray);

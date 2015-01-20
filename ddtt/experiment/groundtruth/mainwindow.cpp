@@ -25,7 +25,13 @@ void computePerformance(double threshold = 0.8)
 {
 	QVector<Record> records;
 
-	QString datasetPath = "C:/Users/Ibraheem/Dropbox/DDTT-dataset/evaluation/userstudy";
+    QString datasetPath = "C:/Users/Ibraheem/Dropbox/DDTT-dataset/evaluation/userstudy/most recent";
+
+    QString endText = ".match";
+    QString extension = "*.match";
+
+    if(true) extension = QString("*g%1").arg(endText);
+
 
 	QDir datasetDir(datasetPath);
 	QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
@@ -36,7 +42,7 @@ void computePerformance(double threshold = 0.8)
 	{
 		QDir d(datasetPath + "/" + subdir);
 
-		auto matchFiles = d.entryList(QStringList() << "*.match", QDir::Files);
+        auto matchFiles = d.entryList(QStringList() << extension, QDir::Files);
 		if (matchFiles.isEmpty()) continue;
 
 		users << subdir;
@@ -50,7 +56,8 @@ void computePerformance(double threshold = 0.8)
 			auto matches = in.readAll().split("\n", QString::SkipEmptyParts);
 
 			// Shape names
-			QStringList shapes = matchFile.replace(".match", "").split("-", QString::SkipEmptyParts);
+            QStringList shapes = matchFile.replace(endText, "").split("-", QString::SkipEmptyParts);
+            if(shapes.back() == "g") shapes.removeLast();
 
 			bool isSwap = shapes.front() > shapes.back();
 
@@ -97,7 +104,7 @@ void computePerformance(double threshold = 0.8)
 	// Passed threshold
 	int num_users = users.size();
 	
-	QVector<Record> C;
+    QVector<Record> C, badC;
 
 	for (QString shapePair : part_matches.keys())
 	{
@@ -119,9 +126,15 @@ void computePerformance(double threshold = 0.8)
 				{
 					C << Record(cur_shape_pairs.front(), cur_shape_pairs.back(), p, q, "from_users");
 				}
+                else
+                {
+                    badC << Record(cur_shape_pairs.front(), cur_shape_pairs.back(), p, q, "from_users");
+                }
 			}
 		}
 	}
+
+	int totalNumPairTypes = C.size() + badC.size();
 
 	//qDebug() << "Num records passed =" << C.size();
 
@@ -140,7 +153,7 @@ void computePerformance(double threshold = 0.8)
 	int wins = 0;
 	int loss = 0;
 
-	auto matchFiles = testDir.entryList(QStringList() << "*.match", QDir::Files);
+    auto matchFiles = testDir.entryList(QStringList() << extension, QDir::Files);
 	for (auto matches_filename : matchFiles)
 	{
 		// Get matches from file
@@ -149,7 +162,9 @@ void computePerformance(double threshold = 0.8)
 		QTextStream in(&ff);
 		auto matches = in.readAll().split("\n", QString::SkipEmptyParts);
 
-		QStringList shapes = matches_filename.replace(".match", "").split("-", QString::SkipEmptyParts);
+        QStringList shapes = matches_filename.replace(endText, "").split("-", QString::SkipEmptyParts);
+        if(shapes.back() == "g") shapes.removeLast();
+
 		bool isSwap = shapes.front() > shapes.back();
 
 		// Shape names sorted
