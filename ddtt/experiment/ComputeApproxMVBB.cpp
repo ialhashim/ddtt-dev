@@ -8181,8 +8181,12 @@ public:
     }
 private:
     unsigned int & m_deletedPoints;
-    const Vector2 m_base; const unsigned int m_baseIdx;
-    const Eigen::Ref<const Matrix2Dyn> m_p;
+    //const Vector2 m_base;
+    Eigen::Matrix<double,2,1,Eigen::DontAlign> m_base;
+    const unsigned int m_baseIdx;
+    //const Eigen::Ref<const Matrix2Dyn> m_p;
+    Eigen::Matrix<double,2,2,Eigen::DontAlign> m_p;
+
 };
 
 };
@@ -8247,7 +8251,7 @@ public:
         m_maxPoint += Vector2(d,d);
     };
 
-    inline void expand(Vector2 d) {
+    inline void expand(const Vector2& d) {
         ApproxMVBB_ASSERTMSG(d(0)>=0 && d(1)>=0,"d>=0")
                 m_minPoint -= d;
         m_maxPoint += d;
@@ -9185,15 +9189,18 @@ public:
 */
 template<typename Derived>
 OOBB approximateMVBBGridSearch(const Eigen::MatrixBase<Derived> & points,
-                               OOBB oobb,
+                               const OOBB& _oobb,
                                double epsilon,
                                const unsigned int gridSize = 5,
                                const unsigned int optLoops = 6
-        ) {
-    EIGEN_STATIC_ASSERT_MATRIX_SPECIFIC_SIZE(Derived,3,Eigen::Dynamic)
+        )
+{
+    EIGEN_STATIC_ASSERT_MATRIX_SPECIFIC_SIZE(Derived,3,Eigen::Dynamic);
 
-            // Define the volume lower bound above we accept a new volume as
-            double volumeAcceptTol = oobb.volume() * 1e-6;
+    OOBB oobb = _oobb;
+
+    // Define the volume lower bound above we accept a new volume as
+    double volumeAcceptTol = oobb.volume() * 1e-6;
 
     //Get the direction of the input OOBB in I frame:
     Vector3 dir1 = oobb.getDirection(0);
@@ -9344,11 +9351,14 @@ void samplePointsGrid(Matrix3Dyn & newPoints,
 */
 template<typename Derived>
 OOBB optimizeMVBB( const Eigen::MatrixBase<Derived> & points,
-                   OOBB oobb, unsigned int times = 10) {
+                   const OOBB& _oobb, unsigned int times = 10)
+{
 
-    EIGEN_STATIC_ASSERT_MATRIX_SPECIFIC_SIZE(Derived,3,Eigen::Dynamic)
+    EIGEN_STATIC_ASSERT_MATRIX_SPECIFIC_SIZE(Derived,3,Eigen::Dynamic);
 
-            if( oobb.volume() == 0.0 || times == 0) {
+    OOBB oobb = _oobb;
+
+    if( oobb.volume() == 0.0 || times == 0) {
         return oobb;
     }
 

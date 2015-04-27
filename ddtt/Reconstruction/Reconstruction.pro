@@ -61,6 +61,7 @@ SOURCES +=  poissonrecon.cpp \
             Src/BSplineData.inl \
             Src/Array.inl
 
+win32: QMAKE_CXXFLAGS_RELEASE -= -Zc:strictStrings
 unix:!mac:QMAKE_CXXFLAGS = $$QMAKE_CFLAGS -fpermissive
 mac:QMAKE_LFLAGS += -fopenmp
 mac:QMAKE_CXXFLAGS += -fopenmp

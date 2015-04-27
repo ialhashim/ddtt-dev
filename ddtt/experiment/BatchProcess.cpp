@@ -216,7 +216,8 @@ void BatchProcess::run()
 
         jobReports.push_back(jobReport);
 
-		// Log results
+		// Log this result
+		if (false)
 		{
 			QFile file("log.txt");
 			if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append)){
@@ -377,6 +378,12 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 	searchTime = searchTimer.elapsed();
 
 	double minCostResult = 1.0;
+
+	// Prepare for matching file
+	QString match_file;
+	if (isManyTypesJobs) match_file = QString("%1/%2.job%3.match").arg(outputPath).arg(title).arg(jobUID);
+	else match_file = QString("%1/%2.match").arg(outputPath).arg(title);
+	jobReport["match_file"].setValue(match_file);
 
 	/// Draw top solutions:
 	QImage img;
@@ -545,11 +552,6 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 			// Only output best match:
 			if (r == 0)
 			{
-				QString match_file;
-				
-				if(isManyTypesJobs) match_file = QString("%1/%2.job%3.match").arg(outputPath).arg(title).arg(jobUID);
-				else match_file = QString("%1/%2.match").arg(outputPath).arg(title);
-
 				QFile file(match_file);
 				file.open(QFile::WriteOnly | QFile::Text);
 				QTextStream out(&file);
@@ -567,18 +569,17 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 					QString sid = realID(sn);
 					QString tid = realID(tn);
 
-					/*if (!selected_path->shapeB->hasRelation(tid))
-
-					else
+					// Check for one-to-many case
+					bool isSourceOne = !selected_path->shapeA->hasRelation(sid) || selected_path->shapeA->relationOf(sid).parts.size() == 1;
+					bool isTargetMany = selected_path->shapeB->hasRelation(tid) && selected_path->shapeB->relationOf(tid).parts.size() > 1;
+					if (isSourceOne && isTargetMany)
 					{
-					for (auto tj : selected_path->shapeB->relationOf(tid).parts)
-					out << QString("%1 %2\n").arg(sid).arg(tj);
-					}*/
-
-					out << QString("%1 %2\n").arg(sid).arg(tid);
+						for (auto tj : selected_path->shapeB->relationOf(tid).parts)
+							out << QString("%1 %2\n").arg(sid).arg(tj);
+					}
+					else
+						out << QString("%1 %2\n").arg(sid).arg(tid);
 				}
-
-                jobReport["match_file"].setValue(match_file);
 			}
 		}
 	}
@@ -593,6 +594,7 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 
     std::cout << " Saving image: " << qPrintable(output_file) << "\n";
 
+	jobReport["is_swapped"].setValue(jobUID);
     jobReport["img_file"].setValue(output_file);
 	jobReport["min_cost"].setValue(minCostResult);
 	jobReport["search_time"].setValue(searchTime);
@@ -764,14 +766,14 @@ BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVari
 {
 	init();
 
-    if(options.contains("k"))
+    if (options.contains("k"))
     {
         isDPsearch = true;
         dpTopK_2 = options["k"].value<int>();
     }
 
-	if (options.contains("isManyTypesJobs"))
-		isManyTypesJobs = options["isManyTypesJobs"].toBool();
+	isManyTypesJobs = options["isManyTypesJobs"].toBool();
+	isOutputMatching = options["isOutputMatching"].toBool();
 
 	QDir d(""); d.mkpath(outputPath);
 

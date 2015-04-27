@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QFileDialog>
 #include <QCommandLineParser>
+#include <QProcess>
 #include "BatchProcess.h"
 
 QVariantMap options;
@@ -12,6 +13,35 @@ enum CommandLineParseResult{
     CommandLineVersionRequested,
     CommandLineHelpRequested
 };
+
+typedef QMap<QString, PropertyMap> DatasetMap;
+DatasetMap shapesInDataset(QString datasetPath)
+{
+	DatasetMap dataset;
+
+	QDir datasetDir(datasetPath);
+	QStringList subdirs = datasetDir.entryList(QDir::Dirs | QDir::NoSymLinks | QDir::NoDotAndDotDot);
+
+	for(auto subdir : subdirs)
+	{
+		// Special folders
+		if (subdir == "corr") continue;
+
+		QDir d(datasetPath + "/" + subdir);
+
+		// Check if no graph is in this folder
+		if (d.entryList(QStringList() << "*.xml", QDir::Files).isEmpty()) continue;
+
+		auto xml_files = d.entryList(QStringList() << "*.xml", QDir::Files);
+
+		dataset[subdir]["Name"] = subdir;
+		dataset[subdir]["graphFile"] = d.absolutePath() + "/" + (xml_files.empty() ? "" : xml_files.front());
+		dataset[subdir]["thumbFile"] = d.absolutePath() + "/" + d.entryList(QStringList() << "*.png", QDir::Files).join("");
+		dataset[subdir]["objFile"] = d.absolutePath() + "/" + d.entryList(QStringList() << "*.obj", QDir::Files).join("");
+	}
+
+	return dataset;
+}
 
 int main(int argc, char *argv[])
 {
@@ -31,6 +61,7 @@ int main(int argc, char *argv[])
             { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
             { { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
+            { { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {
@@ -43,6 +74,143 @@ int main(int argc, char *argv[])
 
 	QString path = parser.value("p");
 	QDir::setCurrent(path);
+
+    // Process shape sets
+    if(parser.isSet("folder"))
+    {
+		QElapsedTimer timer; timer.start();
+
+        QString dataset = parser.value("folder");
+		QDir d("");
+
+		// 1) get sorted set of pairs to compare
+		QVector< QPair<PropertyMap, PropertyMap> > shapePairs;
+		auto folders = shapesInDataset(dataset);
+		auto folderKeys = folders.keys();
+		for (int i = 0; i < folderKeys.size(); i++)
+			for (int j = i + 1; j < folderKeys.size(); j++)
+				shapePairs << qMakePair(folders[folderKeys.at(i)], folders[folderKeys.at(j)]);
+		int shapePairsCount = shapePairs.size();
+		int curShapePair = 0;
+		
+		// 2) perform correspondence for shape pairs
+		{
+			// Remove previous log file
+			d.remove("log.txt");
+
+			// go over pairs
+			for (auto shapePair : shapePairs)
+			{
+				QProcess p;
+				QString source = shapePair.first["graphFile"].toString();
+				QString target = shapePair.second["graphFile"].toString();
+
+				auto sg = QFileInfo(source).baseName();
+				auto tg = QFileInfo(target).baseName();
+
+				std::cout << QString("Now: %1 / %2 - ").arg(sg).arg(tg).toStdString();
+
+				QStringList pargs;
+				pargs << "-s" << source << "-t" << target;	// input
+				if (parser.isSet("o")) pargs << "-o";		// search options
+				if (parser.isSet("k")) pargs << "-k" << parser.value("k");
+
+				p.start(a.applicationFilePath(), pargs);
+				p.waitForFinished(-1);
+
+				auto percent = (double(curShapePair++) / shapePairsCount) * 100.0;
+				std::cout << QString("[%1 %] - %2 - ").arg((int)percent).arg(shapePairsCount-curShapePair).toStdString();
+				std::cout << QString("Time (%1 s=%2 min)\n").arg(timer.elapsed() / 1000).arg(timer.elapsed() / 60000).toStdString();
+			}
+		}
+
+		// 3) prepare results folder
+		QString job_name = QString("job_%1").arg(QDateTime::currentDateTime().toString("dd_MM_yyyy_hh_mm_ss"));
+		d.mkpath(job_name);
+
+		// 4) collect results
+		{
+			// output sorted set of shapes
+			{
+				QFile file(d.absolutePath() + "/" + job_name + "/" + "shapes.txt");
+				if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
+					QTextStream out(&file);
+					for (int i = 0; i < folderKeys.size(); i++)
+						out << QString("%1 %2\n").arg(i).arg(folderKeys.at(i));
+				}
+			}
+
+			// read log and record the minimum costs and correspondence results
+			{
+				QFile ff(d.absolutePath() + "/" + job_name + "/" + "log.txt");
+				ff.open(QFile::ReadOnly | QFile::Text);
+				QTextStream in(&ff);
+				auto datasetLogLines = in.readAll().split("\n", QString::SkipEmptyParts);
+
+				// Hopefully everything went well
+				assert(datasetLogLines.size() == shapePairs.size());
+				if (datasetLogLines.size() != shapePairs.size()) return -1;
+
+				// Record final results
+				QJsonObject results;
+				int idx = 0;
+				for (int i = 0; i < folderKeys.size(); i++){
+					for (int j = i + 1; j < folderKeys.size(); j++){
+						// Read matching pair info
+						auto log_line = datasetLogLines[idx].split(",", QString::SkipEmptyParts);
+						QJsonObject matching;
+						matching["source"] = log_line.at(0);
+						matching["target"] = log_line.at(1);
+						matching["cost"] = log_line.at(2);
+
+						// Get correspondence data
+						QString correspondenceFile = log_line.at(3);
+						bool isSwapped = (log_line.at(4).toInt() % 2) == 0;
+						QJsonArray correspondence;
+						{
+							// Open correspondence file
+							QFile cf(correspondenceFile);
+							cf.open(QFile::ReadOnly | QFile::Text);
+							QTextStream cfin(&cf);
+							auto corrLines = cfin.readAll().split("\n", QString::SkipEmptyParts);
+
+							// Read correspondence file (swapping if needed)
+							for (auto line : corrLines)
+							{
+								auto matched_pair = line.split(" ", QString::SkipEmptyParts);
+								QString sid = matched_pair.at(0);
+								QString tid = matched_pair.at(1);
+								if (isSwapped) std::swap(sid, tid);
+
+								QJsonArray part_pair;
+								part_pair.push_back(sid);
+								part_pair.push_back(tid);
+								correspondence.push_back(part_pair);
+							}
+						}
+						matching["correspondence"] = correspondence;
+
+						// indexing
+						matching["i"] = i;
+						matching["j"] = j;
+
+						// Record result
+						results[QString("%1").arg(idx++)] = matching;
+					}
+				}
+
+				// Write all results in JSON format
+				{
+					QJsonDocument saveDoc(results);
+					QFile saveFile(d.absolutePath() + "/" + job_name + "/" + "dataset.corr");
+					saveFile.open(QIODevice::WriteOnly);
+					saveFile.write(saveDoc.toJson());
+				}
+			}
+		}
+
+		return folders.size();
+    }
 
     QString jobs_filename;
     if(parser.isSet("nogui") || parser.isSet("auto") || parser.isSet("sourceShape"))
@@ -63,7 +231,8 @@ int main(int argc, char *argv[])
 
 					QVector< QVector<QVariantMap> > reports;
 
-					options["isManyTypesJobs"].setValue(QString("isManyTypesJobs"));
+					options["isManyTypesJobs"].setValue(true);
+					options["isOutputMatching"].setValue(true);
 
 					int numIter = 1;
 
@@ -131,7 +300,7 @@ int main(int argc, char *argv[])
 						if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append))
 						{
 							QTextStream out(&file);
-							out << sourceShape << "," << targetShape << "," << minJob["min_cost"].toDouble() << "\n";
+							out << sourceShape << "," << targetShape << "," << minJob["min_cost"].toDouble() << "," << minJob["match_file"].toString() << "," << minJob["is_swapped"].toInt() << "\n";
 						}
 					}
 					

@@ -1,5 +1,6 @@
 #include "PropagateProximity.h"
 #include "ShapeGraph.h"
+#include <array>
 
 #include "convexhull2d.h"
 #include "mean_value_coordinates.h"
@@ -138,8 +139,8 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
 				{
                     // Only consider outer most constraints
                     QVector<ProximityConstraint> filtered_constraints;
-                    std::vector<Eigen::Vector2d> coords;
-                    for (auto & c : c_list) coords.push_back(Eigen::Vector2d(c.coord()[0], c.coord()[1]));
+                    std::vector< std::array<double,2> > coords;
+					for (auto & c : c_list) coords.push_back({ { c.coord()[0], c.coord()[1] } });
 					for (auto idx : chull2d::convex_hull_2d(coords)) filtered_constraints << c_list[idx];
 
 					if (filtered_constraints.size() == 2 || n->type() == Structure::CURVE)

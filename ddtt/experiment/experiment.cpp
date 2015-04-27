@@ -208,7 +208,8 @@ void experiment::doEnergySearch()
 
 	// Create a search path
 	Energy::Assignments assignments;
-	for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
+	if (landmarks_front.size() == landmarks_back.size())
+		for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
 
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);

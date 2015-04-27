@@ -5,13 +5,10 @@ SUBDIRS += NURBS
 SUBDIRS += GlSplatRendererLib
 SUBDIRS += Reconstruction
 SUBDIRS += StructureGraphLib
-SUBDIRS += AuctionLIB
-SUBDIRS += bowlib
+SUBDIRS += experiment/libQDigraph
 
 # Main plugin
-SUBDIRS += ddtt-plugin functional
+SUBDIRS += experiment
 
-# Aux. plugins
-SUBDIRS += empty-mesh
-
-ddtt-plugin.depends = AuctionLIB StructureGraphLib bowlib
+# Standalone tool
+SUBDIRS += experiment/standalone

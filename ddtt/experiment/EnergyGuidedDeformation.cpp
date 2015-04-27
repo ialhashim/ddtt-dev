@@ -537,7 +537,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			Eigen::Vector4d range = (end_c - start_c).cwiseAbs();
 			int snapIDX = range[0] > range[1] ? 1 : 0;
 
-			auto coordSnap = [&](Eigen::Vector4d coord, int dim, int samplesCount, int curvesCount){
+            auto coordSnap = [&](const Eigen::Vector4d& _coord, int dim, int samplesCount, int curvesCount){
+                Eigen::Vector4d coord = _coord;
 				if (curvesCount >= samplesCount) return coord;
 				double interval = 1.0 / curvesCount;
 				double v = coord[dim] < 0.5 ? floor(coord[dim] / interval) : ceil(coord[dim] / interval);
