@@ -437,7 +437,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			auto tcurve = tnode_sheet->convertToNURBSCurve(start_point, direction);
 			auto tcurve_id = tnode_sheet->id + "," + la[i];
 
-			auto newCurve = shapeB->addNode(new Structure::Curve(tcurve, tcurve_id));
+			auto newCurve = shapeB->getNode(tcurve_id) ? shapeB->getNode(tcurve_id) : shapeB->addNode(new Structure::Curve(tcurve, tcurve_id));
 			newCurve->property["solidity"].setValue(1.0);
 			lb << newCurve->id;
 		}

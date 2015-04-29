@@ -5,8 +5,6 @@
 #include <QProcess>
 #include "BatchProcess.h"
 
-QVariantMap options;
-
 enum CommandLineParseResult{
     CommandLineOk,
     CommandLineError,
@@ -61,7 +59,8 @@ int main(int argc, char *argv[])
             { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
             { { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
-            { { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
+			{ { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
+			{ { "q", "quiet" }, QString("Skip visualization.") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {
@@ -108,19 +107,26 @@ int main(int argc, char *argv[])
 				auto sg = QFileInfo(source).baseName();
 				auto tg = QFileInfo(target).baseName();
 
-				std::cout << QString("Now: %1 / %2 - ").arg(sg).arg(tg).toStdString();
+				std::cout << QString("Now: %1 / %2").arg(sg).arg(tg).leftJustified(35, ' ', true).toStdString();
 
 				QStringList pargs;
-				pargs << "-s" << source << "-t" << target;	// input
-				if (parser.isSet("o")) pargs << "-o";		// search options
+
+				// input
+				pargs << "-s" << source << "-t" << target;	
+
+				// search options
+				if (parser.isSet("o")) pargs << "-o";		
 				if (parser.isSet("k")) pargs << "-k" << parser.value("k");
+				if (parser.isSet("q")) pargs << "-q";
 
 				p.start(a.applicationFilePath(), pargs);
 				p.waitForFinished(-1);
 
 				auto percent = (double(curShapePair++) / shapePairsCount) * 100.0;
 				std::cout << QString("[%1 %] - %2 - ").arg((int)percent).arg(shapePairsCount-curShapePair).toStdString();
-				std::cout << QString("Time (%1 s=%2 min)\n").arg(timer.elapsed() / 1000).arg(timer.elapsed() / 60000).toStdString();
+				int secPerPercent = (timer.elapsed() / 1000) / (percent + 1);
+				int timeMinLeft = (secPerPercent * (100 - percent)) / 60;
+				std::cout << QString("Time (%1s=%2m) ETA(%3m)\n").arg(timer.elapsed() / 1000).arg(timer.elapsed() / 60000).arg(timeMinLeft).toStdString();
 			}
 		}
 
@@ -142,7 +148,7 @@ int main(int argc, char *argv[])
 
 			// read log and record the minimum costs and correspondence results
 			{
-				QFile ff(d.absolutePath() + "/" + job_name + "/" + "log.txt");
+				QFile ff(d.absolutePath() + "/" + "log.txt");
 				ff.open(QFile::ReadOnly | QFile::Text);
 				QTextStream in(&ff);
 				auto datasetLogLines = in.readAll().split("\n", QString::SkipEmptyParts);
@@ -152,7 +158,7 @@ int main(int argc, char *argv[])
 				if (datasetLogLines.size() != shapePairs.size()) return -1;
 
 				// Record final results
-				QJsonObject results;
+				QJsonArray results;
 				int idx = 0;
 				for (int i = 0; i < folderKeys.size(); i++){
 					for (int j = i + 1; j < folderKeys.size(); j++){
@@ -195,7 +201,8 @@ int main(int argc, char *argv[])
 						matching["j"] = j;
 
 						// Record result
-						results[QString("%1").arg(idx++)] = matching;
+						results.push_back(matching);
+						idx++;
 					}
 				}
 
@@ -219,67 +226,60 @@ int main(int argc, char *argv[])
 		{
 			QString sourceShape = parser.value("sourceShape");
 			QString targetShape = parser.value("targetShape");
+			QVariantMap options;
 
             if(parser.isSet("g")) options["align"].setValue(true);
             if(parser.isSet("o")) options["roundtrip"].setValue(true);
             if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
+			if(parser.isSet("q")) options["isQuietMode"].setValue(true);
 
             if(options["roundtrip"].toBool() || options["align"].toBool())
-            {
-				QTimer::singleShot(1000, [sourceShape, targetShape] {
+			{
+				options["isManyTypesJobs"].setValue(true);
+				options["isOutputMatching"].setValue(true);
+
+				QTimer::singleShot(1, [sourceShape, targetShape, options]
+				{
 					int numJobs = 0;
 
-					QVector< QVector<QVariantMap> > reports;
+					auto cur_options = options;
 
-					options["isManyTypesJobs"].setValue(true);
-					options["isOutputMatching"].setValue(true);
+					QVector< QVector<QVariantMap> > reports;
 
 					int numIter = 1;
 
 					// Command line now only supports two tests.. GUI has more options
-					if (options["align"].toBool()) numIter = 2;
+					if (cur_options["align"].toBool()) numIter = 2;
 
 					for (int iter = 0; iter < numIter; iter++)
 					{
-						auto bp = new BatchProcess(sourceShape, targetShape, options);
-						//QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
-						QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
+						auto bp = QSharedPointer<BatchProcess>(new BatchProcess(sourceShape, targetShape, cur_options));
 
 						bp->jobUID = numJobs++;
-						bp->start();
-						while (bp->isRunning())
-						{
-							qApp->processEvents();
-						}
-                        qApp->processEvents();
+						bp->run();
 
 						reports << bp->jobReports;
 
-						if (options["roundtrip"].toBool())
+						if (cur_options["roundtrip"].toBool())
 						{
-                            auto bp2 = new BatchProcess(targetShape, sourceShape, options);
+							auto bp2 = QSharedPointer<BatchProcess>(new BatchProcess(targetShape, sourceShape, cur_options));
 
 							bp2->jobUID = numJobs++;
-							bp2->start();
-                            while (bp2->isRunning())
-                            {
-                                qApp->processEvents();
-                            }
-                            qApp->processEvents();
+							bp2->run();
 
 							reports << bp2->jobReports;
 						}
 
-						options["isFlip"].setValue(true);
+						cur_options["isFlip"].setValue(true);
 					}
 
 					// Look at reports
 					double minEnergy = 1.0;
 					int totalTime = 0;
 					QVariantMap minJob;
-					for (auto reportVec : reports)
+					for (auto & reportVec : reports)
 					{
-						for (auto report : reportVec)
+						for (auto & report : reportVec)
 						{
 							totalTime += report["search_time"].toInt();
 
@@ -304,7 +304,8 @@ int main(int argc, char *argv[])
 						}
 					}
 					
-				});
+				}
+				);
             }
             else
             {

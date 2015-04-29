@@ -39,11 +39,16 @@ void BatchProcess::init()
 
 	// Clean up my self
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
+	this->connect(this, &BatchProcess::allJobsFinished, [&]{
+		this->thread()->quit();
+	});
 
 	// Rendering	
-    renderer = new RenderingWidget(512, NULL);
-	renderer->move(0, 0);
-	renderer->connect(this, SIGNAL(allJobsFinished()), SLOT(deleteLater()));
+	if (isVisualize)
+	{
+		renderer = new RenderingWidget(512, NULL);
+		renderer->move(0, 0);
+	}
 
 	// Progress
 	pd = new QProgressDialog("Searching..", "Cancel", 0, 0);
@@ -53,11 +58,15 @@ void BatchProcess::init()
 	pd->connect(this, SIGNAL(setLabelText(QString)), SLOT(setLabelText(QString)));
 
 	// Show progress
-	renderer->show();
-	pd->show();
+	if (isVisualize)
+	{
+		renderer->show();
+		pd->setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
+		pd->show();
+	}
 }
 
-BatchProcess::BatchProcess(QString filename) : jobfilename(filename)
+BatchProcess::BatchProcess(QString filename) : jobfilename(filename), isVisualize(true)
 {
 	init();
 
@@ -464,11 +473,15 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 			}
 		}
 
-		auto cur_solution_img = stitchImages(
-			renderer->render(shapeA.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation),
-			renderer->render(shapeB.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
+		QImage cur_solution_img;
+		if (isVisualize)
+		{
+			cur_solution_img  = stitchImages(
+				renderer->render(shapeA.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation),
+				renderer->render(shapeB.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation));
 
-		renderer->cur_shape = NULL;
+			renderer->cur_shape = NULL;
+		}
 
 		// Show deformed
 		if (isShowDeformed)
@@ -508,11 +521,14 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 			// Compute deformed underlying surface
 			ShapeGeometry::decodeGeometry(shapeAcopy.data());
 
-			auto deformedImg = renderer->render(shapeAcopy.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
-            renderer->cur_shape = NULL;
-			deformedImg = drawText("[Deformed source]", deformedImg, 14, deformedImg.height() - 20);
+			if (isVisualize)
+			{
+				auto deformedImg = renderer->render(shapeAcopy.data()).scaledToWidth(thumbWidth, Qt::TransformationMode::SmoothTransformation);
+				renderer->cur_shape = NULL;
+				deformedImg = drawText("[Deformed source]", deformedImg, 14, deformedImg.height() - 20);
 
-			cur_solution_img = stitchImages(cur_solution_img, deformedImg);
+				cur_solution_img = stitchImages(cur_solution_img, deformedImg);
+			}
 		}
 
 		// Details of solution if requested
@@ -544,8 +560,11 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		}
 
 		// Visualization
-		cur_solution_img = drawText(QString("s %2: cost = %1").arg(cost).arg(r), cur_solution_img);
-		img = stitchImages(img, cur_solution_img, true, 0);
+		if (isVisualize)
+		{
+			cur_solution_img = drawText(QString("s %2: cost = %1").arg(cost).arg(r), cur_solution_img);
+			img = stitchImages(img, cur_solution_img, true, 0);
+		}
 
 		if (isOutputMatching)
 		{
@@ -584,18 +603,21 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		}
 	}
 
-	QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
-	int msgWidth = QFontMetrics(QFont()).width(msg) + 14;
-	img = drawText(msg, img, img.width() - msgWidth, 14);
-	img = drawText(QString("steps %1").arg(numNodesSearched), img, img.width() - msgWidth, 30);
+	if (isVisualize)
+	{
+		QString msg = QString("Solution time (%1 s)").arg(double(searchTime) / 1000.0);
+		int msgWidth = QFontMetrics(QFont()).width(msg) + 14;
+		img = drawText(msg, img, img.width() - msgWidth, 14);
+		img = drawText(QString("steps %1").arg(numNodesSearched), img, img.width() - msgWidth, 30);
 
-	auto output_file = QString("%1/%2.job%3.png").arg(outputPath).arg(title).arg(jobUID);
-	img.save(output_file);
+		auto output_file = QString("%1/%2.job%3.png").arg(outputPath).arg(title).arg(jobUID);
+		img.save(output_file);
+		std::cout << " Saving image: " << qPrintable(output_file) << "\n";
 
-    std::cout << " Saving image: " << qPrintable(output_file) << "\n";
+		jobReport["img_file"].setValue(output_file);
+	}
 
 	jobReport["is_swapped"].setValue(jobUID);
-    jobReport["img_file"].setValue(output_file);
 	jobReport["min_cost"].setValue(minCostResult);
 	jobReport["search_time"].setValue(searchTime);
 
@@ -762,8 +784,10 @@ RenderingWidget::RenderingWidget(int width, QWidget * parent) : cur_shape(NULL),
 }
 
 // All automatic option
-BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVariantMap options)
+BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVariantMap options) : isVisualize(true)
 {
+	isVisualize = !options["isQuietMode"].toBool();
+
 	init();
 
     if (options.contains("k"))

@@ -54,6 +54,7 @@ public:
 	bool isOutputMatching;
 	bool isShowDeformed;
 	bool isManyTypesJobs;
+	bool isVisualize;
 	int thumbWidth;
 	QJsonArray jobsArray;
 
