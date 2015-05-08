@@ -94,10 +94,11 @@ BatchProcess::BatchProcess(QString filename) : jobfilename(filename), isVisualiz
             dpTopK_2 = json.contains("dpTopK_2") ? json["dpTopK_2"].toInt() : 2;
 		}
 
+        QDir d(""); d.mkpath(outputPath);
+
 		// Clear past results in output folder
         if(json["isCleanOutputFolder"].toBool())
         {
-            QDir d(""); d.mkpath(outputPath);
             QDir dir(outputPath);
             for (auto filename : dir.entryList(QDir::Files))
                 if (filename.endsWith(".png") || filename.endsWith(".txt") || filename.endsWith(".match"))
@@ -637,7 +638,7 @@ void BatchProcess::appendJob(QVariantMap job, QString filename)
 	// Default values if needed
 	if (!json.contains("outputPath"))
 	{
-		json["outputPath"] = QString("outputPath");
+        json["outputPath"] = QString("outputPath");
 		json["resultsCount"] = 6;
 		json["isSaveReport"] = true;
 	}
