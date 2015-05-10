@@ -430,6 +430,9 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			link_vector << v;
 		}
 
+		// Should not happen..
+		if (original_spokes.size() == 0) link_vector << 0;
+
 		for (auto v : link_vector) distortion_vector << v;
 
 		double sum_link_vector = 0; for (auto v : link_vector) sum_link_vector += v;

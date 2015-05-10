@@ -13,7 +13,8 @@ tic
 opt = {};
 opt.FastArrayParser = 1;
 opt.ShowProgress = 1;
-json = loadjson(filename, opt);
+%json = loadjson(filename, opt);
+json = fromjson(fileread(filename));
 toc
 
 % Load shape names
@@ -42,7 +43,10 @@ for i=1:length(json)
     M(idx_j,idx_i) = cost;
     
     shapes{idx_i}.graph = pair.source;
-    shapes{idx_i}.thumb = [pair.source(1:length(pair.source)-3) 'png'];
+    shapes{idx_i}.thumb = getThumbForShape([pair.source(1:length(pair.source)-3) 'png']);
+    
+    shapes{idx_j}.graph = pair.target;
+    shapes{idx_j}.thumb = getThumbForShape([pair.target(1:length(pair.target)-3) 'png']);
 end
 
 % Normalize
@@ -51,3 +55,13 @@ end
 %M = (M-mmin) ./ (mmax-mmin);
 
 end
+
+function thumb_img_filename = getThumbForShape(thumb_img_filename)
+    if ~exist(thumb_img_filename,'file')
+        pathstr = fileparts(thumb_img_filename);
+        files = dir( fullfile(pathstr,'*.png') );   %# list all *.xyz files
+        files = {files.name}';                      %'# file names
+        thumb_img_filename = strjoin([pathstr '/' files(1)],'');
+    end
+end
+

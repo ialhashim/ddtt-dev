@@ -1,24 +1,25 @@
-function [M, shapes, clustering, centers] = demo(filename,shapes_filename)
-    
+function [M, shapes, clustering, centers] = demo_kmedioids(filename,shapes_filename)
+    close all;
+
     % Load correspondence results
     [M, shapes]=loadCorrespondence(filename,shapes_filename);
 
     % Convert distance to similairty
-    s = 1-M;
-
-    % Preference 
-    p = median(1-M);
+    %s = 1-M;
 
     % Cluster
-    clusters = apcluster(s,p);
-
+    num_clusters = 5;
+    [inds,centers] = kmedioids(M, num_clusters);
+    clusters = inds;
+    for i=1:size(inds, 2)
+        clusters(i) = centers(inds(i));
+    end
+    
     % Visualize
-    centers = unique(clusters);
     k = length(centers);
     clustering = cell(1,k);
 
     % Collect shape indicies per cluster
-    max_cluster_length = 0;
     for i=1:k
         cluster_center = centers(i);
         ele_indices = find(clusters == cluster_center);
@@ -29,8 +30,6 @@ function [M, shapes, clustering, centers] = demo(filename,shapes_filename)
             idx = ele_indices(j);        
             clustering{i}.elements{j} = idx;
         end
-        
-        max_cluster_length = max([max_cluster_length, size(ele_indices)]);
     end
 
     % Setup thumbnails for clusters
@@ -42,34 +41,26 @@ function [M, shapes, clustering, centers] = demo(filename,shapes_filename)
         class_representative = makeThumb(shapes{ idx_representative }.thumb);
         length_cur_cluster = length(cur_cluster);
         
-        row = cell(max_cluster_length,1);
-        row{1} = class_representative;
+        row = class_representative;
         
-        u = 2;
         for i=1:length_cur_cluster
             cur_idx = cur_cluster{i};
             cluster_element = shapes{ cur_idx };
             img = makeThumb(cluster_element.thumb);
-            row{u} = img;
             if cur_idx == idx_representative
                 continue
             end
-            u = u + 1;
+            row = [row img];
         end
         
         cols{c} = row;
     end
 
     % 
-    for iRow = 1:k
-        for iCol = 1:max_cluster_length 
-            %subplot(k, max_cluster_length, iCol + ((iRow-1)*max_cluster_length));
-            subaxis(k, max_cluster_length, iCol + ((iRow-1)*max_cluster_length), 'SpacingVert',0);
-            r = cols{iRow};
-            c = r{iCol};
-            imshow(c);
-            axis off; 
-        end 
+    for i = 1:k
+        subplot(k,1,i);
+        imshow(cols{i});
+        axis off; 
     end 
     fclose('all');
 end

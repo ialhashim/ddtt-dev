@@ -91,6 +91,8 @@ int main(int argc, char *argv[])
 				shapePairs << qMakePair(folders[folderKeys.at(i)], folders[folderKeys.at(j)]);
 		int shapePairsCount = shapePairs.size();
 		int curShapePair = 0;
+
+        QString dir_name = QDir(dataset).dirName();
 		
 		// 2) perform correspondence for shape pairs
 		{
@@ -138,7 +140,7 @@ int main(int argc, char *argv[])
 		{
 			// output sorted set of shapes
 			{
-				QFile file(d.absolutePath() + "/" + job_name + "/" + "shapes.txt");
+                QFile file(d.absolutePath() + "/" + job_name + "/" + "shapes_" + dir_name + ".txt");
 				if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
 					QTextStream out(&file);
 					for (int i = 0; i < folderKeys.size(); i++)
@@ -167,7 +169,7 @@ int main(int argc, char *argv[])
 						QJsonObject matching;
 						matching["source"] = log_line.at(0);
 						matching["target"] = log_line.at(1);
-						matching["cost"] = log_line.at(2);
+                        matching["cost"] = log_line.at(2).toDouble();
 
 						// Get correspondence data
 						QString correspondenceFile = log_line.at(3);
@@ -209,7 +211,7 @@ int main(int argc, char *argv[])
 				// Write all results in JSON format
 				{
 					QJsonDocument saveDoc(results);
-					QFile saveFile(d.absolutePath() + "/" + job_name + "/" + "dataset.corr");
+                    QFile saveFile(d.absolutePath() + "/" + job_name + "/result_" + dir_name + ".corr");
 					saveFile.open(QIODevice::WriteOnly);
 					saveFile.write(saveDoc.toJson());
 				}

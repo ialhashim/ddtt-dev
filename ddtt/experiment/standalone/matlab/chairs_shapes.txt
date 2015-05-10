@@ -35,4 +35,7 @@
 34 kchair6
 35 kchair7
 36 kchair8
-37 teaserSwivel
+37 other5chair
+38 other6chair
+39 other7chair
+40 teaserSwivel

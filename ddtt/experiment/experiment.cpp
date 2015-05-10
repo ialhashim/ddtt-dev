@@ -275,6 +275,15 @@ void experiment::doEnergySearch()
 
 			selected_path = new Energy::SearchNode(sorted_solutions[leastCost]);
 
+			// Details of evaluation
+			{
+				double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
+				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+
+				pw->ui->pathsList->clear();
+				for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
+			}
+
 			timeElapsed = timer.elapsed();
 		}
 		else
