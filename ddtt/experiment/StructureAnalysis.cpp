@@ -2,6 +2,7 @@
 #include "ShapeGraph.h"
 #include "GenericGraph.h"
 #include "helpers/PhysicsHelper.h"
+#include "disjointset.h"
 
 void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebug)
 {
@@ -64,10 +65,32 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 
 			for (auto c : centers) centroid += c;
 			centroid /= centers.size();
-			Array1D_Real dists;
-			for (auto c : centers) dists.push_back((c-centroid).norm());
+			Array1D_Real cdists;
+			for (auto c : centers) cdists.push_back((c - centroid).norm());
 
-			// Median absolute deviation (MAD) 
+			// Compute closest pair distance 
+			std::vector< QVector<double> > pair_dists(g.size());
+			Array1D_Real dists(g.size());
+			for (int i = 0; i < g.size(); i++){
+				for (int j = 0; j < g.size(); j++){
+					if (i==j) continue;
+					double d = (centers.at(i) - centers.at(j)).norm();
+					pair_dists[i] << d;
+				}
+				std::sort(pair_dists[i].begin(), pair_dists[i].end());
+				dists[i] = (pair_dists[i][0] + pair_dists[i][1]) / 2.0;
+			}
+			double avg_dist_pair = 0;
+			for (auto d : dists) avg_dist_pair += d;
+			avg_dist_pair /= dists.size();
+
+			if (*std::min_element(cdists.begin(), cdists.end()) < avg_dist_pair * 0.5)
+				r.type = Structure::Relation::TRANSLATIONAL;
+			else
+				r.type = Structure::Relation::ROTATIONAL;
+
+			/*
+			// Median absolute deviation (MAD) 			
 			double avg_dist = std::accumulate(dists.begin(), dists.end(), 0.0) / dists.size();
 			QVector<double> absolute_deviations;
 			for (auto dist : dists) absolute_deviations << abs(dist - avg_dist);
@@ -88,6 +111,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				r.type = Structure::Relation::ROTATIONAL;
 			else 
 				r.type = Structure::Relation::TRANSLATIONAL;
+			*/
 
 			if (r.type == Structure::Relation::TRANSLATIONAL)
 			{
@@ -177,6 +201,43 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				auto line = new starlab::LineSegments(3);
 				line->addLine(r.point, Vector3(r.point + r.axis));
 				shape->debug << line;
+			}
+		}
+	}
+
+	// Same height grouping
+	{
+		DisjointSet set(shape->nodes.size());
+
+		double range_z = shape->robustBBox().sizes().z();
+		double threshold = 0.05;
+
+		QMap < Structure::Node*, int > idx_map;
+		int idx = 0; for (auto n : shape->nodes) idx_map[n] = idx++;
+
+		for (auto ni : shape->nodes){
+			for (auto nj : shape->nodes){
+				double zi = ni->center().z();
+				double zj = nj->center().z();
+				double dist = abs(zi - zj);
+				if (dist < range_z * threshold) set.Union(idx_map[ni], idx_map[nj]);
+			}
+		}
+
+		auto hight_groups  = set.Groups();
+
+		for (auto hight_group : hight_groups){
+			for (auto ni : hight_group){
+				auto node_i = shape->nodes.at(ni);
+				QStringList height_siblings;
+
+				for (auto nj : hight_group){
+					if (ni == nj) continue;
+					auto node_j = shape->nodes.at(nj);
+					height_siblings << node_j->id;
+				}
+
+				node_i->property.insert("height_siblings", height_siblings);
 			}
 		}
 	}

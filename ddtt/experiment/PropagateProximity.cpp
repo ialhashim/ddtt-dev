@@ -45,15 +45,22 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
 
     /// Find propagation levels:
     // First level:
-    QVector < QVector<Structure::Node*> > propagationLevel(1);
+    QVector < QSet<Structure::Node*> > propagationLevel(1);
     for (auto nid : fixedNodes) {
         auto n = graph->getNode(nid);
         n->property["propagated"].setValue(true);
-        propagationLevel.front().push_back(n);
+		propagationLevel.front() << n;
+
+		// complement with same height grouping:
+		if (false){
+			for (auto nid : n->property["height_siblings"].toStringList()){
+				propagationLevel.front() << graph->getNode(nid);
+			}
+		}
     }
     // Remaining levels:
     forever{
-        QVector<Structure::Node*> curLevel;
+        QSet<Structure::Node*> curLevel;
         for (auto & nid : propagationLevel.back())
         {
             for (auto & edge : graph->getEdges(nid->id))
@@ -62,7 +69,7 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
                 auto otherNode = edge->otherNode(nid->id);
                 if (otherNode->property["propagated"].toBool()) continue;
 
-                if (!curLevel.contains(otherNode)) curLevel.push_back(otherNode);
+                if (!curLevel.contains(otherNode)) curLevel << otherNode;
 
                 constraints[otherNode->id].push_front( ProximityConstraint(nid,edge) );
             }

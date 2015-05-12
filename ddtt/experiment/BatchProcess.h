@@ -51,6 +51,7 @@ public:
 	bool isDPsearch;
 	bool isSwapped;
 	bool isSaveReport;
+	bool isKeepThread;
 	bool isOutputMatching;
 	bool isShowDeformed;
 	bool isManyTypesJobs;
@@ -61,7 +62,6 @@ public:
 	int dpTopK, dpTopK_2;
 
     QVector<QVariantMap> jobReports;
-
 public slots:
 	void setJobsArray(QJsonArray);
 

@@ -282,6 +282,19 @@ void experiment::doEnergySearch()
 
 				pw->ui->pathsList->clear();
 				for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
+				
+				connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&](){
+					if (pw->ui->pathsList->selectedItems().isEmpty()) return;
+					auto line_selected = pw->ui->pathsList->selectedItems().front()->text().split(":");
+					for (auto & s : line_selected) s = s.simplified();
+					if (line_selected.front() != "L") return;
+					QString n1 = line_selected.at(1);
+					QString n2 = line_selected.at(2);
+					auto g = graphs.front();
+					auto link = g->getEdge(n1, n2);
+					g->property.insert("debugSelectedLink", link->id);
+					drawArea()->update();
+				});
 			}
 
 			timeElapsed = timer.elapsed();
@@ -803,6 +816,7 @@ void experiment::create()
 		if (filename.isEmpty()) return;
 		QTimer::singleShot(0, [=] {
 			BatchProcess * bp = new BatchProcess(filename);
+			bp->isKeepThread = true;
 			QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
 			mainWindow()->connect(bp, SIGNAL(reportMessage(QString, double)), SLOT(setStatusBarMessage(QString, double)));
 			bp->start();
@@ -928,30 +942,36 @@ void experiment::decorate()
 			// Spokes
 			if (g->property["showSpokes"].toBool())
 			{
-				// Original spokes
-				Array1D_Vector3 orig_spokes;
-				for (auto l : g->edges)
-					for (auto s : l->property["orig_spokes"].value<Array1D_Vector3>())
-						orig_spokes.push_back(s);
-
 				int si = 0;
 				starlab::LineSegments ls;
-				Array1D_Vector3 allspokes;
+
 				for (auto l : g->edges)
 				{
+					auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
+					auto current_spokes = EvaluateCorrespondence::spokesFromLink(g, l);
+
 					auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
 					auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
 
+					if (g->property.contains("debugSelectedLink") && 
+						g->property["debugSelectedLink"].toString() != l->id) continue;
+
 					// all combinations
+					int idx = 0;
 					for (auto rowi : samples1){
 						for (auto ci : rowi){
 							for (auto rowj : samples2) {
-								for (auto cj : rowj){
+								for (auto cj : rowj)
+								{
 									auto a = l->n1->position(ci), b = l->n2->position(cj);
-									Vector3 cur_spoke = a - b;
-									double v = orig_spokes[si++].normalized().dot(cur_spoke.normalized());
-									if (v < 0) v = 0;
-									ls.addLine(a, b, starlab::qtJetColor(1.0 - v));
+
+									double v = original_spokes[idx].normalized().dot(current_spokes[idx].normalized());
+									if (!std::isfinite(v)) v = 0;
+									v = std::max(0.0, v);
+
+									ls.addLine(a, b, starlab::qtJetColor(1-v));
+
+									idx++;
 								}
 							}
 						}
@@ -1051,6 +1071,11 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 	if (event->key() == Qt::Key_D)
 	{
 		decodeGeometry();
+	}
+
+	if (event->key() == Qt::Key_V)
+	{
+		EvaluateCorrespondence::evaluate(selected_path);
 	}
 
 	if (event->key() == Qt::Key_O)

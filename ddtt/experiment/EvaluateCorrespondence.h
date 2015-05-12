@@ -10,7 +10,7 @@ struct EvaluateCorrespondence
 	static double evaluate2(Energy::SearchNode * searchNode);
 
 	// Utility:
-	static Array1D_Vector3 spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * link);
+	static Array1D_Vector3 spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * link, bool isFindCoordClosest = false);
 	static Array2D_Vector4d sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution);
 	static QMap<QString, NanoKdTree*> kdTreesNodes(Structure::ShapeGraph * shape);
 	static QMap<QString, QMap<QString, double> > hausdroffDistance( Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB );

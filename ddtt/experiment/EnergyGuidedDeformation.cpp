@@ -72,7 +72,7 @@ void Energy::GuidedDeformation::searchAll(Structure::ShapeGraph * shapeA, Struct
 			applyAssignment(&path, false);
 
 			// Collect valid suggestions
-			auto suggested_children = suggestChildren(path, 3);
+			auto suggested_children = suggestChildren(path, 4);
 			for (auto & child : suggested_children)
 				searchTree.append_child(pathItr, child);
 			path.num_children = suggested_children.size();

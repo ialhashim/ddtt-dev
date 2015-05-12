@@ -6,6 +6,8 @@
 
 int EvaluateCorrespondence::numSamples = 5;
 
+Q_DECLARE_METATYPE(Array1D_Vector4d);
+
 Array1D_Vector3 coupledNormals(Structure::Link * l){
 	Array1D_Vector3 normals;
 	Eigen::Vector4d c1(0,0,0,0), c2(1,1,0,0), midc(0.5,0.5,0,0);
@@ -22,7 +24,7 @@ Array1D_Vector3 coupledNormals(Structure::Link * l){
 	return normals;
 }
 
-Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * l)
+Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * l, bool isFindCoordClosest)
 {
 	auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
 	auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
@@ -30,10 +32,31 @@ Array1D_Vector3 EvaluateCorrespondence::spokesFromLink(Structure::ShapeGraph * s
 	if (samples1.empty()) samples1 = EvaluateCorrespondence::sampleNode(shape, l->n1, 0);
 	if (samples2.empty()) samples1 = EvaluateCorrespondence::sampleNode(shape, l->n2, 0);
 
+	double min_spoke_len = DBL_MAX;
+	Array1D_Vector4d cur_coords(2, Eigen::Vector4d(0, 0, 0, 0));
+	std::vector < Array1D_Vector4d > spoke_coords;
+
 	Array1D_Vector3 spokes;
 	for (auto rowi : samples1) for (auto ci : rowi)
-		for (auto rowj : samples2) for (auto cj : rowj)
-			spokes.push_back(l->n1->position(ci) - l->n2->position(cj));
+	for (auto rowj : samples2) for (auto cj : rowj)
+	{
+		auto spoke = l->n1->position(ci) - l->n2->position(cj);
+		spokes.push_back(spoke);
+
+		if ( isFindCoordClosest )
+		{
+			cur_coords[0] = ci;
+			cur_coords[1] = cj;
+			spoke_coords.push_back(cur_coords);
+			l->property["spoke_coords"].setValue(spoke_coords);
+			
+			auto sqrd = spoke.squaredNorm();
+			if (sqrd < min_spoke_len){
+				min_spoke_len = sqrd;
+				l->property["spoke_closest_idx"].setValue(int(spoke_coords.size() - 1));
+			}
+		}
+	}
 
 	return spokes;
 }
@@ -106,7 +129,7 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	// Sample curve/sheet
 	for (auto l : shape->edges)
 	{
-		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(shape, l));
+		l->property["orig_spokes"].setValue(EvaluateCorrespondence::spokesFromLink(shape, l, true));
 		l->property["orig_centroid_dir"].setValue(Vector3((l->n1->center() - l->n2->center()).normalized()));
 	}
 
@@ -384,6 +407,12 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
 
+		// Sliding
+		auto spoke_coords = l->property["spoke_coords"].value< std::vector < Array1D_Vector4d > >();
+		auto spoke_closest_idx = l->property["spoke_closest_idx"].toInt();
+		auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
+		auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
+
 		/// (a) Connection: difference in closeness distance
 		double connection_weight = 1.0;
 		{
@@ -400,7 +429,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 
 			// Near point got further
 			if (bounds_curr.first > bounds_orig.first){
-				double ratio = std::min(1.0, bounds_curr.first / bounds_orig.second);
+				double ratio = std::min(1.0, bounds_curr.first / std::max(1e-6, bounds_orig.second));
 				connection_weight_near = 1.0 - ratio;
 			}
 
@@ -410,6 +439,45 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 			//}
 
 			connection_weight = std::min(connection_weight_near, connection_weight_far);
+
+			// Sliding penalty
+			if (false)
+			{
+				auto orig_closest1 = spoke_coords[spoke_closest_idx].front();
+				auto orig_closest2 = spoke_coords[spoke_closest_idx].back();
+
+				auto closestCoords = [&](const Vector3 & p, Structure::Node * n, Array2D_Vector4d coords){
+					double min_dist = DBL_MAX;
+					Eigen::Vector4d min_coord(0, 0, 0, 0);
+					for (auto row : coords){
+						for (auto c : row){
+							double d = (p - n->position(c)).norm();
+							if (d < min_dist){
+								min_dist = d;
+								min_coord = c;
+							}
+						}
+					}
+					return min_coord;
+				};
+
+				auto cur_closest1 = closestCoords(l->n1->position(orig_closest1), l->n2, samples2);
+				auto cur_closest2 = closestCoords(l->n2->position(orig_closest2), l->n1, samples1);
+
+				double psd1 = (cur_closest1 - orig_closest1).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
+				double psd2 = (cur_closest2 - orig_closest2).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
+				double parameter_space_dist = (psd1 + psd2) / 2.0;
+
+				connection_weight *= (1.0 - parameter_space_dist);
+			}
+
+			// Semantically broken (two parts correspond to single target)
+			if (true)
+			{
+				if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id)
+					&& searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
+					connection_weight = 0.5;
+			}
 
 			connection_vector << connection_weight;
 		}

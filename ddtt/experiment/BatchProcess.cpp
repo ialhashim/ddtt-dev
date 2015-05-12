@@ -33,6 +33,7 @@ void BatchProcess::init()
     isOutputMatching = false;
 	isShowDeformed = false;
 	isManyTypesJobs = false;
+	isKeepThread = false;
 	thumbWidth = 256;
     dpTopK = 20;
     dpTopK_2 = 2;
@@ -40,7 +41,7 @@ void BatchProcess::init()
 	// Clean up my self
 	connect(this, SIGNAL(finished()), this, SLOT(deleteLater()));
 	this->connect(this, &BatchProcess::allJobsFinished, [&]{
-		this->thread()->quit();
+		if(!this->isKeepThread) this->thread()->quit();
 	});
 
 	// Rendering	
