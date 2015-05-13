@@ -691,8 +691,9 @@ QImage RenderingWidget::render(Structure::ShapeGraph * shape)
 
 	// hack blocking to render shapes..
 	timer.start();
-    while (buffer.isNull()){
-        if (timer.elapsed() > 2000)
+	while (buffer.isNull()){
+		qApp->processEvents();
+        if (timer.elapsed() > 10000)
 			break;
 	}
 	

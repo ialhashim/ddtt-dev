@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 		{
 			// output sorted set of shapes
 			{
-                QFile file(d.absolutePath() + "/" + job_name + "/" + "shapes_" + dir_name + ".txt");
+                QFile file(d.absolutePath() + "/" + job_name + "/" + "_" + dir_name + "_shapes.txt");
 				if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
 					QTextStream out(&file);
 					for (int i = 0; i < folderKeys.size(); i++)
@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
                         matching["cost"] = log_line.at(2).toDouble();
 
 						// Get correspondence data
-						QString correspondenceFile = log_line.at(3);
+                        QString correspondenceFile = log_line.at(3);
 						bool isSwapped = (log_line.at(4).toInt() % 2) == 0;
 						QJsonArray correspondence;
 						{
@@ -198,6 +198,15 @@ int main(int argc, char *argv[])
 						}
 						matching["correspondence"] = correspondence;
 
+                        // Thumbnail files if any
+                        QString correspondenceThumb = log_line.back();
+                        if(correspondenceThumb != "null"){
+							QString targetThumb = QFileInfo(correspondenceThumb).fileName();
+                            targetThumb = QString(d.absolutePath() + "/" + job_name + "/" + targetThumb);
+                            QFile::copy(correspondenceThumb, targetThumb);
+							matching["thumbnail"] = targetThumb;
+                        }
+
 						// indexing
 						matching["i"] = i;
 						matching["j"] = j;
@@ -211,7 +220,7 @@ int main(int argc, char *argv[])
 				// Write all results in JSON format
 				{
 					QJsonDocument saveDoc(results);
-                    QFile saveFile(d.absolutePath() + "/" + job_name + "/result_" + dir_name + ".corr");
+                    QFile saveFile(d.absolutePath() + "/" + job_name + "/_" + dir_name + "_corr.json");
 					saveFile.open(QIODevice::WriteOnly);
 					saveFile.write(saveDoc.toJson());
 				}
@@ -301,8 +310,12 @@ int main(int argc, char *argv[])
 						QFile file("log.txt");
 						if (file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append))
 						{
+                            QString thumb_filename = minJob["img_file"].toString();
+
 							QTextStream out(&file);
-							out << sourceShape << "," << targetShape << "," << minJob["min_cost"].toDouble() << "," << minJob["match_file"].toString() << "," << minJob["is_swapped"].toInt() << "\n";
+                            out << sourceShape << "," << targetShape << "," << minJob["min_cost"].toDouble() << ","
+                                << minJob["match_file"].toString() << "," << minJob["is_swapped"].toInt() << ","
+                                << (thumb_filename.isEmpty() ? "null" : thumb_filename) << "\n";
 						}
 					}
 					
