@@ -8185,7 +8185,7 @@ private:
     Eigen::Matrix<double,2,1,Eigen::DontAlign> m_base;
     const unsigned int m_baseIdx;
     //const Eigen::Ref<const Matrix2Dyn> m_p;
-    Eigen::Matrix<double,2,2,Eigen::DontAlign> m_p;
+    Eigen::Matrix<double,2,-1,Eigen::DontAlign> m_p;
 
 };
 
@@ -9077,7 +9077,7 @@ public:
         //std::cout << "dir: " <<  m_zDir << std::endl;
         makeCoordinateSystem(m_zDir,xDir,yDir);
 
-        //Make coodinate transform from frame I to K!
+        //Make coordinate transform from frame I to K!
         m_A_KI.col(0) = xDir;
         m_A_KI.col(1) = yDir;
         m_A_KI.col(2) = m_zDir;

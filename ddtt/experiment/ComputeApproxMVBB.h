@@ -31,7 +31,7 @@ namespace ApproxMVBB{
 
 		EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-			OOBB() {
+		OOBB() {
 			this->reset();
 		}
 
@@ -42,6 +42,13 @@ namespace ApproxMVBB{
 			m_q_KI.normalize();
 			m_minPoint = Vector3(std::min(l(0), u(0)), std::min(l(1), u(1)), std::min(l(2), u(2)));
 			m_maxPoint = Vector3(std::max(l(0), u(0)), std::max(l(1), u(1)), std::max(l(2), u(2)));
+		}
+
+		std::vector<Vector3> corners(){
+			std::vector<Vector3> corner;
+			corner.push_back(m_minPoint);
+			corner.push_back(m_maxPoint);
+			return corner;
 		}
 
 		/** Switch the z-Axis to the axis with index i (default x-Axis)*/

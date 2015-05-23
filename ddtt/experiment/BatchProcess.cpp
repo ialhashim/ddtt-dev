@@ -578,19 +578,23 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 				QFile file(match_file);
 				file.open(QFile::WriteOnly | QFile::Text);
 				QTextStream out(&file);
+				QSet< QString > matchings;
 
 				for (auto key : selected_path->mapping.keys())
 				{
 					auto sn = selected_path->shapeA->getNode(key);
 					auto tn = selected_path->shapeB->getNode(selected_path->mapping[key]);
 
+					// For cutting case + splitting case
 					auto realID = [&](Structure::Node * n){
-						if (n->property.contains("realOriginalID")) return n->property["realOriginalID"].toString();
-						return n->id;
+						QString id = n->property.contains("realOriginalID") ? n->property["realOriginalID"].toString() : n->id;
+						return id.split("@").front();
 					};
 
 					QString sid = realID(sn);
 					QString tid = realID(tn);
+
+					QPair<QString, QString> matching;
 
 					// Check for one-to-many case
 					bool isSourceOne = !selected_path->shapeA->hasRelation(sid) || selected_path->shapeA->relationOf(sid).parts.size() == 1;
@@ -598,10 +602,18 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 					if (isSourceOne && isTargetMany)
 					{
 						for (auto tj : selected_path->shapeB->relationOf(tid).parts)
-							out << QString("%1 %2\n").arg(sid).arg(tj);
+							matchings << QString("%1|%2").arg(sid).arg(realID(selected_path->shapeB->getNode(tj)));
 					}
 					else
-						out << QString("%1 %2\n").arg(sid).arg(tid);
+						matchings << QString("%1|%2").arg(sid).arg(tid);
+				}
+
+				for (auto m : matchings)
+				{
+					auto matching = m.split("|");
+					auto sid = matching.front();
+					auto tid = matching.back();
+					out << QString("%1 %2\n").arg(sid).arg(tid);
 				}
 			}
 		}
@@ -811,6 +823,7 @@ BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVari
 	job["target"].setValue(targetFilename);
 	job["title"].setValue(QFileInfo(sourceFilename).baseName() + "-" + QFileInfo(targetFilename).baseName());
     job["isFlip"].setValue(options["isFlip"].toBool());
+    job["isAllowCuts"] = options["isAllowCuts"].toBool();
 
 	jobsArray.push_back(QJsonObject::fromVariantMap(job));
 }

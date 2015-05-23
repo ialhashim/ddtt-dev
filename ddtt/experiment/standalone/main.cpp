@@ -61,6 +61,7 @@ int main(int argc, char *argv[])
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
 			{ { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
 			{ { "q", "quiet" }, QString("Skip visualization.") },
+            { { "c", "cut" }, QString("Allow cuts.") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {
@@ -120,6 +121,7 @@ int main(int argc, char *argv[])
 				if (parser.isSet("o")) pargs << "-o";		
 				if (parser.isSet("k")) pargs << "-k" << parser.value("k");
 				if (parser.isSet("q")) pargs << "-q";
+                if (parser.isSet("c")) pargs << "-c";
 
 				p.start(a.applicationFilePath(), pargs);
 				p.waitForFinished(-1);
@@ -243,6 +245,7 @@ int main(int argc, char *argv[])
             if(parser.isSet("o")) options["roundtrip"].setValue(true);
             if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
 			if(parser.isSet("q")) options["isQuietMode"].setValue(true);
+            if(parser.isSet("c")) options["isAllowCuts"].setValue(true);
 
             if(options["roundtrip"].toBool() || options["align"].toBool())
 			{
