@@ -24,6 +24,7 @@ extern int curLabelIdx;
 extern QVector<QColor> LabelColors;
 extern QVector<QColor> ParentColors;
 extern QMap < QString, int > labelIndices;
+extern QMap < QString, int > parentLabelIndices;
 
 class MyDrawArea : public QGLViewer
 {

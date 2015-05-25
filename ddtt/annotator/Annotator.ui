@@ -11,7 +11,11 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>Annotator</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>Annotator.ico</normaloff>Annotator.ico</iconset>
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <property name="leftMargin">
@@ -76,125 +80,27 @@
         </property>
         <layout class="QGridLayout" name="gridLayout_4">
          <item row="21" column="0">
-          <widget class="QPushButton" name="deleteButton">
+          <widget class="QPushButton" name="addDelete">
            <property name="text">
-            <string>Delete...</string>
-           </property>
-          </widget>
-         </item>
-         <item row="0" column="0">
-          <widget class="QLabel" name="selectedMesh">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="12" column="0">
-          <spacer name="verticalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item row="2" column="0">
-          <widget class="QLabel" name="curPage">
-           <property name="text">
-            <string>Page</string>
-           </property>
-          </widget>
-         </item>
-         <item row="11" column="0">
-          <widget class="QPushButton" name="rotateRight">
-           <property name="text">
-            <string>Rotate Right</string>
-           </property>
-          </widget>
-         </item>
-         <item row="6" column="0">
-          <widget class="QPushButton" name="undoButton">
-           <property name="text">
-            <string>Undo</string>
+            <string>(Add / Remove) Delete Set</string>
            </property>
           </widget>
          </item>
          <item row="9" column="0">
-          <spacer name="verticalSpacer_3">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item row="3" column="0">
-          <widget class="QCheckBox" name="showGrids">
-           <property name="text">
-            <string>Show Grids</string>
-           </property>
-          </widget>
-         </item>
-         <item row="15" column="0">
-          <spacer name="verticalSpacer">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item row="20" column="0">
-          <widget class="QListWidget" name="deleteList">
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>100</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QLabel" name="curLabel">
-           <property name="text">
-            <string/>
-           </property>
-          </widget>
-         </item>
-         <item row="5" column="0">
-          <widget class="QPushButton" name="noneButton">
-           <property name="text">
-            <string>None</string>
-           </property>
-          </widget>
-         </item>
-         <item row="7" column="0">
-          <widget class="QPushButton" name="undoAll">
-           <property name="text">
-            <string>Undo All</string>
-           </property>
-          </widget>
-         </item>
-         <item row="8" column="0">
           <widget class="QPushButton" name="componentsButton">
            <property name="text">
             <string>Components</string>
            </property>
           </widget>
          </item>
-         <item row="10" column="0">
+         <item row="8" column="0">
+          <widget class="QPushButton" name="undoAll">
+           <property name="text">
+            <string>Undo All</string>
+           </property>
+          </widget>
+         </item>
+         <item row="11" column="0">
           <widget class="QPushButton" name="rotateLeft">
            <property name="text">
             <string>Rotate Left</string>
@@ -211,28 +117,21 @@
            </property>
           </widget>
          </item>
-         <item row="19" column="0">
-          <widget class="QPushButton" name="addDelete">
-           <property name="text">
-            <string>(Add / Remove) Delete Set</string>
-           </property>
-          </widget>
-         </item>
-         <item row="23" column="0">
-          <widget class="QPushButton" name="generateThumbnails">
-           <property name="text">
-            <string>Generate Thumbnails</string>
-           </property>
-          </widget>
-         </item>
-         <item row="13" column="0">
+         <item row="14" column="0">
           <widget class="QPushButton" name="beginAnnotateButton">
            <property name="text">
             <string>Annotate...</string>
            </property>
           </widget>
          </item>
-         <item row="14" column="0">
+         <item row="25" column="0">
+          <widget class="QPushButton" name="generateThumbnails">
+           <property name="text">
+            <string>Generate Thumbnails</string>
+           </property>
+          </widget>
+         </item>
+         <item row="15" column="0">
           <widget class="QTreeWidget" name="labelsTreeView">
            <attribute name="headerVisible">
             <bool>false</bool>
@@ -242,6 +141,125 @@
              <string notr="true">1</string>
             </property>
            </column>
+          </widget>
+         </item>
+         <item row="13" column="0">
+          <spacer name="verticalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item row="23" column="0">
+          <widget class="QPushButton" name="deleteButton">
+           <property name="text">
+            <string>Delete...</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="curPage">
+           <property name="text">
+            <string>Page</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="0">
+          <widget class="QLabel" name="selectedMesh">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QCheckBox" name="showGrids">
+           <property name="text">
+            <string>Show Grids</string>
+           </property>
+          </widget>
+         </item>
+         <item row="17" column="0">
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item row="7" column="0">
+          <widget class="QPushButton" name="undoButton">
+           <property name="text">
+            <string>Undo</string>
+           </property>
+          </widget>
+         </item>
+         <item row="12" column="0">
+          <widget class="QPushButton" name="rotateRight">
+           <property name="text">
+            <string>Rotate Right</string>
+           </property>
+          </widget>
+         </item>
+         <item row="10" column="0">
+          <spacer name="verticalSpacer_3">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item row="22" column="0">
+          <widget class="QListWidget" name="deleteList">
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>100</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="curLabel">
+           <property name="text">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="0">
+          <widget class="QPushButton" name="noneButton">
+           <property name="text">
+            <string>None</string>
+           </property>
+          </widget>
+         </item>
+         <item row="16" column="0">
+          <widget class="QPushButton" name="remainButton">
+           <property name="text">
+            <string>Remaining</string>
+           </property>
+          </widget>
+         </item>
+         <item row="5" column="0">
+          <widget class="QCheckBox" name="coarseLabels">
+           <property name="text">
+            <string>Show coarse labels</string>
+           </property>
           </widget>
          </item>
         </layout>

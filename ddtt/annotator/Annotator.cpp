@@ -18,6 +18,7 @@ QVector<MyDrawArea*> activeViewers;
 
 QMap<QString,QStringList> lables;
 QMap<QString, int> labelIndices;
+QMap<QString, int> parentLabelIndices;
 
 // Loading XML files
 #include <QDir>
@@ -137,13 +138,16 @@ Annotator::Annotator(QWidget *parent) : QWidget(parent), ui(new Ui::Annotator)
 			// Fill tree widget
 			{
 				int uc = 0;
+                int pc = 0;
 
 				for (auto parentName : lables.keys())
 				{
 					auto parent = new QTreeWidgetItem();
 					parent->setText(0, parentName);
-					parent->setData(0, Qt::UserRole, uc);
-					parent->setBackgroundColor(0, ParentColors[lables.keys().indexOf(parentName)]);
+                    parent->setData(0, Qt::UserRole, pc);
+                    parent->setBackgroundColor(0, ParentColors[pc]);
+
+                    parentLabelIndices[parentName] = pc++;
 
 					for (auto child : lables[parentName])
 					{
@@ -205,6 +209,44 @@ Annotator::Annotator(QWidget *parent) : QWidget(parent), ui(new Ui::Annotator)
 		curLabelIdx = ui->labelsTreeView->selectedItems().front()->data(0, Qt::UserRole).toInt();
 		ui->curLabel->setText(shapeOps[curOp] + QString(" (%1)").arg(curLabel));
 	});
+
+    connect(ui->coarseLabels, &QCheckBox::toggled, [=](){
+
+        for(auto viewer: activeViewers){
+            auto shape = viewer->m;
+            for(auto n : shape->nodes)
+            {
+                if(!n->property.contains("label")) continue;
+
+                auto label = n->property["label"].toString();
+                auto parentLabel = label.split("-").front();
+
+                if(ui->coarseLabels->isChecked())
+                {
+                    shape->setColorFor(n->id, ParentColors[parentLabelIndices[parentLabel]]);
+                }
+                else
+                {
+                    shape->setColorFor(n->id, LabelColors[labelIndices[label]]);
+                }
+            }
+        }
+
+        refreshViewers();
+    });
+
+    connect(ui->remainButton, &QPushButton::released, [=](){
+        if(!activeViewers.empty()) return;
+        for(auto viewer: activeViewers){
+            QStringList untagged;
+            for(auto n : viewer->m->nodes)
+            {
+                if(!n->property.contains("label"))
+                    untagged << n->id;
+            }
+            QMessageBox::information(0,"Untagged", untagged.join(","));
+        }
+    });
 
 	connect(ui->addDelete, &QPushButton::released, [=](){ 
 		if(lastSelected && deletedItems().contains(lastSelected->filename)){
