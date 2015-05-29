@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QFileDialog>
 
 QString exeCorresponder = "C:/Development/ddtt/ddtt/experiment/build-standalone-Qt_5_4-Release/release/geotopCorrespond.exe";
 //QString experiment = "C:/Temp/___Data/two_chairs";
@@ -158,6 +159,11 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 	QString resultsFile = outputPath + "/" + dir.dirName() + "_corr.json";
 
 	QElapsedTimer ours_timer; ours_timer.start();
+
+    if(!QFileInfo(exeCorresponder).exists())
+    {
+        exeCorresponder = QFileDialog::getOpenFileName(0,"geoCorresponder","","*.exe");
+    }
 
 	QString cmd = QString("%1 -o -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
 
