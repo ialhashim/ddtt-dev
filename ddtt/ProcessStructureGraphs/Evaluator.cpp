@@ -30,7 +30,10 @@ struct MultiStrings{
 struct MatchingRecord{
 	QString S, T, sid, tid;
 	MatchingRecord(QString sid="sid", QString tid="tid", QString label_s = "label_s",
-		QString label_t = "label_t") : sid(sid), tid(tid), S(label_s), T(label_t) {}
+		QString label_t = "label_t") : sid(sid), tid(tid), S(label_s), T(label_t) {
+		if (this->tid == "") this->tid = sid;
+		if (this->sid == "") this->sid = tid;
+	}
 	enum MyEnum{CORRECT_REC,INVALID_Rec,OTHER_REC} state;
 };
 typedef QVector < MatchingRecord > MatchingRecords;
@@ -74,6 +77,10 @@ struct LabelOracle{
 			for (auto record : records)
 			{
 				bool isExactMatch = false, isAcceptableMatch = false;
+
+				// in case of broken data files
+				if (record.T.trimmed() == "") record.T = record.S;
+				if (record.S.trimmed() == "") record.S = record.T;
 
 				auto coarse_s = possible.representative(record.S);
 				auto coarse_t = possible.representative(record.T);
@@ -151,6 +158,11 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 {
     ui->setupUi(this);
 
+	run();
+}
+
+void Evaluator::run()
+{
 	//if (true) this->datasetPath = datasetPath = experiment;
 
 	QDir dir(datasetPath);
@@ -160,12 +172,12 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 
 	QElapsedTimer ours_timer; ours_timer.start();
 
-    if(!QFileInfo(exeCorresponder).exists())
-    {
-        exeCorresponder = QFileDialog::getOpenFileName(0,"geoCorresponder","","*.exe");
-    }
+	if (!QFileInfo(exeCorresponder).exists())
+	{
+		exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
+	}
 
-	QString cmd = QString("%1 -o -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
+	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
 
 	// Check first for cached results
 	if (!QFileInfo(resultsFile).exists())
@@ -177,7 +189,7 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 	if (!isSet)
 	{
 		/// Looking at pair-wise comparisons:
-		
+
 		// Open labels JSON file
 		QMap<QString, QStringList> lables;
 		LabelOracle oracle;
@@ -203,13 +215,13 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 			auto crossLabelsArray = json["cross-labels"].toArray();
 
 			// regular nodes
-			for (auto k : lables.keys()) for(auto l : lables[k]) oracle.push(l, l); 
+			for (auto k : lables.keys()) for (auto l : lables[k]) oracle.push(l, l);
 
 			// cross-labeled
 			for (auto l : crossLabelsArray)
 			{
 				auto crosslabel = l.toObject();
-				oracle.push( crosslabel["first"].toString(), crosslabel["second"].toString() );
+				oracle.push(crosslabel["first"].toString(), crosslabel["second"].toString());
 			}
 
 			oracle.build();
@@ -250,6 +262,8 @@ Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget
 				auto matching = match.value<QVariantList>();
 				auto sid = matching.front().toString();
 				auto tid = matching.back().toString();
+
+				if (sid.isEmpty() || tid.isEmpty()) continue;
 
 				auto sn = source.getNode(sid);
 				auto tn = target.getNode(tid);
