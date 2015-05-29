@@ -1,0 +1,282 @@
+#include "Evaluator.h"
+#include "ui_Evaluator.h"
+
+#include "globals.h"
+#include "StructureGraph.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+
+QString exeCorresponder = "C:/Development/ddtt/ddtt/experiment/build-standalone-Qt_5_4-Release/release/geotopCorrespond.exe";
+//QString experiment = "C:/Temp/___Data/two_chairs";
+
+struct MultiStrings{
+	MultiStrings(QVector < QPair<QString, QString> > pairings = QVector < QPair<QString, QString> >()){
+		for (auto p : pairings){
+			groups[p.first] << p.first << p.second;
+			groups[p.second] << p.first << p.second;
+		}
+	}
+	QMap < QString, QSet<QString> > groups;
+	QString representative(QString label){
+		auto sorted = groups[label].toList();
+		qSort(sorted);
+		return sorted.front();
+	}
+};
+
+struct MatchingRecord{
+	QString S, T, sid, tid;
+	MatchingRecord(QString sid="sid", QString tid="tid", QString label_s = "label_s",
+		QString label_t = "label_t") : sid(sid), tid(tid), S(label_s), T(label_t) {}
+	enum MyEnum{CORRECT_REC,INVALID_Rec,OTHER_REC} state;
+};
+typedef QVector < MatchingRecord > MatchingRecords;
+
+struct LabelOracle{
+	LabelOracle(){}
+	QMap < QString, QSet<QString> > mapping;
+	void push( QString first, QString second )
+	{
+		// An item can be itself
+		mapping[first] << first << second;
+
+		// Sibling can be item
+		mapping[second] << second;
+	}
+
+	void build(){
+		QVector < QPair<QString, QString> > combinations;
+		for (auto l : mapping.keys()) for (auto k : mapping[l]) combinations << qMakePair(l, k);
+		gt.possible = MultiStrings(combinations);
+	}
+
+	struct GroundTruth{
+		QMap < QString, int > truth;
+		MultiStrings possible;
+
+		struct PrecisionRecall{
+			double precision, recall;
+			PrecisionRecall(double p = 0, double r = 0) : precision(p), recall(r){}
+		};
+
+		PrecisionRecall compute( MatchingRecords records ){
+			auto correct_matches = truth;
+
+			// Count of ground truth
+			int G = 0;
+			for (auto count : truth) G += count;
+
+			// Count of correct matches
+			int R = 0;
+			for (auto record : records)
+			{
+				bool isExactMatch = false, isAcceptableMatch = false;
+
+				auto coarse_s = possible.representative(record.S);
+				auto coarse_t = possible.representative(record.T);
+
+				isExactMatch = (record.S == record.T);
+
+				// Only if one side is coarse do we go up a level
+				bool isSourceCoarse = possible.representative(record.S) == record.S;
+				bool isTargetCoarse = possible.representative(record.T) == record.T;
+				if (isSourceCoarse || isTargetCoarse){
+					if (!isExactMatch)
+						isAcceptableMatch = (coarse_s == record.T || coarse_t == record.S);
+				}
+
+				if ( isExactMatch || isAcceptableMatch )
+				{
+					R++;
+				}
+			}
+
+			// Count of returned matches
+			int M = records.size();
+
+			double p = double(R) / M;
+			double r = double(R) / G;
+
+			return PrecisionRecall(p, r);
+		}
+	};
+
+	GroundTruth gt;
+
+	void makeGroundTruth(QStringList source, QStringList target)
+	{
+		/// Remove labels with no equivalent whatsoever:
+		auto removeIrrelevant = [](QStringList me, QStringList other, MultiStrings possible){
+			QStringList result = me;
+
+			for (auto label : me)
+			{
+				bool isFound = false;
+
+				for (auto t : other){
+					isFound = possible.representative(t) == possible.representative(label);
+					if (isFound) break;
+				}
+
+				if (isFound) continue;
+
+				result.removeAll(label);
+			}
+			
+			return result;
+		};
+
+		// (b) find the only labels that should be considered
+		source = removeIrrelevant(source, target, gt.possible);
+		target = removeIrrelevant(target, source, gt.possible);
+
+		// (c) each label will have the maximum number of appearance between two graphs
+		QMap<QString, int> source_labels_counter, target_labels_counter;
+		
+		for (auto l : source) source_labels_counter[gt.possible.representative(l)]++;
+		for (auto l : target) target_labels_counter[gt.possible.representative(l)]++;
+
+		auto all_labels = source_labels_counter.keys().toSet() + target_labels_counter.keys().toSet();
+
+		for (auto l : all_labels) gt.truth[l] = std::max(source_labels_counter[l], target_labels_counter[l]);
+	}
+
+	QVector<GroundTruth::PrecisionRecall> pr_results;
+};
+
+Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet)
+{
+    ui->setupUi(this);
+
+	//if (true) this->datasetPath = datasetPath = experiment;
+
+	QDir dir(datasetPath);
+
+	QString outputPath = datasetPath;
+	QString resultsFile = outputPath + "/" + dir.dirName() + "_corr.json";
+
+	QElapsedTimer ours_timer; ours_timer.start();
+
+	QString cmd = QString("%1 -o -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
+
+	// Check first for cached results
+	if (!QFileInfo(resultsFile).exists())
+		system(qPrintable(cmd));
+
+	auto all_pair_wise_time = ours_timer.elapsed();
+
+	// Now process results
+	if (!isSet)
+	{
+		/// Looking at pair-wise comparisons:
+		
+		// Open labels JSON file
+		QMap<QString, QStringList> lables;
+		LabelOracle oracle;
+		{
+			auto labelsFilename = datasetPath + "/labels.json";
+			QFile file;
+			file.setFileName(labelsFilename);
+			if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+			QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
+			auto json = jdoc.object();
+
+			// Get lables
+			auto labelsArray = json["labels"].toArray();
+			for (auto l : labelsArray)
+			{
+				auto label = l.toObject();
+				auto parent = label["parent"].toString();
+
+				lables[parent] << label["title"].toString();
+			}
+
+			// Get cross-labels
+			auto crossLabelsArray = json["cross-labels"].toArray();
+
+			// regular nodes
+			for (auto k : lables.keys()) for(auto l : lables[k]) oracle.push(l, l); 
+
+			// cross-labeled
+			for (auto l : crossLabelsArray)
+			{
+				auto crosslabel = l.toObject();
+				oracle.push( crosslabel["first"].toString(), crosslabel["second"].toString() );
+			}
+
+			oracle.build();
+		}
+
+		// Open results JSON file
+		QFile file;
+		file.setFileName(resultsFile);
+		if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+		QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
+		auto corrArray = jdoc.toVariant().value<QVariantList>();
+
+		QElapsedTimer stats_timer; stats_timer.start();
+
+		for (auto c : corrArray)
+		{
+			auto obj = c.toMap();
+			auto i = obj["i"].toInt();
+			auto j = obj["j"].toInt();
+			auto cost = obj["cost"].toDouble();
+			auto corr = obj["correspondence"].value<QVariantList>();
+
+			// Load graphs
+			Structure::Graph source(obj["source"].toString()), target(obj["target"].toString());
+
+			// Collect all labels from both shapes
+			QStringList sourceLabels, targetLabels;
+			for (auto n : source.nodes) if (n->meta.contains("label")) sourceLabels << n->meta["label"].toString();
+			for (auto n : target.nodes) if (n->meta.contains("label")) targetLabels << n->meta["label"].toString();
+
+			// Build expected ground truth
+			oracle.makeGroundTruth(sourceLabels, targetLabels);
+
+			MatchingRecords M;
+
+			for (auto match : corr)
+			{
+				auto matching = match.value<QVariantList>();
+				auto sid = matching.front().toString();
+				auto tid = matching.back().toString();
+
+				auto sn = source.getNode(sid);
+				auto tn = target.getNode(tid);
+
+				M << MatchingRecord(sn->id, tn->id, sn->meta["label"].toString(), tn->meta["label"].toString());
+			}
+
+			oracle.pr_results << oracle.gt.compute(M);
+		}
+
+		// Sum results
+		double P = 0, R = 0;
+		for (auto pr : oracle.pr_results)
+		{
+			P += pr.precision;
+			R += pr.recall;
+		}
+
+		// Get average
+		int N = oracle.pr_results.size();
+		P /= N;
+		R /= N;
+
+		debugBox(QString("[%5] Avg. P = %1, R = %2, Pair-wise time (%3 ms) - post (%4 ms)").arg(P).arg(R)
+			.arg(all_pair_wise_time).arg(stats_timer.elapsed()).arg(dir.dirName()));
+	}
+	else
+	{
+
+	}
+}
+
+Evaluator::~Evaluator()
+{
+    delete ui;
+}
