@@ -256,6 +256,11 @@ int main(int argc, char *argv[])
 			if(parser.isSet("q")) options["isQuietMode"].setValue(true);
             if(parser.isSet("c")) options["isAllowCuts"].setValue(true);
 
+            // Bicycel dataset is acting weird
+            if(sourceShape.contains("bicycle", Qt::CaseInsensitive)){
+                options["k"].setValue(1);
+            }
+
             if(options["roundtrip"].toBool() || options["align"].toBool())
 			{
 				options["isManyTypesJobs"].setValue(true);

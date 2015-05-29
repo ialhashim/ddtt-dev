@@ -61,8 +61,10 @@ struct LabelOracle{
 		MultiStrings possible;
 
 		struct PrecisionRecall{
-			double precision, recall;
-			PrecisionRecall(double p = 0, double r = 0) : precision(p), recall(r){}
+			double precision, recall, G, M, R;
+			PrecisionRecall(double p = 0, double r = 0, double G = 0, double M = 0, double R = 0) 
+				: precision(p), recall(r), G(G), M(M), R(R)
+			{}
 		};
 
 		PrecisionRecall compute( MatchingRecords records ){
@@ -104,10 +106,13 @@ struct LabelOracle{
 			// Count of returned matches
 			int M = records.size();
 
+			assert(M);
+			assert(G);
+
 			double p = double(R) / M;
 			double r = double(R) / G;
 
-			return PrecisionRecall(p, r);
+			return PrecisionRecall(p, r, G, M, R);
 		}
 	};
 
@@ -177,7 +182,7 @@ void Evaluator::run()
 		exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
 	}
 
-	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
+	QString cmd = QString("%1 -o -q -k 2 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
 
 	// Check first for cached results
 	if (!QFileInfo(resultsFile).exists())
@@ -244,6 +249,11 @@ void Evaluator::run()
 			auto cost = obj["cost"].toDouble();
 			auto corr = obj["correspondence"].value<QVariantList>();
 
+			// Program might have crashed
+			if (corr.isEmpty()) continue;
+
+			if (obj["source"].toString() == obj["target"].toString()) continue;
+
 			// Load graphs
 			Structure::Graph source(obj["source"].toString()), target(obj["target"].toString());
 
@@ -274,12 +284,19 @@ void Evaluator::run()
 			oracle.pr_results << oracle.gt.compute(M);
 		}
 
+		// General stats
+		int numG = 0, numM = 0, numR = 0;
+
 		// Sum results
 		double P = 0, R = 0;
 		for (auto pr : oracle.pr_results)
 		{
 			P += pr.precision;
 			R += pr.recall;
+
+			numG += pr.G;
+			numM += pr.M;
+			numR += pr.R;
 		}
 
 		// Get average
@@ -287,8 +304,20 @@ void Evaluator::run()
 		P /= N;
 		R /= N;
 
-		debugBox(QString("[%5] Avg. P = %1, R = %2, Pair-wise time (%3 ms) - post (%4 ms)").arg(P).arg(R)
-			.arg(all_pair_wise_time).arg(stats_timer.elapsed()).arg(dir.dirName()));
+		QString report = QString("[%5] Avg. P = %1, R = %2, Pair-wise time (%3 ms) - post (%4 ms)").arg(P).arg(R)
+			.arg(all_pair_wise_time).arg(stats_timer.elapsed()).arg(dir.dirName());
+
+		report += QString("\nG_count %1 / M_count %2 / R_count %3").arg(numG).arg(numM).arg(numR);
+
+		// Save log of P/R measures
+		{
+			QFile logfile(datasetPath + "/log.txt");
+			logfile.open(QIODevice::WriteOnly | QIODevice::Text);
+			QTextStream out(&logfile);
+			out << report + "\n";
+		}
+
+		debugBox(report);
 	}
 	else
 	{
