@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
             { { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
 			{ { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
+            { { "z", "output" }, QString("Folder for output JSON file."), QString("output") },
 			{ { "q", "quiet" }, QString("Skip visualization.") },
             { { "c", "cut" }, QString("Allow cuts.") },
 	});
@@ -222,7 +223,15 @@ int main(int argc, char *argv[])
 				// Write all results in JSON format
 				{
 					QJsonDocument saveDoc(results);
-                    QFile saveFile(d.absolutePath() + "/" + job_name + "/_" + dir_name + "_corr.json");
+
+                    QString jsonFilename = d.absolutePath() + "/" + job_name + "/_" + dir_name + "_corr.json";
+
+                    if(parser.isSet("output"))
+                    {
+                        jsonFilename = parser.value("output") + "/" + dir_name + "_corr.json";
+                    }
+
+                    QFile saveFile(jsonFilename);
 					saveFile.open(QIODevice::WriteOnly);
 					saveFile.write(saveDoc.toJson());
 				}

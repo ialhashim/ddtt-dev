@@ -30,6 +30,7 @@ Node * Sheet::clone()
 	Sheet * cloneSheet = new Sheet( this->surface, this->id );
 	cloneSheet->surface.quads.clear();
 	cloneSheet->property = this->property;
+	cloneSheet->meta = this->meta;
 	cloneSheet->vis_property = this->vis_property;
 	return cloneSheet;
 }

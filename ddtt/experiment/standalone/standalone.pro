@@ -3,6 +3,8 @@ include($$[SURFACEMESH])
 include($$[NANOFLANN])
 StarlabTemplate(none)
 
+QMAKE_CXXFLAGS -= /MP
+
 QT     += core gui
 CONFIG += console
 

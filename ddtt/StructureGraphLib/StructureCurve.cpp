@@ -26,6 +26,7 @@ Node * Curve::clone()
 
 	Curve * cloneCurve = new Curve( this->curve, this->id );
 	cloneCurve->property = this->property;
+    cloneCurve->meta = this->meta;
 	cloneCurve->vis_property = this->vis_property;
 	return cloneCurve;
 }
