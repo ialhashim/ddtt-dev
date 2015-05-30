@@ -85,14 +85,16 @@ int main(int argc, char *argv[])
 		QDir d("");
 
 		// 1) get sorted set of pairs to compare
-		QVector< QPair<PropertyMap, PropertyMap> > shapePairs;
+        QVector< QPair<int, int> > shapePairs;
 		auto folders = shapesInDataset(dataset);
 		auto folderKeys = folders.keys();
 		for (int i = 0; i < folderKeys.size(); i++)
 			for (int j = i + 1; j < folderKeys.size(); j++)
-				shapePairs << qMakePair(folders[folderKeys.at(i)], folders[folderKeys.at(j)]);
+                shapePairs << qMakePair(i,j);
 		int shapePairsCount = shapePairs.size();
 		int curShapePair = 0;
+
+        QMap< QString,QPair<int,int> > pair_idx;
 
         QString dir_name = QDir(dataset).dirName();
 		
@@ -105,11 +107,13 @@ int main(int argc, char *argv[])
 			for (auto shapePair : shapePairs)
 			{
 				QProcess p;
-				QString source = shapePair.first["graphFile"].toString();
-				QString target = shapePair.second["graphFile"].toString();
+                QString source = folders[folders.keys().at(shapePair.first)]["graphFile"].toString();
+                QString target = folders[folders.keys().at(shapePair.second)]["graphFile"].toString();
 
 				auto sg = QFileInfo(source).baseName();
 				auto tg = QFileInfo(target).baseName();
+
+                pair_idx[sg+tg] = qMakePair(shapePair.first, shapePair.second);
 
 				std::cout << QString("Now: %1 / %2").arg(sg).arg(tg).leftJustified(35, ' ', true).toStdString();
 
@@ -163,62 +167,63 @@ int main(int argc, char *argv[])
 				if (datasetLogLines.size() != shapePairs.size()) return -1;
 
 				// Record final results
-				QJsonArray results;
-				int idx = 0;
-				for (int i = 0; i < folderKeys.size(); i++){
-					for (int j = i + 1; j < folderKeys.size(); j++){
-						// Read matching pair info
-						auto log_line = datasetLogLines[idx].split(",", QString::SkipEmptyParts);
-						QJsonObject matching;
-						matching["source"] = log_line.at(0);
-						matching["target"] = log_line.at(1);
-                        matching["cost"] = log_line.at(2).toDouble();
+                QJsonArray results;
 
-						// Get correspondence data
-                        QString correspondenceFile = log_line.at(3);
-						bool isSwapped = (log_line.at(4).toInt() % 2) == 0;
-						QJsonArray correspondence;
-						{
-							// Open correspondence file
-							QFile cf(correspondenceFile);
-							cf.open(QFile::ReadOnly | QFile::Text);
-							QTextStream cfin(&cf);
-							auto corrLines = cfin.readAll().split("\n", QString::SkipEmptyParts);
+                for(int idx = 0; idx < datasetLogLines.size(); idx++)
+                {
+                    // Read matching pair info
+                    auto log_line = datasetLogLines[idx].split(",", QString::SkipEmptyParts);
+                    QJsonObject matching;
+                    matching["source"] = log_line.at(0);
+                    matching["target"] = log_line.at(1);
+                    matching["cost"] = log_line.at(2).toDouble();
 
-							// Read correspondence file (swapping if needed)
-							for (auto line : corrLines)
-							{
-								auto matched_pair = line.split(" ", QString::SkipEmptyParts);
-								QString sid = matched_pair.at(0);
-								QString tid = matched_pair.at(1);
-								if (isSwapped) std::swap(sid, tid);
+                    // Get correspondence data
+                    QString correspondenceFile = log_line.at(3);
+                    bool isSwapped = (log_line.at(4).toInt() % 2) == 0;
+                    QJsonArray correspondence;
+                    {
+                        // Open correspondence file
+                        QFile cf(correspondenceFile);
+                        cf.open(QFile::ReadOnly | QFile::Text);
+                        QTextStream cfin(&cf);
+                        auto corrLines = cfin.readAll().split("\n", QString::SkipEmptyParts);
 
-								QJsonArray part_pair;
-								part_pair.push_back(sid);
-								part_pair.push_back(tid);
-								correspondence.push_back(part_pair);
-							}
-						}
-						matching["correspondence"] = correspondence;
+                        // Read correspondence file (swapping if needed)
+                        for (auto line : corrLines)
+                        {
+                            auto matched_pair = line.split(" ", QString::SkipEmptyParts);
+                            QString sid = matched_pair.at(0);
+                            QString tid = matched_pair.at(1);
+                            if (isSwapped) std::swap(sid, tid);
 
-                        // Thumbnail files if any
-                        QString correspondenceThumb = log_line.back();
-                        if(correspondenceThumb != "null"){
-							QString targetThumb = QFileInfo(correspondenceThumb).fileName();
-                            targetThumb = QString(d.absolutePath() + "/" + job_name + "/" + targetThumb);
-                            QFile::copy(correspondenceThumb, targetThumb);
-							matching["thumbnail"] = targetThumb;
+                            QJsonArray part_pair;
+                            part_pair.push_back(sid);
+                            part_pair.push_back(tid);
+                            correspondence.push_back(part_pair);
                         }
+                    }
+                    matching["correspondence"] = correspondence;
 
-						// indexing
-						matching["i"] = i;
-						matching["j"] = j;
+                    // Thumbnail files if any
+                    QString correspondenceThumb = log_line.back();
+                    if(correspondenceThumb != "null"){
+                        QString targetThumb = QFileInfo(correspondenceThumb).fileName();
+                        targetThumb = QString(d.absolutePath() + "/" + job_name + "/" + targetThumb);
+                        QFile::copy(correspondenceThumb, targetThumb);
+                        matching["thumbnail"] = targetThumb;
+                    }
 
-						// Record result
-						results.push_back(matching);
-						idx++;
-					}
-				}
+                    // indexing
+                    auto sg = QFileInfo(log_line.at(0)).baseName();
+                    auto tg = QFileInfo(log_line.at(1)).baseName();
+                    auto pi = pair_idx[sg+tg];
+                    matching["i"] = pi.first;
+                    matching["j"] = pi.second;
+
+                    // Record result
+                    results.push_back(matching);
+                }
 
 				// Write all results in JSON format
 				{
@@ -257,9 +262,9 @@ int main(int argc, char *argv[])
             if(parser.isSet("c")) options["isAllowCuts"].setValue(true);
 
             // Bicycel dataset is acting weird
-            if(sourceShape.contains("bicycle", Qt::CaseInsensitive)){
-                options["k"].setValue(1);
-            }
+            //if(sourceShape.contains("bicycle", Qt::CaseInsensitive))
+            //    options["k"].setValue(1);
+
 
             if(options["roundtrip"].toBool() || options["align"].toBool())
 			{
