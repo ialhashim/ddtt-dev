@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>362</width>
-    <height>477</height>
+    <width>399</width>
+    <height>615</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,7 +15,7 @@
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="3" column="0" colspan="3">
+    <item row="4" column="0" colspan="3">
      <widget class="QGroupBox" name="groupBox">
       <property name="title">
        <string>GroupBox</string>
@@ -57,34 +57,14 @@
       </layout>
      </widget>
     </item>
-    <item row="7" column="1">
-     <widget class="QPushButton" name="fuzzyButton">
+    <item row="2" column="1">
+     <widget class="QPushButton" name="exportLabelsButton">
       <property name="text">
-       <string>Fuzzy correspond..</string>
+       <string>Export Labels...</string>
       </property>
      </widget>
-    </item>
-    <item row="0" column="0">
-     <spacer name="horizontalSpacer">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>40</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
     </item>
     <item row="5" column="1">
-     <widget class="QPushButton" name="vkButton">
-      <property name="text">
-       <string>VK template...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="4" column="1">
      <widget class="QPushButton" name="greedyButton">
       <property name="text">
        <string>Greedy correspondence...</string>
@@ -104,21 +84,14 @@
       </property>
      </spacer>
     </item>
-    <item row="1" column="1">
-     <widget class="QPushButton" name="exportLabelsButton">
-      <property name="text">
-       <string>Export Labels...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="8" column="1">
+    <item row="9" column="1">
      <widget class="QPushButton" name="clusterButton">
       <property name="text">
        <string>Extract cluster...</string>
       </property>
      </widget>
     </item>
-    <item row="2" column="1">
+    <item row="3" column="1">
      <widget class="QPushButton" name="conSegButton">
       <property name="text">
        <string>Consistent Segmentation..</string>
@@ -132,17 +105,24 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="0">
-     <widget class="QSpinBox" name="greedyParam2">
-      <property name="maximum">
-       <number>1000</number>
+    <item row="14" column="0">
+     <widget class="QCheckBox" name="optClustering">
+      <property name="text">
+       <string>Use clustering</string>
       </property>
-      <property name="value">
-       <number>10</number>
+      <property name="checked">
+       <bool>true</bool>
       </property>
      </widget>
     </item>
-    <item row="4" column="2">
+    <item row="13" column="1">
+     <widget class="QPushButton" name="pairWiseButton">
+      <property name="text">
+       <string>Evaluate pair-wise...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="2">
      <widget class="QDoubleSpinBox" name="greedyParam">
       <property name="decimals">
        <number>3</number>
@@ -161,14 +141,57 @@
       </property>
      </widget>
     </item>
-    <item row="6" column="1">
-     <widget class="QPushButton" name="visualizeButton">
-      <property name="text">
-       <string>Visualize clustering..</string>
+    <item row="5" column="0">
+     <widget class="QSpinBox" name="greedyParam2">
+      <property name="maximum">
+       <number>1000</number>
+      </property>
+      <property name="value">
+       <number>10</number>
       </property>
      </widget>
     </item>
-    <item row="9" column="1">
+    <item row="8" column="1">
+     <widget class="QPushButton" name="fuzzyButton">
+      <property name="text">
+       <string>Fuzzy correspond..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="0">
+     <spacer name="horizontalSpacer">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>40</width>
+        <height>20</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="6" column="1">
+     <widget class="QPushButton" name="vkButton">
+      <property name="text">
+       <string>VK template...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="10" column="1">
+     <spacer name="verticalSpacer_2">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>40</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="12" column="1">
      <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -181,17 +204,38 @@
       </property>
      </spacer>
     </item>
-    <item row="10" column="1">
-     <widget class="QPushButton" name="pairWiseButton">
+    <item row="7" column="1">
+     <widget class="QPushButton" name="visualizeButton">
       <property name="text">
-       <string>Evaluate pair-wise...</string>
+       <string>Visualize clustering..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="14" column="1">
+     <widget class="QPushButton" name="setWiseButton">
+      <property name="text">
+       <string>Evaluate set-wise...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="14" column="2">
+     <widget class="QCheckBox" name="groundTruthMode">
+      <property name="text">
+       <string>Ground truth</string>
       </property>
      </widget>
     </item>
     <item row="11" column="1">
-     <widget class="QPushButton" name="setWiseButton">
+     <widget class="QPushButton" name="evalZhenButton">
       <property name="text">
-       <string>Evaluate set-wise...</string>
+       <string>Evaluate Z14..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QPushButton" name="extractOFF">
+      <property name="text">
+       <string>Extract OFF...</string>
       </property>
      </widget>
     </item>
@@ -202,7 +246,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>362</width>
+     <width>399</width>
      <height>21</height>
     </rect>
    </property>

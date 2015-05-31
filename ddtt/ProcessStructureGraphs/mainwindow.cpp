@@ -228,6 +228,33 @@ MainWindow::MainWindow(QWidget *parent) :
         }
     });
 
+	connect(ui->extractOFF, &QPushButton::clicked, [&](){
+		auto folders = shapesInDataset(default_folder);
+		auto outputFolder = QFileDialog::getExistingDirectory();
+
+		for (auto folderName : folders.keys())
+		{
+			auto folderInfo = folders[folderName];
+			//debugBox(folderName);
+
+			Structure::Graph g(folderInfo["graphFile"].toString());
+
+			QTemporaryFile file("XXXXXX.obj");
+
+			if (file.open()){
+				QString objFilename = file.fileName();
+				g.exportAsOBJ(objFilename);
+
+				auto destination = QString("%1/%2").arg(outputFolder).arg(folderName + ".off");
+
+				// Convert 'obj' to 'off' using meshlabserver
+				auto cmd = QString("\"C:/Program Files/VCG/MeshLab/meshlabserver.exe\" -i %1 -o %2").arg(objFilename).arg(destination);
+				
+				system(cmd.toLatin1());
+			}
+		}
+	});
+
 	connect(ui->clusterButton, &QPushButton::clicked, [&](){
 		auto corrFilename = QFileDialog::getOpenFileName(this, "Open correspondence", "", "*.json");
 
@@ -538,24 +565,47 @@ MainWindow::MainWindow(QWidget *parent) :
 
 		viewer->setWindowTitle("vk_template");
 
-		auto shapesDir = QDir(default_folder + "_vk_template");
+		auto shapesDirName = default_folder;
+		auto shapesDir = QDir(shapesDirName);
+		auto folders = shapesInDataset(shapesDirName);
 
-		auto meshFiles = shapesDir.entryList(QStringList() << "*.off", QDir::Files);
-		auto segFiles = shapesDir.entryList(QStringList() << "*.seg", QDir::Files);
+		auto vkShapesDir = QDir(QFileDialog::getExistingDirectory());
 
-		QString p = shapesDir.absolutePath() + "/";
+		auto meshFiles = vkShapesDir.entryList(QStringList() << "*.off", QDir::Files);
+		auto segFiles = vkShapesDir.entryList(QStringList() << "*.seg", QDir::Files);
+
+		QString p = vkShapesDir.absolutePath() + "/";
+
+		// Read labels map
+		QMap<int, QString> id_label_map;
+		{
+			QFile label_mapping_file(vkShapesDir.absolutePath() + "/labels.map");
+			if (!label_mapping_file.open(QIODevice::ReadOnly | QIODevice::Text)) { debugBox("No labels file.."); return; }
+			QTextStream in(&label_mapping_file);
+			QStringList lines = QString(in.readAll()).split("\n", QString::SkipEmptyParts);
+
+			for (QString labels : lines)
+			{
+				auto items = labels.split(" ", QString::SkipEmptyParts);
+
+				for (int i = 0; i < items.size(); i++)
+					id_label_map[i] = items[i];
+			}
+		}
+
+		int G = 0, M = 0, C = 0;
 
 		for (int i = 0; i < meshFiles.size(); i++)
 		{
 			// Read geometry
 			auto mesh = QSharedPointer<SurfaceMeshModel>(new SurfaceMeshModel("mesh"));
-			mesh->read((p + meshFiles.at(i)).toStdString());
+			auto offFilename = meshFiles.at(i);
+			mesh->read((p + offFilename).toStdString());
 
 			// Read segmentation
-			auto filename = (p + segFiles.at(i)).toStdString();
-			std::vector<double> m_aValues;
+			std::vector<double> face_class_id;
 			{
-				FILE * file = fopen(filename.c_str(), "rb");
+				FILE * file = fopen((p + segFiles.at(i)).toStdString().c_str(), "rb");
 				enum ShapeValueCacheType{
 					SVTYPE_Unknown,
 					SVTYPE_PerFace,			// single value for the whole face
@@ -578,44 +628,164 @@ MainWindow::MainWindow(QWidget *parent) :
 				fread(&m_CacheType, sizeof(ShapeValueCacheType), 1, file);
 				fread(&m_iNDims, sizeof(int), 1, file);
 				fread(&m_iNValues, sizeof(int), 1, file);
-				m_aValues.resize(m_iNDims*m_iNValues, 0);
-				fread(&m_aValues[0], sizeof(double), m_iNDims*m_iNValues, file);
+				face_class_id.resize(m_iNDims*m_iNValues, 0);
+				fread(&face_class_id[0], sizeof(double), m_iNDims*m_iNValues, file);
 			}
-
-			// Count number of classes
-			//auto vec = m_aValues;
-			//std::sort(vec.begin(), vec.end());
-			//vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
-			//QMap < int, int > imap;
-			//for (auto i : vec) imap[i] = imap.size();
-			//int num_classes = *std::max_element(m_aValues.begin(), m_aValues.end());
 
 			auto fcolor = mesh->add_face_property<QColor>("f:color");
 			for (auto f : mesh->faces())
 			{
-				fcolor[f] = MyViewer::class_color[m_aValues[f.idx()]];
+				fcolor[f] = MyViewer::class_color[face_class_id[f.idx()]];
 			}
 
-			// post-process
+			// post-process visualization
 			mesh->updateBoundingBox();
 			mesh->update_face_normals();
 			mesh->update_vertex_normals();
 
 			viewer->models << mesh;
+
+			/// Compute accuracy of label:
+
+			// Load corresponding graph:
+			auto folder = folders[offFilename.replace(".off","")];
+			Structure::Graph g(folder["graphFile"].toString());
+
+			int fid = 0;
+			QMap < QString, QMap<int, int> > votes;
+
+			for (auto n : g.nodes)
+			{
+				auto mn = g.getMesh(n->id);
+				for (auto f : mn->faces()){
+					int class_id = face_class_id[fid];
+					votes[n->id][class_id]++;
+					fid++;
+				}
+			}
+
+			// Collect votes
+			for (auto n : g.nodes)
+			{
+				QVector<QPair<int, int> > node_votes;
+				auto n_votes = votes[n->id];
+				for (auto class_id : n_votes.keys()){
+					auto votes_count = n_votes[class_id];
+					node_votes << qMakePair(votes_count, class_id);
+				}
+				qSort(node_votes);
+
+				// Selected class id
+				QString true_label = n->meta["label"].toString().split("-").front();
+				QString assigned_label = id_label_map[node_votes.back().second-1].split("-").front();
+
+				// Record
+				if (true_label == assigned_label) C++;
+				G++; M++;
+			}
 		}
+
+		outputResults(G, M, C, shapesDir.dirName(), vkShapesDir.absolutePath());
 	});
 
 
 	connect(ui->pairWiseButton, &QPushButton::clicked, [&](){
-		new Evaluator(default_folder, false);
+		new Evaluator(default_folder, false, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
 	});
 
 	connect(ui->setWiseButton, &QPushButton::clicked, [&](){
-		new Evaluator(default_folder, true);
+		new Evaluator(default_folder, true, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
+	});
+
+	connect(ui->evalZhenButton, &QPushButton::clicked, [&](){
+		auto resultsFolder = QFileDialog::getExistingDirectory();
+
+		MyViewer * viewer = new MyViewer;
+		viewer->setWindowTitle("zheng");
+
+		auto shapesDirName = default_folder;
+		auto shapesDir = QDir(shapesDirName);
+		auto folders = shapesInDataset(shapesDirName);
+
+		// Load shapes
+		for (auto folderName : folders.keys())
+		{
+			auto & folder = folders[folderName];
+			viewer->graphs[folderName] = QSharedPointer<Structure::Graph>(new Structure::Graph(folder["graphFile"].toString()));
+
+			auto g = viewer->graphs[folderName];
+
+			// Initialize visualization
+			g->property["showMeshes"].setValue(true);
+			g->property["showNodes"].setValue(false);
+			g->setColorAll(Qt::black);
+			g->setVisPropertyAll("meshSolid", true);
+
+			viewer->shape_names << folderName;
+		}
+
+		int G = 0, M = 0, C = 0;
+
+		for (int i = 0; i < viewer->shape_names.size(); i++)
+		{
+			auto & folder = folders[viewer->shape_names[i]];
+
+			auto g = viewer->graphs[viewer->shape_names[i]];
+			
+			// Get results file:
+			QString results_file = resultsFolder + "/zheng14_" + QFileInfo(folder["graphFile"].toString()).baseName() + ".txt";
+			if (!QFileInfo(results_file).exists()) continue;
+
+			QFile file(results_file);
+			if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+			auto assignments = QString(file.readAll()).split(QRegExp("\n|\r\n|\r"), QString::SkipEmptyParts);
+
+			QMap < QString, QString > result_labels;
+			for (auto row : assignments){
+				auto items = row.split(" ", QString::SkipEmptyParts);
+				result_labels[items.front()] = items.back();
+			}
+
+			for (auto n : g->nodes)
+			{
+				auto true_label = n->meta["label"].toString().split("-").front();
+				auto assigned_label = result_labels[n->id];
+
+				// Record
+				if (true_label == assigned_label) C++;
+				G++; M++;
+			}
+		}
+
+		outputResults(G, M, C, shapesDir.dirName(), resultsFolder);
+
+		viewer->show();
 	});
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::outputResults(int G, int M, int C, QString typeShapes, QString resultsFolder)
+{
+	// Results:
+	
+	double P = double(C) / M;
+	double R = double(C) / G;
+
+	QString report = QString("[%3] Avg. P = %1, R = %2").arg(P).arg(R).arg(typeShapes);
+
+	report += QString("\nG_count %1 / M_count %2 / R_count %3").arg(G).arg(M).arg(C);
+
+	// Save log of P/R measures
+	{
+		QFile logfile(resultsFolder + "/" + typeShapes + "_log.txt");
+		logfile.open(QIODevice::WriteOnly | QIODevice::Text);
+		QTextStream out(&logfile);
+		out << report + "\n";
+	}
+
+	debugBox(report);
 }

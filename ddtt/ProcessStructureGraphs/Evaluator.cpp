@@ -159,7 +159,8 @@ struct LabelOracle{
 	QVector<GroundTruth::PrecisionRecall> pr_results;
 };
 
-Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet)
+Evaluator::Evaluator(QString datasetPath, bool isSet, bool optClustering, bool optGTMode, QWidget *parent) :
+QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), optClustering(optClustering), optGTMode(optGTMode)
 {
     ui->setupUi(this);
 
@@ -322,8 +323,8 @@ void Evaluator::run()
 	else
 	{
 		/// Using a set of shapes:
-		bool isUseClustering = true;		// if false, becomes a simple baseline / greedy assignment
-		bool isCheatingMode = true;		// !! only use when debugging !!
+		bool isUseClustering = optClustering;		// if false, becomes a simple baseline / greedy assignment
+		bool isCheatingMode = optGTMode;			// !! only use when debugging !!
 
 		// Open JSON file
 		QFile file;
@@ -361,7 +362,7 @@ void Evaluator::run()
 					edges << edge;
 
 					auto edge2 = QString("%2\t%1\t%3").arg(nid1).arg(nid2).arg(similiairty);
-					edges << edge2;
+					//edges << edge2;
 				}
 			}
 
@@ -462,7 +463,7 @@ void Evaluator::run()
 
 					int class_id = all_part_classes[part_full_name];
 
-					g->setColorFor(n->id, MyViewer::class_color[class_id]);
+					g->setColorFor(n->id, MyViewer::class_color[class_id % MyViewer::class_color.size()]);
 
 					n->property["classID"].setValue(class_id);
 
@@ -486,7 +487,14 @@ void Evaluator::run()
 							}
 							return closest_label.split("-").front(); // return coarse-level label
 						};
-						vote = closestLable(n->center());
+
+						if(isUseClustering) vote = closestLable(n->center());
+						else
+						{
+							auto mesh = g->getMesh(n->id);
+							mesh->updateBoundingBox();
+							vote = closestLable(mesh->bbox().center());
+						}
 					}
 
 					class_votes[class_id][vote]++;
