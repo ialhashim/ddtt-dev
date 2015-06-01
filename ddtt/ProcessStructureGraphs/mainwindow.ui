@@ -328,6 +328,28 @@
       </property>
      </widget>
     </item>
+    <item row="11" column="2">
+     <widget class="QPushButton" name="baselineButton">
+      <property name="text">
+       <string>Baseline..</string>
+      </property>
+     </widget>
+    </item>
+
+    <item row="13" column="2">
+     <widget class="QCheckBox" name="ignoreSymmetry">
+      <property name="text">
+       <string>Ignore symmetry</string>
+      </property>
+     </widget>
+    </item>
+    <item row="13" column="0">
+     <widget class="QCheckBox" name="cutsJoins">
+      <property name="text">
+       <string>Cuts and joins</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">
