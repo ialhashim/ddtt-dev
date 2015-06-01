@@ -50,19 +50,22 @@ int main(int argc, char *argv[])
     QCommandLineParser parser;
     parser.addHelpOption();
     parser.addOptions({
-			{ "nogui", QString("Using command line arguments, do not show GUI.") },
+            { "nogui", QString("Using command line arguments, do not show GUI.") },
             { { "p", "path" }, QString("Path for job files or shape files."), QString("path") },
             { { "g", "align" }, QString("Input is not aligned. Find lowest cost alignment.") },
-            { { "o", "roundtrip" }, QString("Compute least cost from source to target, and target to source.") },
             { { "s", "sourceShape" }, QString("Path for source shape file."), QString("source") },
             { { "t", "targetShape" }, QString("Path for target shape file."), QString("target") },
-            { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
             { { "a", "auto" }, QString("Automatically try to find initial correspondence. Not used for job files.") },
 			{ { "j", "job" }, QString("Job file to load."), QString("job") },
 			{ { "f", "folder" }, QString("Folder for a shape dataset."), QString("folder") },
             { { "z", "output" }, QString("Folder for output JSON file."), QString("output") },
 			{ { "q", "quiet" }, QString("Skip visualization.") },
-            { { "c", "cut" }, QString("Allow cuts.") },
+            { { "m", "asymmetry" }, QString("Ignore symmetry groups. Used for evaluation.") },
+
+            /* Actual paramteres */
+            { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
+            { { "o", "roundtrip" }, QString("Compute least cost from source to target, and target to source.") },
+            { { "c", "cut" }, QString("Allow part cuts/joins.") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {
@@ -76,13 +79,15 @@ int main(int argc, char *argv[])
 	QString path = parser.value("p");
 	QDir::setCurrent(path);
 
-    // Process shape sets
+
+    /// Process shape sets:
     if(parser.isSet("folder"))
     {
 		QElapsedTimer timer; timer.start();
 
         QString dataset = parser.value("folder");
-		QDir d("");
+        QDir d("");
+        QString dir_name = QDir(dataset).dirName();
 
 		// 1) get sorted set of pairs to compare
         QVector< QPair<int, int> > shapePairs;
@@ -96,8 +101,6 @@ int main(int argc, char *argv[])
 
         QMap< QString,QPair<int,int> > pair_idx;
 
-        QString dir_name = QDir(dataset).dirName();
-		
 		// 2) perform correspondence for shape pairs
 		{
 			// Remove previous log file
@@ -119,18 +122,21 @@ int main(int argc, char *argv[])
 
 				QStringList pargs;
 
-				// input
+                // Inputs
 				pargs << "-s" << source << "-t" << target;	
 
-				// search options
-				if (parser.isSet("o")) pargs << "-o";		
-				if (parser.isSet("k")) pargs << "-k" << parser.value("k");
+                // Forward search options
+                if (parser.isSet("o")) pargs << "-o";
+                if (parser.isSet("k")) pargs << "-k" << parser.value("k");
 				if (parser.isSet("q")) pargs << "-q";
                 if (parser.isSet("c")) pargs << "-c";
+                if (parser.isSet("m")) pargs << "-m";
 
+                // Execute as a seperate process
 				p.start(a.applicationFilePath(), pargs);
 				p.waitForFinished(-1);
 
+                // Show progress to user
 				auto percent = (double(curShapePair++) / shapePairsCount) * 100.0;
 				std::cout << QString("[%1 %] - %2 - ").arg((int)percent).arg(shapePairsCount-curShapePair).toStdString();
 				int secPerPercent = (timer.elapsed() / 1000) / (percent + 1);
@@ -143,9 +149,9 @@ int main(int argc, char *argv[])
 		QString job_name = QString("job_%1").arg(QDateTime::currentDateTime().toString("dd_MM_yyyy_hh_mm_ss"));
 		d.mkpath(job_name);
 
-		// 4) collect results
+        // 4) collect all pair-wise results
 		{
-			// output sorted set of shapes
+            // output sorted set of shape names
 			{
                 QFile file(d.absolutePath() + "/" + job_name + "/" + "_" + dir_name + "_shapes.txt");
 				if (file.open(QIODevice::WriteOnly | QIODevice::Text)){
@@ -161,10 +167,6 @@ int main(int argc, char *argv[])
 				ff.open(QFile::ReadOnly | QFile::Text);
 				QTextStream in(&ff);
 				auto datasetLogLines = in.readAll().split("\n", QString::SkipEmptyParts);
-
-				// Hopefully everything went well
-				assert(datasetLogLines.size() == shapePairs.size());
-				if (datasetLogLines.size() != shapePairs.size()) return -1;
 
 				// Record final results
                 QJsonArray results;
@@ -231,14 +233,12 @@ int main(int argc, char *argv[])
 
                     QString jsonFilename = d.absolutePath() + "/" + job_name + "/_" + dir_name + "_corr.json";
 
-                    if(parser.isSet("output"))
-                    {
-                        jsonFilename = parser.value("output") + "/" + dir_name + "_corr.json";
-                    }
+                    // User specified output folder
+                    if(parser.isSet("output")) jsonFilename = parser.value("output") + "/" + dir_name + "_corr.json";
 
-                    QFile saveFile(jsonFilename);
-					saveFile.open(QIODevice::WriteOnly);
-					saveFile.write(saveDoc.toJson());
+                    QFile saveFile( jsonFilename );
+                    saveFile.open( QIODevice::WriteOnly );
+                    saveFile.write( saveDoc.toJson() );
 				}
 			}
 		}
@@ -246,7 +246,10 @@ int main(int argc, char *argv[])
 		return folders.size();
     }
 
+
+    /// Here we perform the actual pair-wise correspondence:
     QString jobs_filename;
+
     if(parser.isSet("nogui") || parser.isSet("auto") || parser.isSet("sourceShape"))
     {
         if (parser.isSet("auto") || parser.isSet("sourceShape") || parser.isSet("targetShape"))
@@ -259,12 +262,8 @@ int main(int argc, char *argv[])
             if(parser.isSet("o")) options["roundtrip"].setValue(true);
             if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
 			if(parser.isSet("q")) options["isQuietMode"].setValue(true);
-            if(parser.isSet("c")) options["isAllowCuts"].setValue(true);
-
-            // Bicycel dataset is acting weird
-            //if(sourceShape.contains("bicycle", Qt::CaseInsensitive))
-            //    options["k"].setValue(1);
-
+            if(parser.isSet("c")) options["isAllowCutsJoins"].setValue(true);
+            if(parser.isSet("m")) options["isIgnoreSymmetryGroups"].setValue(true);
 
             if(options["roundtrip"].toBool() || options["align"].toBool())
 			{
@@ -339,10 +338,8 @@ int main(int argc, char *argv[])
                                 << minJob["match_file"].toString() << "," << minJob["is_swapped"].toInt() << ","
                                 << (thumb_filename.isEmpty() ? "null" : thumb_filename) << "\n";
 						}
-					}
-					
-				}
-				);
+                    }
+                }); // end of QTimer::singleShot
             }
             else
             {

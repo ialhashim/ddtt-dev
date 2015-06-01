@@ -265,6 +265,24 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 
 	int searchTime = 0;
 
+    if(job["isIgnoreSymmetryGroups"].toBool())
+    {
+        shapeA->groups.clear();
+        shapeB->groups.clear();
+
+        for (auto n : shapeA->nodes) shapeA->setColorFor(n->id, starlab::qRandomColor3());
+        for (auto n : shapeB->nodes) shapeB->setColorFor(n->id, starlab::qRandomColor3());
+    }
+
+    if (job["isAllowCutsJoins"].toBool())
+    {
+        //shapeA->performJoins();
+        shapeA->performCuts();
+
+        //shapeB->performJoins();
+        shapeB->performCuts();
+    }
+
 	if (job["isAnisotropy"].toBool())
 	{
 		QMatrix4x4 mat;
@@ -273,39 +291,6 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		Vector3 s = bboxA.diagonal().array() / bboxB.diagonal().array();
 		mat.scale(s.x(), s.y(), s.z());
 		shapeB->transform(mat, true);
-	}
-
-	if (job["isAllowCuts"].toBool())
-	{
-		auto performCuts = [&](Structure::ShapeGraph * g){
-			QVector<QString> toCutIDs;
-			for (auto n : g->nodes){
-				if (g->hasDoubleEdges(n->id)){
-					Structure::Node * otherDouble = nullptr;
-					for (auto l : g->getEdges(n->id)){
-						if (g->hasDoubleEdges(l->otherNode(n->id)->id)){
-							otherDouble = l->otherNode(n->id);
-							break;
-						}
-					}
-
-					if (!otherDouble){
-						toCutIDs << n->id;
-					}
-					else
-					{
-						if (n->length() > otherDouble->length())
-							toCutIDs << n->id;
-					}
-				}
-			}
-
-			for (auto nid : toCutIDs)
-				g->cutNode(nid, 2);
-		};
-
-		performCuts(shapeA.data());
-		performCuts(shapeB.data());
 	}
 
     if (job["isFlip"].toBool())
@@ -823,7 +808,8 @@ BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVari
 	job["target"].setValue(targetFilename);
 	job["title"].setValue(QFileInfo(sourceFilename).baseName() + "-" + QFileInfo(targetFilename).baseName());
     job["isFlip"].setValue(options["isFlip"].toBool());
-    job["isAllowCuts"] = options["isAllowCuts"].toBool();
+    job["isAllowCutsJoins"] = options["isAllowCutsJoins"].toBool();
+    job["isIgnoreSymmetryGroups"] = options["isIgnoreSymmetryGroups"].toBool();
 
 	jobsArray.push_back(QJsonObject::fromVariantMap(job));
 }
