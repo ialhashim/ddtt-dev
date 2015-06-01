@@ -22,7 +22,107 @@
 #include <string>
 
 QString default_folder = "";
+<<<<<<< HEAD
+auto paired_colors = {"#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a", "#ffff99", "#b15928"};
+
+int num_classes = 128;
+QVector<QColor> class_color;
+
+Q_DECLARE_METATYPE(OBB_Volume)
+
+class MyViewer : public QGLViewer{
+public:
+	QMap <QString, QSharedPointer<Structure::Graph> > graphs;
+	QStringList shape_names;
+	QVector < QSharedPointer<RenderObject::Base> > debugs;
+
+	QVector <QSharedPointer<SurfaceMeshModel> > models;
+
+	QVector < QSharedPointer<QWidget> > widgets;
+
+	void makeShapePairsWidget()
+	{
+		auto w = QSharedPointer<QWidget>(new QWidget);
+		w->setMinimumSize(150,300);
+		auto l1 = new QHBoxLayout;
+
+		auto list1 = QSharedPointer<QListWidget>(new QListWidget());
+		auto list2 = QSharedPointer<QListWidget>(new QListWidget());
+
+		widgets << list1;
+		widgets << list2;
+
+		for (auto shape : shape_names)
+		{
+			list1->addItem(shape);
+			list2->addItem(shape);
+		}
+
+		connect(list1.data(), &QListWidget::itemSelectionChanged, [&](){this->showPairs();});
+		connect(list2.data(), &QListWidget::itemSelectionChanged, [&](){this->showPairs();});
+
+		l1->addWidget(list1.data());
+		l1->addWidget(list2.data());
+
+		w->setLayout(l1);
+		widgets << w;
+		w->show();
+	}
+
+	void showPairs()
+	{
+		auto list1 = (QListWidget*)widgets.at(0).data();
+		auto list2 = (QListWidget*)widgets.at(1).data();
+		if (list1->selectedItems().empty() || list2->selectedItems().empty()) return;
+
+		auto CalcHausdorffDist = [](const std::vector<Vector3> &vp, const std::vector<Vector3> &bbvp){
+			double d1(0);
+			for (unsigned int i = 0; i < vp.size(); i++) {
+				double dd(std::numeric_limits<double>::max());
+				for (unsigned int j = 0; j < bbvp.size(); j++) {
+					dd = std::min(dd, (vp[i]-bbvp[j]).norm());
+				}
+				d1 = std::max(d1, dd);
+			}
+			double d2(0);
+			for (unsigned int i = 0; i < bbvp.size(); i++) {
+				double dd(std::numeric_limits<double>::max());
+				for (unsigned int j = 0; j < vp.size(); j++) {
+					dd = std::min(dd, (bbvp[i]-vp[j]).norm());
+				}
+				d2 = std::max(d2, dd);
+			}
+			return std::max(d1, d2);
+		};
+
+		for (auto g : graphs)
+		{
+			for (auto n : g->nodes)
+				g->setColorFor(n->id, QColor(200, 200, 200));
+
+			g->property["showMeshes"].setValue(true);
+		}
+
+		auto g1 = graphs[list1->selectedItems().front()->text()];
+
+		for (auto g2 : graphs)
+		{
+			for (auto ni : g1->nodes){
+				auto mesh = g1->getMesh(ni->id);
+
+				auto obbi = OBB_Volume(mesh);
+
+				ni->property["obb"].setValue(obbi);
+				//for (auto p : obbi.corners<Vector3>()) g1->debug << starlab::PointSoup::drawPoint(p, 4);
+			}
+
+			for (auto nj : g2->nodes){
+				auto meshj = g2->getMesh(nj->id);
+
+				auto obbj = OBB_Volume(meshj);
+=======
 auto paired_colors = { "#a6cee3", "#1f78b4", "#b2df8a", "#33a02c", "#fb9a99", "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6", "#6a3d9a", "#ffff99", "#b15928" };
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
 
 QVector<QColor> MyViewer::class_color = QVector<QColor>();
 int MyViewer::num_classes = 128;
@@ -76,6 +176,104 @@ MainWindow::MainWindow(QWidget *parent) :
 		}
 
 		viewer->makeShapePairsWidget();
+
+	});
+
+	connect(ui->baselineButton, &QPushButton::clicked, [&](){
+		QMap <QString, QSharedPointer<Structure::Graph> > graphs;
+		auto folders = shapesInDataset(default_folder);
+
+		for (auto folderName : folders.keys())
+		{
+			auto folder = folders[folderName];
+			graphs[folderName] = QSharedPointer<Structure::Graph>(new Structure::Graph(folder["graphFile"].toString()));
+		}
+
+		auto CalcHausdorffDist = [](const std::vector<Vector3> &vp, const std::vector<Vector3> &bbvp){
+			double d1(0);
+			for (unsigned int i = 0; i < vp.size(); i++) {
+				double dd(std::numeric_limits<double>::max());
+				for (unsigned int j = 0; j < bbvp.size(); j++) {
+					dd = std::min(dd, (vp[i] - bbvp[j]).norm());
+				}
+				d1 = std::max(d1, dd);
+			}
+			double d2(0);
+			for (unsigned int i = 0; i < bbvp.size(); i++) {
+				double dd(std::numeric_limits<double>::max());
+				for (unsigned int j = 0; j < vp.size(); j++) {
+					dd = std::min(dd, (bbvp[i] - vp[j]).norm());
+				}
+				d2 = std::max(d2, dd);
+			}
+			return std::max(d1, d2);
+		};
+
+		std::vector<std::vector<std::pair<QString, QString>>> allMaps, allMapsLabel;
+		for (auto g1 : graphs)
+		{
+			for (auto g2 : graphs)
+			{
+				if (g1->name() == g2->name()) continue;
+// 				cout << "g1:" << g1->name().toStdString() << "  g2:" << g2->name().toStdString() << endl;
+
+				std::vector<std::pair<QString, QString>> gmap, gmapl;
+
+				for (auto ni : g1->nodes){
+					auto mesh = g1->getMesh(ni->id);
+
+					auto obbi = OBB_Volume(mesh);
+
+					ni->property["obb"].setValue(obbi);
+					//for (auto p : obbi.corners<Vector3>()) g1->debug << starlab::PointSoup::drawPoint(p, 4);
+				}
+
+				for (auto nj : g2->nodes){
+					auto meshj = g2->getMesh(nj->id);
+
+					auto obbj = OBB_Volume(meshj);
+
+					nj->property["obb"].setValue(obbj);
+					//for (auto p : obbj.corners<Vector3>()) g2->debug << starlab::PointSoup::drawPoint(p, 4, Qt::green);
+				}
+
+
+				QVector < QPair<QString, QString> > paring;
+				QMap < QString, QSet<QString> > target_mapped;
+
+				for (auto ni : g1->nodes)
+				{
+					auto obbi = ni->property["obb"].value<OBB_Volume>();
+
+					double minDist = DBL_MAX;
+					QString correspond = "";
+					auto corrn = g2->nodes.front();
+
+					for (auto nj : g2->nodes)
+					{
+						auto obbj = nj->property["obb"].value<OBB_Volume>();
+
+						double dist = CalcHausdorffDist(obbi.corners(), obbj.corners());
+						if (dist < minDist || correspond.isEmpty())
+						{
+							minDist = dist;
+							correspond = nj->id;
+							corrn = nj;
+						}
+
+						nj->vis_property["meshSolid"].setValue(true);
+					}
+
+						gmap.push_back(std::pair<QString, QString>(correspond, ni->id));
+						gmapl.push_back(std::pair<QString, QString>(corrn->meta["label"].toString(), ni->meta["label"].toString()));
+
+				}
+
+				allMaps.push_back(gmap);
+				allMapsLabel.push_back(gmapl);
+			}
+		}
+		new Evaluator(default_folder, allMaps, allMapsLabel);
 	});
 
 	connect(ui->exportLabelsButton, &QPushButton::clicked, [&](){
