@@ -888,17 +888,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
 	connect(ui->pairWiseButton, &QPushButton::clicked, [&](){
-		QVariantMap extraOptions;
-		if (ui->ignoreSymmetry->isChecked()) extraOptions["ignoreSymmetry"] = "-m";
-		if (ui->cutsJoins->isChecked()) extraOptions["cutsJoins"] = "-c";
-
-		auto ev = new Evaluator(default_folder, false, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
-		ev->run();
+		new Evaluator(default_folder, false, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
 	});
 
 	connect(ui->setWiseButton, &QPushButton::clicked, [&](){
-		auto ev = new Evaluator(default_folder, true, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
-		ev->run();
+		new Evaluator(default_folder, true, ui->optClustering->isChecked(), ui->groundTruthMode->isChecked());
 	});
 
 	connect(ui->evalZhenButton, &QPushButton::clicked, [&](){
@@ -964,101 +958,6 @@ MainWindow::MainWindow(QWidget *parent) :
 		outputResults(G, M, C, shapesDir.dirName(), resultsFolder);
 
 		viewer->show();
-	});
-
-	connect(ui->baselineButton, &QPushButton::clicked, [&](){
-		QMap <QString, QSharedPointer<Structure::Graph> > graphs;
-		auto folders = shapesInDataset(default_folder);
-
-		for (auto folderName : folders.keys())
-		{
-			auto folder = folders[folderName];
-			graphs[folderName] = QSharedPointer<Structure::Graph>(new Structure::Graph(folder["graphFile"].toString()));
-		}
-
-		auto CalcHausdorffDist = [](const std::vector<Vector3> &vp, const std::vector<Vector3> &bbvp){
-			double d1(0);
-			for (unsigned int i = 0; i < vp.size(); i++) {
-				double dd(std::numeric_limits<double>::max());
-				for (unsigned int j = 0; j < bbvp.size(); j++) {
-					dd = std::min(dd, (vp[i] - bbvp[j]).norm());
-				}
-				d1 = std::max(d1, dd);
-			}
-			double d2(0);
-			for (unsigned int i = 0; i < bbvp.size(); i++) {
-				double dd(std::numeric_limits<double>::max());
-				for (unsigned int j = 0; j < vp.size(); j++) {
-					dd = std::min(dd, (bbvp[i] - vp[j]).norm());
-				}
-				d2 = std::max(d2, dd);
-			}
-			return std::max(d1, d2);
-		};
-
-		std::vector<std::vector<std::pair<QString, QString>>> allMaps, allMapsLabel;
-		for (auto g1 : graphs){
-			for (auto g2 : graphs){
-				if (g1->name() == g2->name()) continue;
-				//     cout << "g1:" << g1->name().toStdString() << "  g2:" << g2->name().toStdString() << endl;
-
-				std::vector<std::pair<QString, QString>> gmap, gmapl;
-
-				for (auto ni : g1->nodes){
-					auto mesh = g1->getMesh(ni->id);
-
-					auto obbi = OBB_Volume(mesh);
-
-					ni->property["obb"].setValue(obbi);
-					//for (auto p : obbi.corners<Vector3>()) g1->debug << starlab::PointSoup::drawPoint(p, 4);
-				}
-
-				for (auto nj : g2->nodes){
-					auto meshj = g2->getMesh(nj->id);
-
-					auto obbj = OBB_Volume(meshj);
-
-					nj->property["obb"].setValue(obbj);
-					//for (auto p : obbj.corners<Vector3>()) g2->debug << starlab::PointSoup::drawPoint(p, 4, Qt::green);
-				}
-
-
-				QVector < QPair<QString, QString> > paring;
-				QMap < QString, QSet<QString> > target_mapped;
-
-				for (auto ni : g1->nodes)
-				{
-					auto obbi = ni->property["obb"].value<OBB_Volume>();
-
-					double minDist = DBL_MAX;
-					QString correspond = "";
-					auto corrn = g2->nodes.front();
-
-					for (auto nj : g2->nodes)
-					{
-						auto obbj = nj->property["obb"].value<OBB_Volume>();
-
-						double dist = CalcHausdorffDist(obbi.corners(), obbj.corners());
-						if (dist < minDist || correspond.isEmpty())
-						{
-							minDist = dist;
-							correspond = nj->id;
-							corrn = nj;
-						}
-
-						nj->vis_property["meshSolid"].setValue(true);
-					}
-
-					gmap.push_back(std::pair<QString, QString>(correspond, ni->id));
-					gmapl.push_back(std::pair<QString, QString>(corrn->meta["label"].toString(), ni->meta["label"].toString()));
-
-				}
-
-				allMaps.push_back(gmap);
-				allMapsLabel.push_back(gmapl);
-			}
-		}
-		new Evaluator(default_folder, allMaps, allMapsLabel);
 	});
 }
 

@@ -160,10 +160,12 @@ struct LabelOracle{
 	QVector<GroundTruth::PrecisionRecall> pr_results;
 };
 
-Evaluator::Evaluator(QString datasetPath, bool isSet, bool optClustering, bool optGTMode, QVariantMap otherOptions, QWidget *parent) :
-QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), optClustering(optClustering), optGTMode(optGTMode), otherOptions(otherOptions)
+Evaluator::Evaluator(QString datasetPath, bool isSet, bool optClustering, bool optGTMode, QWidget *parent) :
+QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), optClustering(optClustering), optGTMode(optGTMode)
 {
     ui->setupUi(this);
+
+	run();
 }
 Evaluator::Evaluator(QString datasetPath, std::vector<std::vector<std::pair<QString, QString>>> &allMaps, std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel) : datasetPath(datasetPath)
 {
@@ -186,12 +188,7 @@ void Evaluator::run()
 		exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
 	}
 
-	QString extras = "";
-	for (auto option : otherOptions){
-		extras += QString(" %1").arg(option.toString());
-	}
-
-	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3 %4").arg(exeCorresponder).arg(datasetPath).arg(datasetPath).arg(extras);
+	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
 
 	// Check first for cached results
 	if (!QFileInfo(resultsFile).exists())
@@ -687,118 +684,4 @@ void Evaluator::compareWithGreedyOBB( std::vector<std::vector<std::pair<QString,
 Evaluator::~Evaluator()
 {
     delete ui;
-}
-
-void Evaluator::compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, QString>>> &allMaps, 
-									 std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel)
-{
-	QDir dir(datasetPath);
-
-	QString outputPath = datasetPath;
-	// Now process results
-	{
-		/// Looking at pair-wise comparisons:
-		std::cout << "path:" << datasetPath.toStdString() << std::endl;
-		// Open labels JSON file
-		QMap<QString, QStringList> lables;
-		LabelOracle oracle;
-		{
-			auto labelsFilename = datasetPath + "/labels.json";
-			QFile file;
-			file.setFileName(labelsFilename);
-			if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
-			QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
-			auto json = jdoc.object();
-
-			// Get lables
-			auto labelsArray = json["labels"].toArray();
-			for (auto l : labelsArray)
-			{
-				auto label = l.toObject();
-				auto parent = label["parent"].toString();
-
-				lables[parent] << label["title"].toString();
-			}
-
-			// Get cross-labels
-			auto crossLabelsArray = json["cross-labels"].toArray();
-
-			// regular nodes
-			for (auto k : lables.keys()) for (auto l : lables[k]) oracle.push(l, l);
-
-			// cross-labeled
-			for (auto l : crossLabelsArray)
-			{
-				auto crosslabel = l.toObject();
-				oracle.push(crosslabel["first"].toString(), crosslabel["second"].toString());
-			}
-
-			oracle.build();
-		}
-
-		QElapsedTimer stats_timer; stats_timer.start();
-
-		for (int pi = 0; pi < allMaps.size(); pi++)
-		{
-			auto corr = allMaps[pi];
-			auto corrl = allMapsLabel[pi];
-
-
-			QStringList sourceLabels, targetLabels;
-			for (auto n : corrl) {
-				sourceLabels << n.first;
-				targetLabels << n.second;
-			}
-
-			// Build expected ground truth
-			oracle.makeGroundTruth(sourceLabels, targetLabels);
-
-			MatchingRecords M;
-
-			for (int ci = 0; ci < corr.size(); ci++)
-			{
-				auto sn = corr[ci].first;
-				auto tn = corr[ci].second;
-				auto snl = corrl[ci].first;
-				auto tnl = corrl[ci].second;
-
-				M << MatchingRecord(sn, tn, snl, tnl);
-			}
-
-			oracle.pr_results << oracle.gt.compute(M);
-		}
-
-		// General stats
-		int numG = 0, numM = 0, numR = 0;
-
-		// Sum results
-		double P = 0, R = 0;
-		for (auto pr : oracle.pr_results)
-		{
-			P += pr.precision;
-			R += pr.recall;
-
-			numG += pr.G;
-			numM += pr.M;
-			numR += pr.R;
-		}
-
-		// Get average
-		int N = oracle.pr_results.size();
-		P /= N;
-		R /= N;
-		QString report = QString("[%3] Avg. P = %1, R = %2").arg(P).arg(R).arg(dir.dirName());
-
-		report += QString("\nG_count %1 / M_count %2 / R_count %3").arg(numG).arg(numM).arg(numR);
-
-		// Save log of P/R measures
-		{
-			QFile logfile(datasetPath + "/log.txt");
-			logfile.open(QIODevice::WriteOnly | QIODevice::Text);
-			QTextStream out(&logfile);
-			out << report + "\n";
-		}
-
-		debugBox(report);
-	}
 }

@@ -1,5 +1,3 @@
-#pragma once
-
 #include <vector>
 
 /// A Union-Find/Disjoint-Set data structure.

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>330</width>
+    <width>313</width>
     <height>614</height>
    </rect>
   </property>
@@ -312,13 +312,6 @@
     <widget class="QSpinBox" name="topParts">
      <property name="maximum">
       <number>512</number>
-     </property>
-    </widget>
-   </item>
-   <item row="19" column="2">
-    <widget class="QCheckBox" name="noGroups">
-     <property name="text">
-      <string>no groups</string>
      </property>
     </widget>
    </item>

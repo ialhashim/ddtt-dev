@@ -173,16 +173,6 @@ void experiment::doEnergySearch()
 
 	QMatrix4x4 mat;
 
-	// For experiments
-	if (pw->ui->noGroups->isChecked())
-	{
-		shapeA->groups.clear();
-		shapeB->groups.clear();
-
-		for (auto n : shapeA->nodes) shapeA->setColorFor(n->id, starlab::qRandomColor3());
-		for (auto n : shapeB->nodes) shapeB->setColorFor(n->id, starlab::qRandomColor3());
-	}
-
 	if (pw->ui->isAnisotropy->isChecked())
 	{
 		auto bboxA = shapeA->bbox();
@@ -809,9 +799,6 @@ void experiment::create()
 		this->doCorrespondSearch();
 		drawArea()->update();
 	});
-	
-	pw->ui->searchBest->setVisible(false);
-
 	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&]{
 		if (mysearch){
 			int pid = pw->ui->pathsList->currentItem()->data(Qt::UserRole).toInt();
@@ -1186,15 +1173,33 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 	{
 		for (auto g : graphs)
 		{
-			g->performCuts();
-		}
-	}
+			QVector<QString> toCutIDs;
+			for (auto n : g->nodes){
+				if (g->hasDoubleEdges(n->id)){
+					Structure::Node * otherDouble = nullptr;
+					for (auto l : g->getEdges(n->id)){
+						if (g->hasDoubleEdges(l->otherNode(n->id)->id)){
+							otherDouble = l->otherNode(n->id);
+							break;
+						}
+					}
 
-	if (event->key() == Qt::Key_J)
-	{
-		for (auto g : graphs)
-		{
-			g->performJoins();
+					if (!otherDouble){
+						toCutIDs << n->id;
+					}
+					else
+					{
+						if (n->length() > otherDouble->length())
+							toCutIDs << n->id;
+					}
+				}
+			}
+
+			for (auto nid : toCutIDs)
+				g->cutNode(nid, 2);
+
+			if (!toCutIDs.isEmpty())
+				g->property["hasCuts"].setValue(true);
 		}
 	}
 
