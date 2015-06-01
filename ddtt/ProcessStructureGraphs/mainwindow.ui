@@ -57,10 +57,22 @@
       </layout>
      </widget>
     </item>
-    <item row="7" column="1">
-     <widget class="QPushButton" name="fuzzyButton">
-      <property name="text">
-       <string>Fuzzy correspond..</string>
+    <item row="4" column="2">
+     <widget class="QDoubleSpinBox" name="greedyParam">
+      <property name="decimals">
+       <number>3</number>
+      </property>
+      <property name="minimum">
+       <double>0.000000000000000</double>
+      </property>
+      <property name="maximum">
+       <double>10000.000000000000000</double>
+      </property>
+      <property name="singleStep">
+       <double>0.050000000000000</double>
+      </property>
+      <property name="value">
+       <double>0.080000000000000</double>
       </property>
      </widget>
     </item>
@@ -77,17 +89,10 @@
       </property>
      </spacer>
     </item>
-    <item row="5" column="1">
-     <widget class="QPushButton" name="vkButton">
+    <item row="2" column="1">
+     <widget class="QPushButton" name="conSegButton">
       <property name="text">
-       <string>VK template...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="4" column="1">
-     <widget class="QPushButton" name="greedyButton">
-      <property name="text">
-       <string>Greedy correspondence...</string>
+       <string>Consistent Segmentation..</string>
       </property>
      </widget>
     </item>
@@ -111,24 +116,17 @@
       </property>
      </widget>
     </item>
-    <item row="8" column="1">
-     <widget class="QPushButton" name="clusterButton">
-      <property name="text">
-       <string>Extract cluster...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="2" column="1">
-     <widget class="QPushButton" name="conSegButton">
-      <property name="text">
-       <string>Consistent Segmentation..</string>
-      </property>
-     </widget>
-    </item>
     <item row="0" column="1">
      <widget class="QPushButton" name="extractPly">
       <property name="text">
        <string>Extract Ply...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QPushButton" name="vkButton">
+      <property name="text">
+       <string>VK template...</string>
       </property>
      </widget>
     </item>
@@ -142,22 +140,10 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="2">
-     <widget class="QDoubleSpinBox" name="greedyParam">
-      <property name="decimals">
-       <number>3</number>
-      </property>
-      <property name="minimum">
-       <double>0.000000000000000</double>
-      </property>
-      <property name="maximum">
-       <double>10000.000000000000000</double>
-      </property>
-      <property name="singleStep">
-       <double>0.050000000000000</double>
-      </property>
-      <property name="value">
-       <double>0.080000000000000</double>
+    <item row="4" column="1">
+     <widget class="QPushButton" name="greedyButton">
+      <property name="text">
+       <string>Greedy correspondence...</string>
       </property>
      </widget>
     </item>
@@ -168,7 +154,7 @@
       </property>
      </widget>
     </item>
-    <item row="9" column="1">
+    <item row="10" column="1">
      <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -181,17 +167,38 @@
       </property>
      </spacer>
     </item>
-    <item row="10" column="1">
+    <item row="11" column="1">
      <widget class="QPushButton" name="pairWiseButton">
       <property name="text">
        <string>Evaluate pair-wise...</string>
       </property>
      </widget>
     </item>
-    <item row="11" column="1">
+    <item row="7" column="1">
+     <widget class="QPushButton" name="fuzzyButton">
+      <property name="text">
+       <string>Fuzzy correspond..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="12" column="1">
      <widget class="QPushButton" name="setWiseButton">
       <property name="text">
        <string>Evaluate set-wise...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="1">
+     <widget class="QPushButton" name="clusterButton">
+      <property name="text">
+       <string>Extract cluster...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="9" column="1">
+     <widget class="QPushButton" name="baselineButton">
+      <property name="text">
+       <string>Baseline</string>
       </property>
      </widget>
     </item>
