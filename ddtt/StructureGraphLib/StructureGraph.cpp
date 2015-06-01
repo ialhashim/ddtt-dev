@@ -23,6 +23,8 @@ using namespace Structure;
 
 #include "Task.h"
 
+#include "../NURBS/LineSegment.h"
+
 Q_DECLARE_METATYPE( Eigen::AlignedBox3d )
 
 Graph::Graph()
@@ -2155,6 +2157,125 @@ void Graph::cutNode(QString nodeID, int cutCount)
         // Remove original node
         removeNode(nodeID);
     }
+}
+
+void Graph::joinNodes(QStringList nodeIDs)
+{
+	if (nodeIDs.isEmpty() || nodeIDs.size() < 2) return;
+
+	// Check types
+	QString nodeType = getNode(nodeIDs.front())->type();
+	for (auto nid : nodeIDs) {
+		if (getNode(nid)->type() != nodeType){
+			//qDebug() << "We only support joining nodes of same type for now..";
+			return;
+		}
+	}
+	
+	if (nodeType == Structure::SHEET)
+	{
+		return; // no support for sheets for now..
+	}
+	else
+	// curve-chain joins
+	{
+		// Get furthest most points
+		QVector<Vector3> all_cpts;
+        for (auto nid : nodeIDs) for (auto p : getNode(nid)->controlPoints()) all_cpts << p;
+		double max_dist = -DBL_MAX;
+		int max_i = 0, max_j = 1;
+		for (int i = 0; i < all_cpts.size(); i++){
+			for (int j = i + 1; j < all_cpts.size(); j++){
+				double dist = (all_cpts[i] - all_cpts[j]).norm();
+				if (dist > max_dist){
+					max_dist = dist;
+					max_i = i;
+					max_j = j;
+				}
+			}
+		}
+
+		// Line
+		Vector3 start = all_cpts[max_i];
+		Vector3 end = all_cpts[max_j];
+        NURBS::Line l(start, end);
+
+		// Sample nodes
+		typedef QMap<double, Vector3> CoordPoint;
+		CoordPoint samplePoints;
+		for (auto nid : nodeIDs)
+		{
+			auto n = (Structure::Curve*) getNode(nid);
+            auto coords = n->discretizedPoints(n->length() / 10);
+
+            for (auto row : coords)
+            {
+                for(auto c : row)
+                {
+                    auto p = n->position(c);
+
+                    double t = std::max(0.0, std::min(1.0, l.timeAt(p)));
+                    samplePoints[t] = p;
+                }
+			}
+		}
+
+		// Create joined node
+		Array1D_Vector3 new_curve_pts;
+		for (auto t : samplePoints.keys())
+		{
+			new_curve_pts.push_back(samplePoints[t]);
+		}
+
+		QString newNodeID = nodeIDs.join("-");
+		auto joinedNode = addNode(new Structure::Curve(NURBS::NURBSCurved::createCurveFromPoints(new_curve_pts), newNodeID));
+
+        // Create a mesh by joining geometry from all nodes
+        QSharedPointer<SurfaceMeshModel> newMesh = QSharedPointer<SurfaceMeshModel>(new SurfaceMeshModel(newNodeID,newNodeID));
+
+        int voffset = 0;
+
+        for(auto nid : nodeIDs)
+        {
+            auto old_mesh = getMesh(nid);
+            for(auto v : old_mesh->vertices()) newMesh->add_vertex(old_mesh->vertex_coordinates()[v]);
+            for(auto f : old_mesh->faces()){
+                std::vector<SurfaceMeshModel::Vertex> verts;
+                for(auto v : old_mesh->vertices(f)) verts.push_back(SurfaceMeshModel::Vertex(voffset + v.idx()));
+                newMesh->add_face(verts);
+            }
+
+            newMesh->updateBoundingBox();
+            newMesh->update_face_normals();
+            newMesh->update_vertex_normals();
+
+            voffset += old_mesh->n_vertices();
+        }
+
+        joinedNode->property["mesh"].setValue(newMesh);
+		joinedNode->property["realOriginalID"].setValue(nodeIDs.front());
+		
+		// Reconnect edges
+		for (auto nodeID : nodeIDs)
+		{
+			QVector<Link*> links = getEdges(nodeID);
+			for (Link* l : links)
+			{
+				auto otherNode = l->otherNode(nodeID);
+
+				// skip edges between each other
+				if (nodeIDs.contains(otherNode->id)) continue;
+
+				auto otherCoords = l->getCoordOther(nodeID);
+				auto origPos = l->position(nodeID);
+
+				addEdge(joinedNode, otherNode, Array1D_Vector4d(1, joinedNode->approxCoordinates(origPos)), otherCoords);
+			}
+		}
+
+		// Remove original nodes
+        for(auto nid : nodeIDs) removeNode(nid);
+	}
 }
 
 Array2D_Vector3 Graph::getAllControlPoints()

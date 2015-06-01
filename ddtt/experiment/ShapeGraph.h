@@ -1,5 +1,6 @@
 #pragma once
 #include "StructureGraph.h"
+#include "disjointset.h"
 
 // 64 bit
 #pragma warning (disable : 4267)
@@ -403,6 +404,105 @@ namespace Structure
 			
 			return newSheet->id;
 		}
+
+		void performCuts()
+		{
+			QVector<QString> toCutIDs;
+			for (auto n : nodes)
+			{
+				// this is restrictive, needs to be more general in the future..
+				if (hasDoubleEdges(n->id))
+				{
+					Structure::Node * otherDouble = nullptr;
+					for (auto l : getEdges(n->id)){
+						if (hasDoubleEdges(l->otherNode(n->id)->id)){
+							otherDouble = l->otherNode(n->id);
+							break;
+						}
+					}
+
+					if (!otherDouble){
+						toCutIDs << n->id;
+					}
+					else{
+						if (n->length() > otherDouble->length())
+							toCutIDs << n->id;
+					}
+				}
+			}
+
+			for (auto nid : toCutIDs)
+				cutNode(nid, 2);
+		}
+
+		void performJoins()
+		{
+			DisjointSet U(nodes.size());
+
+			// Merge join-able nodes
+			for (auto ni : nodes)
+			{
+				if (ni->type() != Structure::CURVE) continue;
+
+				double theta = M_PI * 0.9;
+				double threshold = ni->length() * 0.01;
+				double angle_threshold = abs(cos(theta));
+
+				for (auto l : getEdges(ni->id))
+				{
+					auto nj = l->otherNode(ni->id);
+					if (nj->type() != Structure::CURVE) continue;
+
+					auto p = ni->approxProjection(nj->startPoint());
+					auto q = ni->approxProjection(nj->endPoint());
+
+					double dist = (p - q).norm();
+
+					auto meetingPoint = [&](Structure::Node * ni, Structure::Node * nj){
+						double dist1 = (ni->approxProjection(nj->startPoint()) - nj->startPoint()).norm();
+						double dist2 = (ni->approxProjection(nj->endPoint()) - nj->endPoint()).norm();
+						if (dist1 < dist2)
+							return ni->approxCoordinates(nj->startPoint())(0);
+						else
+							return ni->approxCoordinates(nj->endPoint())(0);
+					};
+
+					auto midTangent = [&](Structure::Node * n, double t, double range){
+						double t0 = std::max(0.0, std::min(1.0, t - range));
+						double t1 = std::max(0.0, std::min(1.0, t + range));
+						return (n->position(Eigen::Vector4d(t1, 0, 0, 0)) - n->position(Eigen::Vector4d(t0, 0, 0, 0))).normalized();
+					};
+
+					double range = 0.1;
+					auto ti = midTangent(ni, meetingPoint(ni, nj), range);
+					auto tj = midTangent(nj, meetingPoint(nj, ni), range);
+
+					double dot_diagonals = abs(ti.dot(tj));
+
+					bool isAngle = angle_threshold < dot_diagonals;
+
+					if (dist < threshold && isAngle)
+					{
+						U.Union(nodes.indexOf(ni), nodes.indexOf(nj));
+					}
+				}
+			}
+
+			// Convert numerical indices to alphabetical IDs
+			QVector<QStringList> groupedNodes;
+			for (auto group : U.Groups())
+			{
+				QStringList nodeIDs;
+				for (auto nidx : group) nodeIDs << nodes[nidx]->id;
+				if (nodeIDs.size() < 2) continue;
+				groupedNodes << nodeIDs;
+			}
+
+			// Apply join
+			for (auto nodeIDs : groupedNodes)
+				joinNodes(nodeIDs);
+		}
+
 	};
 }
 

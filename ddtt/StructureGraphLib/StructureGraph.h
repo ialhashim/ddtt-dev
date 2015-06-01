@@ -143,6 +143,7 @@ namespace Structure{
         // Topology modifiers
         bool hasDoubleEdges(QString nodeID);
         void cutNode(QString nodeID, int cutCount);
+		void joinNodes(QStringList nodeIDs);
 
         Array2D_Vector3 getAllControlPoints();
         void setAllControlPoints(Array2D_Vector3 all_points);
