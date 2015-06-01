@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>362</width>
-    <height>477</height>
+    <width>399</width>
+    <height>615</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,7 +15,7 @@
   </property>
   <widget class="QWidget" name="centralWidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="3" column="0" colspan="3">
+    <item row="4" column="0" colspan="3">
      <widget class="QGroupBox" name="groupBox">
       <property name="title">
        <string>GroupBox</string>
@@ -57,6 +57,7 @@
       </layout>
      </widget>
     </item>
+<<<<<<< HEAD
     <item row="4" column="2">
      <widget class="QDoubleSpinBox" name="greedyParam">
       <property name="decimals">
@@ -91,6 +92,17 @@
     </item>
     <item row="2" column="1">
      <widget class="QPushButton" name="conSegButton">
+=======
+    <item row="2" column="1">
+     <widget class="QPushButton" name="exportLabelsButton">
+      <property name="text">
+       <string>Export Labels...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="1">
+     <widget class="QPushButton" name="greedyButton">
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
       <property name="text">
        <string>Consistent Segmentation..</string>
       </property>
@@ -109,6 +121,7 @@
       </property>
      </spacer>
     </item>
+<<<<<<< HEAD
     <item row="1" column="1">
      <widget class="QPushButton" name="exportLabelsButton">
       <property name="text">
@@ -118,6 +131,17 @@
     </item>
     <item row="0" column="1">
      <widget class="QPushButton" name="extractPly">
+=======
+    <item row="9" column="1">
+     <widget class="QPushButton" name="clusterButton">
+      <property name="text">
+       <string>Extract cluster...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QPushButton" name="conSegButton">
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
       <property name="text">
        <string>Extract Ply...</string>
       </property>
@@ -130,7 +154,50 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="0">
+    <item row="14" column="0">
+     <widget class="QCheckBox" name="optClustering">
+      <property name="text">
+       <string>Use clustering</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="13" column="1">
+     <widget class="QPushButton" name="pairWiseButton">
+      <property name="text">
+       <string>Evaluate pair-wise...</string>
+      </property>
+     </widget>
+    </item>
+<<<<<<< HEAD
+    <item row="4" column="1">
+     <widget class="QPushButton" name="greedyButton">
+      <property name="text">
+       <string>Greedy correspondence...</string>
+=======
+    <item row="5" column="2">
+     <widget class="QDoubleSpinBox" name="greedyParam">
+      <property name="decimals">
+       <number>3</number>
+      </property>
+      <property name="minimum">
+       <double>0.000000000000000</double>
+      </property>
+      <property name="maximum">
+       <double>10000.000000000000000</double>
+      </property>
+      <property name="singleStep">
+       <double>0.050000000000000</double>
+      </property>
+      <property name="value">
+       <double>0.080000000000000</double>
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
+      </property>
+     </widget>
+    </item>
+    <item row="5" column="0">
      <widget class="QSpinBox" name="greedyParam2">
       <property name="maximum">
        <number>1000</number>
@@ -140,21 +207,50 @@
       </property>
      </widget>
     </item>
-    <item row="4" column="1">
-     <widget class="QPushButton" name="greedyButton">
+    <item row="8" column="1">
+     <widget class="QPushButton" name="fuzzyButton">
       <property name="text">
-       <string>Greedy correspondence...</string>
+       <string>Fuzzy correspond..</string>
       </property>
      </widget>
     </item>
+    <item row="0" column="0">
+     <spacer name="horizontalSpacer">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>40</width>
+        <height>20</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
     <item row="6" column="1">
-     <widget class="QPushButton" name="visualizeButton">
+     <widget class="QPushButton" name="vkButton">
       <property name="text">
-       <string>Visualize clustering..</string>
+       <string>VK template...</string>
       </property>
      </widget>
     </item>
     <item row="10" column="1">
+<<<<<<< HEAD
+=======
+     <spacer name="verticalSpacer_2">
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>20</width>
+        <height>40</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="12" column="1">
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
      <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
@@ -167,13 +263,19 @@
       </property>
      </spacer>
     </item>
+<<<<<<< HEAD
     <item row="11" column="1">
      <widget class="QPushButton" name="pairWiseButton">
+=======
+    <item row="7" column="1">
+     <widget class="QPushButton" name="visualizeButton">
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
       <property name="text">
-       <string>Evaluate pair-wise...</string>
+       <string>Visualize clustering..</string>
       </property>
      </widget>
     </item>
+<<<<<<< HEAD
     <item row="7" column="1">
      <widget class="QPushButton" name="fuzzyButton">
       <property name="text">
@@ -182,12 +284,16 @@
      </widget>
     </item>
     <item row="12" column="1">
+=======
+    <item row="14" column="1">
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
      <widget class="QPushButton" name="setWiseButton">
       <property name="text">
        <string>Evaluate set-wise...</string>
       </property>
      </widget>
     </item>
+<<<<<<< HEAD
     <item row="8" column="1">
      <widget class="QPushButton" name="clusterButton">
       <property name="text">
@@ -199,6 +305,26 @@
      <widget class="QPushButton" name="baselineButton">
       <property name="text">
        <string>Baseline</string>
+=======
+    <item row="14" column="2">
+     <widget class="QCheckBox" name="groundTruthMode">
+      <property name="text">
+       <string>Ground truth</string>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="1">
+     <widget class="QPushButton" name="evalZhenButton">
+      <property name="text">
+       <string>Evaluate Z14..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QPushButton" name="extractOFF">
+      <property name="text">
+       <string>Extract OFF...</string>
+>>>>>>> 600293f0f3486770c72e24bb81fc9c31c72b23f4
       </property>
      </widget>
     </item>
@@ -209,7 +335,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>362</width>
+     <width>399</width>
      <height>21</height>
     </rect>
    </property>

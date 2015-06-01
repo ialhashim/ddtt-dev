@@ -15,6 +15,8 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+	void outputResults(int G, int M, int C, QString typeShapes, QString resultsFolder);
+
 private:
     Ui::MainWindow *ui;
 };

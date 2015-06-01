@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QFileDialog>
+#include <QRegExp>
 
 // QString exeCorresponder = "C:/Development/ddtt/ddtt/experiment/build-standalone-Qt_5_4-Release/release/geotopCorrespond.exe";
 QString exeCorresponder = "C:/Users/Yixin/Desktop/StarlabPackageRelease/geotopCorrespond.exe";
@@ -64,8 +65,7 @@ struct LabelOracle{
 		struct PrecisionRecall{
 			double precision, recall, G, M, R;
 			PrecisionRecall(double p = 0, double r = 0, double G = 0, double M = 0, double R = 0) 
-				: precision(p), recall(r), G(G), M(M), R(R)
-			{}
+				: precision(p), recall(r), G(G), M(M), R(R) {}
 		};
 
 		PrecisionRecall compute( MatchingRecords records ){
@@ -160,7 +160,8 @@ struct LabelOracle{
 	QVector<GroundTruth::PrecisionRecall> pr_results;
 };
 
-Evaluator::Evaluator(QString datasetPath, bool isSet, QWidget *parent) : QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet)
+Evaluator::Evaluator(QString datasetPath, bool isSet, bool optClustering, bool optGTMode, QWidget *parent) :
+QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), optClustering(optClustering), optGTMode(optGTMode)
 {
     ui->setupUi(this);
 
@@ -187,7 +188,7 @@ void Evaluator::run()
 		exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
 	}
 
-	QString cmd = QString("%1 -o -q -k 2 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
+	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3").arg(exeCorresponder).arg(datasetPath).arg(datasetPath);
 
 	// Check first for cached results
 	if (!QFileInfo(resultsFile).exists())
@@ -326,6 +327,243 @@ void Evaluator::run()
 	}
 	else
 	{
+		/// Using a set of shapes:
+		bool isUseClustering = optClustering;		// if false, becomes a simple baseline / greedy assignment
+		bool isCheatingMode = optGTMode;			// !! only use when debugging !!
+
+		// Open JSON file
+		QFile file;
+		file.setFileName(resultsFile);
+		if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+		QJsonDocument jdoc = QJsonDocument::fromJson(file.readAll());
+		auto corrArray = jdoc.toVariant().value<QVariantList>();
+
+		QString graphFilename = resultsFile + ".tgf";
+
+		//if (!QFileInfo(graphFilename).exists())
+		{
+			QStringList edges;
+
+			for (auto c : corrArray)
+			{
+				auto obj = c.toMap();
+				auto i = obj["i"].toInt();
+				auto j = obj["j"].toInt();
+				auto cost = obj["cost"].toDouble();
+				auto corr = obj["correspondence"].value<QVariantList>();
+
+				if (i == j) continue;
+				if (corr.isEmpty()) continue; // something went wrong during processing of set
+
+				for (auto match : corr)
+				{
+					auto matching = match.value<QVariantList>();
+					auto nid1 = QString("%1:%2").arg(i).arg(matching.front().toString());
+					auto nid2 = QString("%1:%2").arg(j).arg(matching.back().toString());
+
+					double similiairty = 1.0;
+
+					auto edge = QString("%1\t%2\t%3").arg(nid1).arg(nid2).arg(similiairty);
+					edges << edge;
+
+					auto edge2 = QString("%2\t%1\t%3").arg(nid1).arg(nid2).arg(similiairty);
+					//edges << edge2;
+				}
+			}
+
+			// Write graph file
+			{
+				QFile gfile(graphFilename);
+				QTextStream out(&gfile);
+				if (!gfile.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+				out << edges.join("\n");
+			}
+
+			//debugBox("TGF file created.");
+		}
+		
+		QString classesFilename = graphFilename + ".out";
+		if (QFileInfo(classesFilename).exists())
+		{
+			// Read 'graph:part' classes
+			QFile file;
+			file.setFileName(classesFilename);
+			if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+			auto output_classes_raw = QString(file.readAll()).split(QRegExp("\n|\r\n|\r"), QString::SkipEmptyParts);
+			QMap<QString,int> all_part_classes;
+			int part_count = 0;
+			for (int r = 0; r < output_classes_raw.size(); r++)
+			{
+				auto row = output_classes_raw[r];
+				auto part_names_raw = row.split("\t", QString::SkipEmptyParts);
+				for (auto col : part_names_raw)
+				{
+					if ( isUseClustering )
+					{
+						all_part_classes[col] = r;
+					}
+					else
+					{
+						all_part_classes[col] = part_count;
+					}
+					part_count++;
+				}
+			}
+
+			MyViewer * viewer = new MyViewer;
+
+			viewer->setWindowTitle("ours");
+
+			auto shapesDirName = datasetPath;
+			auto shapesDir = QDir(shapesDirName);
+
+			auto folders = shapesInDataset(shapesDirName);
+
+			// Load shapes
+			for (auto folderName : folders.keys())
+			{
+				auto & folder = folders[folderName];
+				viewer->graphs[folderName] = QSharedPointer<Structure::Graph>(new Structure::Graph(folder["graphFile"].toString()));
+
+				viewer->shape_names << folderName;
+			}
+
+			// Voting for class type
+			QMap < int, QMap<QString, int> > class_votes;
+
+			QMap < QString, QVector<Vector3> > label_points;
+			QMap < QString, Vector3 > label_centers;
+
+			// Collect all class centers
+			for (int i = 0; i < viewer->shape_names.size(); i++){
+				auto g = viewer->graphs[viewer->shape_names[i]];
+				for (auto n : g->nodes) {
+					auto label = n->meta["label"].toString();
+					label_points[label].push_back(n->center());
+				}
+			}
+			for (auto class_name : label_points.keys()){
+				Vector3 c(0, 0, 0);
+				for (auto p : label_points[class_name]) c += p;
+				c /= label_points[class_name].size();
+				label_centers[class_name] = c;
+			}
+			
+			// Assign classes
+			for (int i = 0; i < viewer->shape_names.size(); i++)
+			{
+				auto g = viewer->graphs[viewer->shape_names[i]];
+
+				// Initialize visualization
+				g->property["showMeshes"].setValue(true);
+				g->property["showNodes"].setValue(false);
+				g->setColorAll(Qt::black);
+				g->setVisPropertyAll("meshSolid", true);
+
+				// Load class for each part
+				for (auto n : g->nodes)
+				{
+					QString part_full_name = QString("%1:%2").arg(i).arg(n->id);
+					if (!all_part_classes.contains(part_full_name)) continue;
+
+					int class_id = all_part_classes[part_full_name];
+
+					g->setColorFor(n->id, MyViewer::class_color[class_id % MyViewer::class_color.size()]);
+
+					n->property["classID"].setValue(class_id);
+
+					// Cast vote for cluster
+					QString vote = "";
+					if ( isCheatingMode ) // !! only use for debugging
+					{
+						vote = n->meta["label"].toString().split("-").front();
+					}
+					else
+					{
+						auto closestLable = [&label_centers](Vector3 node_center){
+							QString closest_label;
+							double min_dist = DBL_MAX;
+							for (auto l : label_centers.keys()){
+								double dist = (label_centers[l] - node_center).norm();
+								if (dist < min_dist){
+									min_dist = dist;
+									closest_label = l;
+								}
+							}
+							return closest_label.split("-").front(); // return coarse-level label
+						};
+
+						if(isUseClustering) vote = closestLable(n->center());
+						else
+						{
+							auto mesh = g->getMesh(n->id);
+							mesh->updateBoundingBox();
+							vote = closestLable(mesh->bbox().center());
+						}
+					}
+
+					class_votes[class_id][vote]++;
+				}
+			}
+
+			QList<QString> set_coarse_labels;
+			for (auto l : label_centers.keys()) set_coarse_labels << l.split("-").front();
+			set_coarse_labels = set_coarse_labels.toSet().toList();
+
+			QMap < QString, int > fine_coarse_id;
+			for (auto l : label_centers.keys()) fine_coarse_id[l] = set_coarse_labels.indexOf(l.split("-").front());
+
+			// Collect votes
+			QMap<int, int> mapped_class;
+			QMap<int, QString> class_name;
+			{
+				for (auto classID : class_votes.keys())
+				{
+					// Sort votes
+					std::vector < QPair < int, QString > > votes;
+					for (auto class_name : class_votes[classID].keys())
+						votes.push_back(qMakePair(class_votes[classID][class_name], class_name));
+					std::sort(votes.begin(), votes.end());
+					std::reverse(votes.begin(), votes.end());
+
+					// majority wins
+					auto majority = votes.front().second;
+					class_name[classID] = majority;
+					mapped_class[classID] = set_coarse_labels.indexOf(majority);
+				}
+			}
+
+			int G = 0, M = 0, C = 0;
+
+			for (int i = 0; i < viewer->shape_names.size(); i++)
+			{
+				auto g = viewer->graphs[viewer->shape_names[i]];
+				for (auto n : g->nodes) 
+				{
+					// Assign color
+					int resulting_class_id = mapped_class[n->property["classID"].toInt()];
+					g->setColorFor(n->id, MyViewer::class_color[resulting_class_id]);
+
+					// Check for correctness
+					auto computed = set_coarse_labels[resulting_class_id];
+					auto real = n->meta["label"].toString().split("-").front();
+
+					if(computed == real) C++;
+					M++;
+					G++;
+				}
+			}
+
+			viewer->show();
+
+			double P = double(C) / M;
+			double R = double(C) / G;
+
+			QString report = QString("[%3] Avg. P = %1, R = %2").arg(P).arg(R).arg(dir.dirName());
+			report += QString("\nG_count %1 / M_count %2 / C_count %3").arg(G).arg(M).arg(C);
+
+			debugBox(report);
+		}
 
 	}
 }
