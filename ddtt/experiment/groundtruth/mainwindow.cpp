@@ -25,7 +25,7 @@ void computePerformance(double threshold = 0.8)
 {
 	QVector<Record> records;
 
-    QString datasetPath = "C:/Users/Yixin/Dropbox/DDTT-dataset/evaluation/userstudy/group matching";
+    QString datasetPath = "C:/Users/XXX/Dropbox/DDTT-dataset/evaluation/userstudy/group matching";
 
     QString endText = ".gmatch";
     QString extension = "*.gmatch";
@@ -146,7 +146,7 @@ void computePerformance(double threshold = 0.8)
 	}
 
 	// Test set:
-	QString testPath = "C:/Users/Ibraheem/Dropbox/DDTT-dataset/evaluation/userstudy/geotopo";
+	QString testPath = "C:/Users/XXX/Dropbox/DDTT-dataset/evaluation/userstudy/geotopo";
 	QDir testDir(testPath);
 
 	int wins = 0;
