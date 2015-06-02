@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>399</width>
-    <height>615</height>
+    <width>400</width>
+    <height>617</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -57,10 +57,59 @@
       </layout>
      </widget>
     </item>
+    <item row="11" column="1">
+     <widget class="QPushButton" name="evalZhenButton">
+      <property name="text">
+       <string>Evaluate Z14..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="11" column="2">
+     <widget class="QPushButton" name="baselineButton">
+      <property name="text">
+       <string>Baseline..</string>
+      </property>
+     </widget>
+    </item>
+    <item row="13" column="2">
+     <widget class="QCheckBox" name="ignoreSymmetry">
+      <property name="text">
+       <string>Ignore symmetry</string>
+      </property>
+     </widget>
+    </item>
+    <item row="13" column="0">
+     <widget class="QCheckBox" name="cutsJoins">
+      <property name="text">
+       <string>Cuts and joins</string>
+      </property>
+     </widget>
+    </item>
+    <item row="14" column="2">
+     <widget class="QCheckBox" name="groundTruthMode">
+      <property name="text">
+       <string>Ground truth</string>
+      </property>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QPushButton" name="extractOFF">
+      <property name="text">
+       <string>Extract OFF...</string>
+      </property>
+     </widget>
+    </item>
     <item row="2" column="1">
      <widget class="QPushButton" name="exportLabelsButton">
       <property name="text">
        <string>Export Labels...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QPushButton" name="conSegButton">
+      <property name="text">
+       <string>Consistent Segmentation..</string>
       </property>
      </widget>
     </item>
@@ -84,20 +133,6 @@
       </property>
      </spacer>
     </item>
-    <item row="9" column="1">
-     <widget class="QPushButton" name="clusterButton">
-      <property name="text">
-       <string>Extract cluster...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="3" column="1">
-     <widget class="QPushButton" name="conSegButton">
-      <property name="text">
-       <string>Consistent Segmentation..</string>
-      </property>
-     </widget>
-    </item>
     <item row="0" column="1">
      <widget class="QPushButton" name="extractPly">
       <property name="text">
@@ -115,10 +150,10 @@
       </property>
      </widget>
     </item>
-    <item row="13" column="1">
-     <widget class="QPushButton" name="pairWiseButton">
+    <item row="9" column="1">
+     <widget class="QPushButton" name="clusterButton">
       <property name="text">
-       <string>Evaluate pair-wise...</string>
+       <string>Extract cluster...</string>
       </property>
      </widget>
     </item>
@@ -141,13 +176,10 @@
       </property>
      </widget>
     </item>
-    <item row="5" column="0">
-     <widget class="QSpinBox" name="greedyParam2">
-      <property name="maximum">
-       <number>1000</number>
-      </property>
-      <property name="value">
-       <number>10</number>
+    <item row="13" column="1">
+     <widget class="QPushButton" name="pairWiseButton">
+      <property name="text">
+       <string>Evaluate pair-wise...</string>
       </property>
      </widget>
     </item>
@@ -171,15 +203,18 @@
       </property>
      </spacer>
     </item>
-    <item row="6" column="1">
-     <widget class="QPushButton" name="vkButton">
-      <property name="text">
-       <string>VK template...</string>
+    <item row="5" column="0">
+     <widget class="QSpinBox" name="greedyParam2">
+      <property name="maximum">
+       <number>1000</number>
+      </property>
+      <property name="value">
+       <number>10</number>
       </property>
      </widget>
     </item>
-    <item row="10" column="1">
-     <spacer name="verticalSpacer_2">
+    <item row="12" column="1">
+     <spacer name="verticalSpacer">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -191,8 +226,22 @@
       </property>
      </spacer>
     </item>
-    <item row="12" column="1">
-     <spacer name="verticalSpacer">
+    <item row="6" column="1">
+     <widget class="QPushButton" name="vkButton">
+      <property name="text">
+       <string>VK template...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="14" column="1">
+     <widget class="QPushButton" name="setWiseButton">
+      <property name="text">
+       <string>Evaluate set-wise...</string>
+      </property>
+     </widget>
+    </item>
+    <item row="10" column="1">
+     <spacer name="verticalSpacer_2">
       <property name="orientation">
        <enum>Qt::Vertical</enum>
       </property>
@@ -211,52 +260,10 @@
       </property>
      </widget>
     </item>
-    <item row="14" column="1">
-     <widget class="QPushButton" name="setWiseButton">
+    <item row="15" column="1">
+     <widget class="QPushButton" name="baselineSet">
       <property name="text">
-       <string>Evaluate set-wise...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="14" column="2">
-     <widget class="QCheckBox" name="groundTruthMode">
-      <property name="text">
-       <string>Ground truth</string>
-      </property>
-     </widget>
-    </item>
-    <item row="11" column="1">
-     <widget class="QPushButton" name="evalZhenButton">
-      <property name="text">
-       <string>Evaluate Z14..</string>
-      </property>
-     </widget>
-    </item>
-    <item row="1" column="1">
-     <widget class="QPushButton" name="extractOFF">
-      <property name="text">
-       <string>Extract OFF...</string>
-      </property>
-     </widget>
-    </item>
-    <item row="13" column="2">
-     <widget class="QCheckBox" name="ignoreSymmetry">
-      <property name="text">
-       <string>Ignore symmetry</string>
-      </property>
-     </widget>
-    </item>
-    <item row="13" column="0">
-     <widget class="QCheckBox" name="cutsJoins">
-      <property name="text">
-       <string>Cuts and joins</string>
-      </property>
-     </widget>
-    </item>
-    <item row="11" column="2">
-     <widget class="QPushButton" name="baselineButton">
-      <property name="text">
-       <string>Baseline..</string>
+       <string>Baseline set-wise...</string>
       </property>
      </widget>
     </item>
@@ -267,7 +274,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>399</width>
+     <width>400</width>
      <height>21</height>
     </rect>
    </property>

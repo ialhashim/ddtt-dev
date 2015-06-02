@@ -189,7 +189,7 @@ void Evaluator::run()
 	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3 %4").arg(exeCorresponder).arg(datasetPath).arg(datasetPath).arg(extras);
 
 	// Check first for cached results
-	if (!QFileInfo(resultsFile).exists())
+	if (!QFileInfo(resultsFile).exists() && !isSet)
 		system(qPrintable(cmd));
 
 	auto all_pair_wise_time = ours_timer.elapsed();
@@ -432,11 +432,33 @@ void Evaluator::run()
 			QMap < QString, QVector<Vector3> > label_points;
 			QMap < QString, Vector3 > label_centers;
 
+			//
+			auto labelsFilename = datasetPath + "/labels.json";
+			QFile file2;
+			file2.setFileName(labelsFilename);
+			if (!file2.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+			QJsonDocument jdoc = QJsonDocument::fromJson(file2.readAll());
+			auto json = jdoc.object();
+
+			// Get lables
+			auto labelsArray = json["labels"].toArray();
+			QStringList all_lables;
+			for (auto l : labelsArray)
+			{
+				auto label = l.toObject();
+				auto parent = label["parent"].toString();
+				all_lables << label["title"].toString();
+				//lables[parent] << label["title"].toString();
+			}
+
 			// Collect all class centers
 			for (int i = 0; i < viewer->shape_names.size(); i++){
 				auto g = viewer->graphs[viewer->shape_names[i]];
 				for (auto n : g->nodes) {
 					auto label = n->meta["label"].toString();
+
+					if (!all_lables.contains(label)) continue;
+
 					label_points[label].push_back(n->center());
 				}
 			}
@@ -572,7 +594,7 @@ Evaluator::~Evaluator()
 }
 
 void Evaluator::compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, QString>>> &allMaps, 
-									 std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel)
+                                     std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel, bool isSet)
 {
 	QDir dir(datasetPath);
 
@@ -681,6 +703,18 @@ void Evaluator::compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, 
 			out << report + "\n";
 		}
 
-		debugBox(report);
+        //debugBox(report);
+        std::cout << qPrintable(report);
+
+        QDir dir(datasetPath);
+
+        QString outputPath = datasetPath;
+        QString resultsFile = outputPath + "/" + dir.dirName() + "_corr.json";
+
+        // Write graph file
+        {
+            QString graphFilename = resultsFile + ".baseline.tgf";
+
+        }
 	}
 }

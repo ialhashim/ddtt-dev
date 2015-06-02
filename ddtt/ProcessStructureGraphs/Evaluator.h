@@ -18,13 +18,14 @@ public:
     ~Evaluator();
 
 	Evaluator::Evaluator(QString datasetPath, std::vector<std::vector<std::pair<QString, QString>>> &allMaps, 
-		std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel) : datasetPath(datasetPath){
-		compareWithGreedyOBB(allMaps, allMapsLabel);
+        std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel, bool isSet = false) : datasetPath(datasetPath){
+        compareWithGreedyOBB(allMaps, allMapsLabel, isSet);
 	}
 
 	void run();
 
-	void compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, QString>>> &allMaps, std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel);
+    void compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, QString>>> &allMaps,
+                              std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel, bool isSet = false);
 
     QString datasetPath;
 	bool isSet;
