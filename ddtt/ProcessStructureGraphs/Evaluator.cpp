@@ -63,6 +63,7 @@ struct LabelOracle{
 
 		struct PrecisionRecall{
 			double precision, recall, G, M, R;
+			int i, j;
 			PrecisionRecall(double p = 0, double r = 0, double G = 0, double M = 0, double R = 0) 
 				: precision(p), recall(r), G(G), M(M), R(R) {}
 		};
@@ -158,7 +159,14 @@ struct LabelOracle{
 
 	QVector<GroundTruth::PrecisionRecall> pr_results;
 };
-
+bool precisionLessThan(const LabelOracle::GroundTruth::PrecisionRecall &s1, const LabelOracle::GroundTruth::PrecisionRecall &s2)
+{
+	return s1.precision < s2.precision;
+}
+bool recallLessThan(const LabelOracle::GroundTruth::PrecisionRecall &s1, const LabelOracle::GroundTruth::PrecisionRecall &s2)
+{
+	return s1.recall < s2.recall;
+}
 Evaluator::Evaluator(QString datasetPath, bool isSet, bool optClustering, bool optGTMode, QVariantMap otherOptions, QWidget *parent) :
 QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), optClustering(optClustering), optGTMode(optGTMode), otherOptions(otherOptions)
 {
@@ -286,6 +294,8 @@ void Evaluator::run()
 			}
 
 			oracle.pr_results << oracle.gt.compute(M);
+			oracle.pr_results.last().i = i;
+			oracle.pr_results.last().j = j;
 		}
 
 		// General stats
@@ -308,10 +318,26 @@ void Evaluator::run()
 		P /= N;
 		R /= N;
 
+
 		QString report = QString("[%5] Avg. P = %1, R = %2, Pair-wise time (%3 ms) - post (%4 ms)").arg(P).arg(R)
 			.arg(all_pair_wise_time).arg(stats_timer.elapsed()).arg(dir.dirName());
 
 		report += QString("\nG_count %1 / M_count %2 / R_count %3").arg(numG).arg(numM).arg(numR);
+		debugBox(report);
+
+		// sort according to precision or recall
+		std::sort(oracle.pr_results.begin(), oracle.pr_results.end(), precisionLessThan);
+		report += QString("\n\n sorting according to precision");
+		for (auto pr : oracle.pr_results)
+		{
+			report += QString("\n i=%1, j=%2, precision=%3").arg(pr.i).arg(pr.j).arg(pr.precision);
+		}
+		std::sort(oracle.pr_results.begin(), oracle.pr_results.end(), recallLessThan);
+		report += QString("\n\n\n\n sorting according to recall");
+		for (auto pr : oracle.pr_results)
+		{
+			report += QString("\n i=%1, j=%2, recall=%3").arg(pr.i).arg(pr.j).arg(pr.recall);
+		}
 
 		// Save log of P/R measures
 		{
@@ -321,7 +347,6 @@ void Evaluator::run()
 			out << report + "\n";
 		}
 
-		debugBox(report);
 	}
 	else
 	{
