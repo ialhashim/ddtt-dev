@@ -330,13 +330,13 @@ void Evaluator::run()
 		report += QString("\n\n sorting according to precision");
 		for (auto pr : oracle.pr_results)
 		{
-			report += QString("\n i=%1, j=%2, precision=%3").arg(pr.i).arg(pr.j).arg(pr.precision);
+			report += QString("\n i=%1, j=%2, precision=%3, recall=%4").arg(pr.i).arg(pr.j).arg(pr.precision).arg(pr.recall);
 		}
 		std::sort(oracle.pr_results.begin(), oracle.pr_results.end(), recallLessThan);
 		report += QString("\n\n\n\n sorting according to recall");
 		for (auto pr : oracle.pr_results)
 		{
-			report += QString("\n i=%1, j=%2, recall=%3").arg(pr.i).arg(pr.j).arg(pr.recall);
+			report += QString("\n i=%1, j=%2, recall=%3, precision=%4").arg(pr.i).arg(pr.j).arg(pr.recall).arg(pr.precision);
 		}
 
 		// Save log of P/R measures
