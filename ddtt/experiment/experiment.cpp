@@ -223,6 +223,7 @@ void experiment::doEnergySearch()
 
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
+	search_roots << path;
 
 	// Partial search
 	int topParts = pw->ui->topParts->value();
@@ -309,10 +310,8 @@ void experiment::doEnergySearch()
 
 			timeElapsed = timer.elapsed();
 		}
-		else
+		else // search all
 		{
-			search_roots << path;
-
 			// Explore path
 			egd->searchAll(graphs.front(), graphs.back(), search_roots);
 
@@ -435,11 +434,25 @@ void experiment::doEnergySearch()
 		}
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
+		Energy::Assignments new_assignments;
+		for (QMap<QString, QString>::iterator mapit = selected_path->mapping.begin(); mapit != selected_path->mapping.end(); ++mapit)
+		{
+			new_assignments << qMakePair(mapit.value(), mapit.key());
+		}
 
-		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
+		QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+		QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+		Energy::GuidedDeformation::preprocess(origShapeB.data(), origShapeA.data());
+
+		Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
+		Energy::GuidedDeformation::applyAssignment(&new_path, false);
+		double new_cost = EvaluateCorrespondence::evaluate(&new_path);
+		
+
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - ncost = %3").arg(timeElapsed).arg(cost).arg(new_cost));
 
 		QMessageBox tbox;
-		tbox.setText(QString("%1 ms - cost = %2").arg(timeElapsed).arg(cost));
+		tbox.setText(QString("%1 ms - cost = %2 - ncost = %3").arg(timeElapsed).arg(cost).arg(new_cost));
 		tbox.exec();
 	}
 

@@ -119,10 +119,11 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 	}
 
 	// Evaluate distortion of shape
-	double curEnergy = EvaluateCorrespondence::evaluate(path);
-
-	path->cost = curEnergy - prevEnergy;
-	path->energy = path->energy + path->cost;
+	//double curEnergy = EvaluateCorrespondence::evaluate(path);
+	//path->cost = curEnergy - prevEnergy;
+	//path->energy = path->energy + path->cost;
+	path->energy = EvaluateCorrespondence::evaluate(path);
+	path->cost = path->energy - prevEnergy;
 
 	// Assign costs to mapping:
 	for (auto partID : mappedParts) path->mappingCost[partID] = path->cost;
@@ -1038,6 +1039,11 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 
 	//initial state
 	SearchNode root;
+	if (!roots.empty())
+	{
+		root = *roots.begin();
+		roots.clear();
+	}
 	root.shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeA));
 	root.shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*origShapeB));
 	root.unassigned = root.unassignedList();

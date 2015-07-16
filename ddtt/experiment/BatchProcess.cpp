@@ -313,7 +313,6 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 	// Set initial correspondence
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
-	path.unassigned = path.unassignedList();
 	search_roots << path;
 
 	QElapsedTimer searchTimer; searchTimer.start();
