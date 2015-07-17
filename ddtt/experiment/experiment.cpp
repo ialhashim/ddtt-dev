@@ -434,25 +434,18 @@ void experiment::doEnergySearch()
 		}
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
-		Energy::Assignments new_assignments;
-		for (QMap<QString, QString>::iterator mapit = selected_path->mapping.begin(); mapit != selected_path->mapping.end(); ++mapit)
+		double ccost = 0.0;
+		pw->ui->pathsList->clear();
+		for (int i = 0; i < 10; ++i)
 		{
-			new_assignments << qMakePair(mapit.value(), mapit.key());
+			ccost = EvaluateCorrespondence::compensate(graphs.front(), graphs.back(), selected_path);
+			pw->ui->pathsList->addItem(QString::number(ccost));
 		}
 
-		QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
-		QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
-		Energy::GuidedDeformation::preprocess(origShapeB.data(), origShapeA.data());
-
-		Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
-		Energy::GuidedDeformation::applyAssignment(&new_path, false);
-		double new_cost = EvaluateCorrespondence::evaluate(&new_path);
-		
-
-		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - ncost = %3").arg(timeElapsed).arg(cost).arg(new_cost));
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - ccost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 
 		QMessageBox tbox;
-		tbox.setText(QString("%1 ms - cost = %2 - ncost = %3").arg(timeElapsed).arg(cost).arg(new_cost));
+		tbox.setText(QString("%1 ms - cost = %2 - ccost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 		tbox.exec();
 	}
 

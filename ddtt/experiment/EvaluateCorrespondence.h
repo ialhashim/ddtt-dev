@@ -8,6 +8,7 @@ struct EvaluateCorrespondence
 	static void prepare(Structure::ShapeGraph * shape);
 	static double evaluate(Energy::SearchNode * searchNode);
 	static double evaluate2(Energy::SearchNode * searchNode);
+	static double compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, Energy::SearchNode * searchNode);
 
 	// Utility:
 	static Array1D_Vector3 spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * link, bool isFindCoordClosest = false);
