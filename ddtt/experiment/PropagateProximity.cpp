@@ -32,6 +32,7 @@ void PropagateProximity::prepareForProximity(Structure::Graph * graph)
     }
 }
 
+
 void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::ShapeGraph *graph)
 {
     // Constraints per part
@@ -86,7 +87,11 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
     // Apply constraints
     for (int i = 0; i < propagationLevel.size(); i++)
     {
-        for (auto & n : propagationLevel[i])
+		// Elements in QSet are not saved in fixed order, which will lead to different propogation order, thus to different matching energy. JJCAO
+		//for (auto & n : propagationLevel[i])  
+		QList<Structure::Node*> curLevel = propagationLevel[i].toList();
+		std::sort(curLevel.begin(), curLevel.end(), Structure::Node::sortByName);
+		for (auto & n : curLevel)
         {
 			// Experimental: allow sliding
 			if (n->property["isMerged"].toBool()) 

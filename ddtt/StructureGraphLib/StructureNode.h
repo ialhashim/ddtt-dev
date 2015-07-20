@@ -103,6 +103,8 @@ struct Node
     QMap< QString, QVariant > vis_property;
 	virtual void drawWithNames(int nID, int pointIDRange) = 0;
 	std::vector<Vector3> debugPoints,debugPoints2,debugPoints3;
+
+	static bool sortByName(Structure::Node * l, Structure::Node* r) { return (l->id < r->id); }
 };
 
 }
