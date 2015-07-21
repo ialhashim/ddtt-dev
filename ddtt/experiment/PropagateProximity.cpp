@@ -46,37 +46,37 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
 
     /// Find propagation levels:
     // First level:
-    QVector < QSet<Structure::Node*> > propagationLevel(1);
+    QVector < QSet<QString> > propagationLevel(1);
     for (auto nid : fixedNodes) {
         auto n = graph->getNode(nid);
         n->property["propagated"].setValue(true);
-		propagationLevel.front() << n;
+		propagationLevel.front() << nid;
 
 		// complement with same height grouping:
 		if (false){
 			for (auto nid : n->property["height_siblings"].toStringList()){
-				propagationLevel.front() << graph->getNode(nid);
+				propagationLevel.front() << nid;
 			}
 		}
     }
     // Remaining levels:
     forever{
-        QSet<Structure::Node*> curLevel;
+        QSet<QString> curLevel;
         for (auto & nid : propagationLevel.back())
         {
-            for (auto & edge : graph->getEdges(nid->id))
+            for (auto & edge : graph->getEdges(nid))
             {
                 if (edge->n1->id == edge->n2->id) continue;
-                auto otherNode = edge->otherNode(nid->id);
+                auto otherNode = edge->otherNode(nid);
                 if (otherNode->property["propagated"].toBool()) continue;
 
-                if (!curLevel.contains(otherNode)) curLevel << otherNode;
+                if (!curLevel.contains(otherNode->id)) curLevel << otherNode->id;
 
-                constraints[otherNode->id].push_front( ProximityConstraint(nid,edge) );
+				constraints[otherNode->id].push_front(ProximityConstraint(graph->getNode(nid), edge));
             }
         }
 
-        for (auto & nid : curLevel)	nid->property["propagated"].setValue(true);
+		for (auto & nid : curLevel)	graph->getNode(nid)->property["propagated"].setValue(true);
         if (curLevel.isEmpty())	break;
         propagationLevel.push_back(curLevel);
     };
@@ -89,10 +89,11 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
     {
 		// Elements in QSet are not saved in fixed order, which will lead to different propogation order, thus to different matching energy. JJCAO
 		//for (auto & n : propagationLevel[i])  
-		QList<Structure::Node*> curLevel = propagationLevel[i].toList();
-		std::sort(curLevel.begin(), curLevel.end(), Structure::Node::sortByName);
-		for (auto & n : curLevel)
+		QList<QString> curLevel = propagationLevel[i].toList();
+		//std::sort(curLevel.begin(), curLevel.end());
+		for (auto & nid : curLevel)
         {
+			auto n = graph->getNode(nid);
 			// Experimental: allow sliding
 			if (n->property["isMerged"].toBool()) 
 				continue;
