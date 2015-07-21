@@ -416,7 +416,7 @@ void experiment::doEnergySearch()
 		egd->K_2 = pw->ui->dpTopK_2->value();
 		egd->isApplySYMH = pw->ui->isUseSYMH->isChecked();
 
-		egd->searchDP(graphs.front(), graphs.back(), search_roots);
+		egd->searchDP(shapeA.data(), shapeB.data(), search_roots);
 
 		auto timeElapsed = timer.elapsed();
 
