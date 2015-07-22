@@ -33,20 +33,25 @@ void PropagateProximity::prepareForProximity(Structure::Graph * graph)
 }
 
 
-void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::ShapeGraph *graph)
+void PropagateProximity::propagate(const QSet<QString> &_fixedNodes, Structure::ShapeGraph *graph)
 {
-    // Constraints per part
+	// Convert, std::set will give a fixed element order, while the QSet not. 
+	// The oder of fixedNodes leads to diff propagation too. How to optimize it? or just let it go.
+	std::set<QString> fixedNodes;
+	for (auto s : _fixedNodes) fixedNodes.insert(s);
+
+	// Constraints per part
     QMap < QString, QVector< ProximityConstraint > > constraints;
 
     // Initialize propagation state
     for (auto n : graph->nodes){
         n->property["propagated"].setValue( false );
-        n->property["fixed"].setValue( fixedNodes.contains(n->id) );
+		n->property["fixed"].setValue( fixedNodes.count(n->id) != 0 );
     }
 
     /// Find propagation levels:
     // First level:
-    QVector < QSet<QString> > propagationLevel(1);
+	QVector < QVector<QString> > propagationLevel(1); // Use QVector instead of QSet. Elements in QSet are not saved in fixed order, which will lead to different propogation order, thus to different matching energy. JJCAO
     for (auto nid : fixedNodes) {
         auto n = graph->getNode(nid);
         n->property["propagated"].setValue(true);
@@ -61,7 +66,7 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
     }
     // Remaining levels:
     forever{
-        QSet<QString> curLevel;
+        QVector<QString> curLevel;
         for (auto & nid : propagationLevel.back())
         {
             for (auto & edge : graph->getEdges(nid))
@@ -87,11 +92,7 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
     // Apply constraints
     for (int i = 0; i < propagationLevel.size(); i++)
     {
-		// Elements in QSet are not saved in fixed order, which will lead to different propogation order, thus to different matching energy. JJCAO
-		//for (auto & n : propagationLevel[i])  
-		QList<QString> curLevel = propagationLevel[i].toList();
-		//std::sort(curLevel.begin(), curLevel.end());
-		for (auto & nid : curLevel)
+		for (auto & nid : propagationLevel[i])
         {
 			auto n = graph->getNode(nid);
 			// Experimental: allow sliding
@@ -167,7 +168,7 @@ void PropagateProximity::propagate(const QSet<QString> &fixedNodes, Structure::S
 					else
 					{
 						bool isFixedAround = true;
-						for (auto & c : c_list) isFixedAround &= fixedNodes.contains(c.from->id);
+						for (auto & c : c_list) isFixedAround &= (fixedNodes.count(c.from->id) != 0);
 						if (isFixedAround)
 						{
 							filtered_constraints = c_list;
