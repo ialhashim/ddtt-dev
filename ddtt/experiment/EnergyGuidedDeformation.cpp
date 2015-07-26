@@ -850,8 +850,8 @@ void Energy::GuidedDeformation::symhPruning(Energy::SearchNode & path, QVector <
 void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors,
 	std::vector<double>& costs, std::vector<Energy::SearchNode>& res)
 {
-	double candidate_threshold = 0.5;
-	double cost_threshold = 0.3;
+	double candidate_threshold = 0.7;//0.5;
+	double cost_threshold = 0.5;//0.3;
 	int k_top_candidates = std::min(K_2, (int)mirrors.size());
 
 	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
