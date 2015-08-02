@@ -391,9 +391,6 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		Energy::SearchNode * selected_path = NULL;
 		double cost = sorted_solutions.keys().at(r);
 
-		// Keep track of least cost solution
-		minCostResult = std::min(minCostResult, cost);
-
 		if (!isSearchAstar)
 		{
 			auto entire_path = egd.getEntirePath(&sorted_solutions[cost]);
@@ -404,6 +401,10 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		{
 			selected_path = &sorted_solutions[cost];
 		}
+
+		double ccost = EvaluateCorrespondence::compensate(shapeA.data(), shapeB.data(), selected_path);
+		// Keep track of least cost solution
+		minCostResult = std::min(minCostResult, cost + ccost);
 
 		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeA.data()));
 		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeB.data()));
@@ -551,6 +552,7 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		if (isVisualize)
 		{
 			cur_solution_img = drawText(QString("s %2: cost = %1").arg(cost).arg(r), cur_solution_img);
+			cur_solution_img = drawText(QString("tcost = %1").arg(minCostResult), cur_solution_img,14,30);
 			img = stitchImages(img, cur_solution_img, true, 0);
 		}
 

@@ -537,18 +537,64 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, 
 	Energy::SearchNode * searchNode)
 {
-	Energy::Assignments new_assignments;
-	for (QMap<QString, QString>::iterator mapit = searchNode->mapping.begin(); mapit != searchNode->mapping.end(); ++mapit)
+	QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
+	QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
+	Energy::GuidedDeformation::preprocess(origShapeB.data(), origShapeA.data());
+
+
+	//std::vector<int > connectStrength = searchNode->shapeA->property["relationConnectStrength"].value<std::vector<int > >();
+	//QMap<QString, int> relationIds;
+	//for (int i = 0; i < origShapeA->relations.size(); i++)
+	//	relationIds[origShapeA->relations[i].parts.front()] = i;
+
+	QMap<QString, QStringList> mapping_b2a;
+	for (auto key : searchNode->mapping.keys())
 	{
-		new_assignments << qMakePair(mapit.value(), mapit.key());
+		if (key.contains("@")){
+			key = key.split("@").front();
+		}
+		QString value = searchNode->mapping.value(key);
+		if (value.contains("@")){
+			value = value.split("@").front();
+		}
+		mapping_b2a[value] << key;
+	}
+	Energy::Assignments new_assignments;
+	for (auto key : mapping_b2a.keys())
+	{
+		QStringList values = mapping_b2a[key];
+		if (values.size() > 1)
+		{
+			double hightDiff = std::numeric_limits<double>::max(); QString value;
+			for (auto partId : values)
+			{
+				double tmp = abs(origShapeA->getNode(partId)->center()(2) - origShapeB->getNode(key)->center()(2));
+				if (tmp < hightDiff)
+				{
+					hightDiff = tmp;
+					value = partId;
+				}
+			}
+			new_assignments << qMakePair(key, value);
+		}
+		else
+		{
+			new_assignments << qMakePair(key, values);
+		}
 	}
 
+	Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
+	Energy::GuidedDeformation::applyAssignment(&new_path, false);
+	return new_path.energy;
+}
+double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
+	Energy::Assignments &new_assignments)
+{
 	QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 	QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
 	Energy::GuidedDeformation::preprocess(origShapeB.data(), origShapeA.data());
 
 	Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
 	Energy::GuidedDeformation::applyAssignment(&new_path, false);
-	double new_cost = EvaluateCorrespondence::evaluate(&new_path);
-	return new_cost;
+	return new_path.energy;
 }

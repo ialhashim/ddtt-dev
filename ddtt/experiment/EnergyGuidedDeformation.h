@@ -88,6 +88,8 @@ namespace Energy
 		void symhPruning(Energy::SearchNode & path, QVector < QPair<Structure::Relation, Structure::Relation> > & pairings, std::vector<int>& pairAward);
 		void propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors, std::vector<double>& costs, std::vector<Energy::SearchNode>& res);
 		void searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots);
+		void buildConnectGraph(QSharedPointer<Structure::ShapeGraph> shape, QMap<QString, int> &relationIds,
+			std::vector<std::vector<bool> >& connectGraph, std::vector<int > &connectStrength);
 
 		Energy::SearchNode partialSelectionGreedy(const Energy::SearchNode &initpath, const Energy::SearchNode &path, int bestK = 0);
 		//////////////////////////////////////////////////////////////////////////

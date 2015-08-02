@@ -1027,6 +1027,35 @@ std::vector<std::pair<int, int> > TopKAlgorithm(std::vector < std::vector<double
 	}
 	return inds;
 }
+void Energy::GuidedDeformation::buildConnectGraph(QSharedPointer<Structure::ShapeGraph> shape, QMap<QString, int> &relationIds,
+	std::vector<std::vector<bool> >& connectGraph, std::vector<int > &connectStrength)
+{
+	for (int i = 0; i < shape->relations.size(); i++)
+		relationIds[shape->relations[i].parts.front()] = i;
+	
+	for (auto edg : shape->edges)
+	{
+		if (!shape->hasRelation(edg->n1->id)) continue;
+		if (!shape->hasRelation(edg->n2->id)) continue;
+		auto r1 = shape->relationOf(edg->n1->id);
+		auto r2 = shape->relationOf(edg->n2->id);
+		connectGraph[relationIds[r1.parts.front()]][relationIds[r2.parts.front()]] = true;
+		connectGraph[relationIds[r2.parts.front()]][relationIds[r1.parts.front()]] = true;
+	}
+	for (int i = 0; i < connectGraph.size(); i++)
+	{
+		for (int j = i + 1; j < connectGraph[i].size(); j++)
+		{
+			if (connectGraph[i][j])
+			{
+				connectStrength[i]++;
+				connectStrength[j]++;
+			}
+		}
+	}
+	qRegisterMetaType<std::vector<int > >("StdVector<int>");
+	shape->property["relationConnectStrength"] = QVariant::fromValue(connectStrength);
+}
 void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots)
 {
 	// Preprocessing
@@ -1066,30 +1095,9 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 
 	//connectivity group
 	QMap<QString, int> relationIds;
-	for (int i = 0; i < root.shapeA->relations.size(); i++)
-		relationIds[root.shapeA->relations[i].parts.front()] = i;
 	std::vector<std::vector<bool> > connectGraph(root.shapeA->relations.size(), std::vector<bool>(root.shapeA->relations.size(), false));
 	std::vector<int > connectStrength(root.shapeA->relations.size(), 0);
-	for (auto edg : root.shapeA->edges)
-	{
-		if (!root.shapeA->hasRelation(edg->n1->id)) continue;
-		if (!root.shapeA->hasRelation(edg->n2->id)) continue;
-		auto r1 = root.shapeA->relationOf(edg->n1->id);
-		auto r2 = root.shapeA->relationOf(edg->n2->id);
-		connectGraph[relationIds[r1.parts.front()]][relationIds[r2.parts.front()]] = true;
-		connectGraph[relationIds[r2.parts.front()]][relationIds[r1.parts.front()]] = true;
-	}
-	for (int i = 0; i < connectGraph.size(); i++)
-	{
-		for (int j = i + 1; j < connectGraph[i].size(); j++)
-		{
-			if (connectGraph[i][j])
-			{
-				connectStrength[i]++;
-				connectStrength[j]++;
-			}
-		}
-	}
+	buildConnectGraph(root.shapeA, relationIds, connectGraph, connectStrength);
 	int firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
 
 	//initial space; DP is order sensitive, different order of visiting returns different solution
