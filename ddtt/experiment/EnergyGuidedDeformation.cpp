@@ -1085,6 +1085,20 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	std::vector<Structure::Relation> unvisitedParts, mirrors;
 	for (auto rel : root.shapeA->relations)
 		unvisitedParts.push_back(rel);
+	std::vector<Structure::Relation> visitedParts;
+	for (auto a : root.assignments)
+	{
+		for (auto pid : a.first)
+		{
+			auto rel = root.shapeA->relationOf(pid);
+			auto relItor = std::find(unvisitedParts.begin(), unvisitedParts.end(), rel);
+			if (relItor != unvisitedParts.end())
+			{
+				unvisitedParts.erase(relItor);
+				visitedParts.push_back(rel);
+			}
+		}
+	}
 	for (auto rel : root.shapeB->relations)
 		mirrors.push_back(rel);
 
@@ -1098,7 +1112,19 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	std::vector<std::vector<bool> > connectGraph(root.shapeA->relations.size(), std::vector<bool>(root.shapeA->relations.size(), false));
 	std::vector<int > connectStrength(root.shapeA->relations.size(), 0);
 	buildConnectGraph(root.shapeA, relationIds, connectGraph, connectStrength);
-	int firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
+
+	std::vector<int> frontPrior(unvisitedParts.size(), 0);
+	for (int i = 0; i < unvisitedParts.size(); i++){
+		for (auto & rel2 : visitedParts){
+			if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+			{
+				frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+				break;
+			}
+		}
+	}
+	int firstfrontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+	//int firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
 
 	//initial space; DP is order sensitive, different order of visiting returns different solution
 	std::vector<double> initCost(M);
@@ -1111,7 +1137,7 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 		topKScore[j] = initCost[j];
 	}
 
-	std::vector<Structure::Relation> visitedParts(1, unvisitedParts[firstfrontId]);
+	visitedParts.push_back(unvisitedParts[firstfrontId]);
 	unvisitedParts.erase(unvisitedParts.begin() + firstfrontId);
 
 	// complexity = N * K*M; 
