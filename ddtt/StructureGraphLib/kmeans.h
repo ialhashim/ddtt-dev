@@ -313,8 +313,8 @@ namespace kmeansFast
 		for (int kk=0; kk<K; kk++) {
 		  Dist.col(kk) = ( X.rowwise() - Mu.row(kk) ).square().rowwise().sum();
 		}    
-	  } else {
-		Dist = -2*( X.matrix() * Mu.transpose().matrix() );
+          } else {
+                Dist = -2*( X * Mu.transpose() );
 		Dist.rowwise() += Mu.square().rowwise().sum().transpose().row(0);
 	  }
 	}
