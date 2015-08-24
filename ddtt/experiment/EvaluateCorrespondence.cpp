@@ -596,14 +596,16 @@ double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Struct
 	Energy::SearchNode * selected_path = &(search_roots.back());
 	return selected_path->energy;
 }
-double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
-	Energy::Assignments &new_assignments)
+double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, Energy::SearchNode * searchNode)
 {
-	QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
-	QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
-	Energy::GuidedDeformation::preprocess(origShapeB.data(), origShapeA.data());
+	QVector<double> costs = searchNode->mappingCost.values().toVector();
+	for (QVector<double>::iterator it = costs.begin(); it != costs.end(); ++it)
+		*it = std::abs(*it);
+	sort(costs.begin(), costs.end());
 
-	Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
-	Energy::GuidedDeformation::applyAssignment(&new_path, false);
-	return new_path.energy;
+	int topCount = min(shapeA->nodes.size(), shapeB->nodes.size());
+	//--topCount;
+	topCount = min(5, topCount);
+	double topCostSum = std::accumulate(costs.begin(), costs.begin() + topCount, 0.0);
+	return topCostSum;
 }

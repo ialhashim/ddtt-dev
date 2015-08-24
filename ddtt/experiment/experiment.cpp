@@ -434,12 +434,12 @@ void experiment::doEnergySearch()
 		}
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
-		double ccost = EvaluateCorrespondence::compensate(shapeA.data(), shapeB.data(), selected_path);
+		double ccost = EvaluateCorrespondence::compensate(shapeA.data(), shapeB.data(), selected_path);//, egd
 
-		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(cost+ccost));
+		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 
 		QMessageBox tbox;
-		tbox.setText(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(cost+ccost));
+		tbox.setText(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 		tbox.exec();
 	}
 
