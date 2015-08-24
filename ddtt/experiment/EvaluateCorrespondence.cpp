@@ -534,8 +534,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	return total_cost;
 }
 
-double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, 
-	Energy::SearchNode * searchNode)
+double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
+	Energy::SearchNode * searchNode, Energy::GuidedDeformation * egd)
 {
 	QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
 	QSharedPointer<Structure::ShapeGraph> origShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeB));
@@ -584,8 +584,17 @@ double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Struct
 	}
 
 	Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
-	Energy::GuidedDeformation::applyAssignment(&new_path, false);
-	return new_path.energy;
+
+	// option 1
+	//Energy::GuidedDeformation::applyAssignment(&new_path, false);
+	//return new_path.energy;
+
+	// option 2
+	QVector<Energy::SearchNode> search_roots;
+	search_roots << new_path;
+	egd->searchDP(origShapeB.data(), origShapeA.data(), search_roots);
+	Energy::SearchNode * selected_path = &(search_roots.back());
+	return selected_path->energy;
 }
 double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
 	Energy::Assignments &new_assignments)
