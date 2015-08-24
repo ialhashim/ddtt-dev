@@ -1105,6 +1105,11 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	if (K < M) K = M;
 	std::vector<SearchNode> topK(K);			//stores top K solution
 	std::vector<double> topKScore(K, DBL_MAX);	//and the top K best cost
+	if (unvisitedParts.empty())
+	{
+		roots.push_back(root);
+		return;
+	}
 
 
 	//connectivity group
@@ -1114,17 +1119,24 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	buildConnectGraph(root.shapeA, relationIds, connectGraph, connectStrength);
 
 	std::vector<int> frontPrior(unvisitedParts.size(), 0);
-	for (int i = 0; i < unvisitedParts.size(); i++){
-		for (auto & rel2 : visitedParts){
-			if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
-			{
-				frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
-				break;
+	int firstfrontId = 0;
+	if (visitedParts.empty())
+	{
+		firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
+	}
+	else
+	{
+		for (int i = 0; i < unvisitedParts.size(); i++){
+			for (auto & rel2 : visitedParts){
+				if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+				{
+					frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+					break;
+				}
 			}
 		}
+		firstfrontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
 	}
-	int firstfrontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
-	//int firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
 
 	//initial space; DP is order sensitive, different order of visiting returns different solution
 	std::vector<double> initCost(M);
