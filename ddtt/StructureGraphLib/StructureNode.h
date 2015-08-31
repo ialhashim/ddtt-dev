@@ -46,8 +46,8 @@ struct Node
 	virtual Vector3 center() = 0;
 
 	// Special coordinates [todo: check type of node]
-	inline Vector4d minCoord(){ return Vector4d(0.0); }
-	inline Vector4d maxCoord(){ return Vector4d(1.0); }
+    inline Vector4d minCoord(){ return Vector4d(0,0,0,0); }
+    inline Vector4d maxCoord(){ return Vector4d(1,1,0,0); }
 
 
     virtual Array1D_Vector3 discretizedAsCurve(Scalar resolution) = 0;

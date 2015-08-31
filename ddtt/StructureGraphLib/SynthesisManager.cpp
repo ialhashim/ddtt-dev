@@ -407,7 +407,9 @@ void SynthesisManager::renderGraph( Structure::Graph graph, QString filename, bo
         }
 
 		SimpleMesh mesh;
-		PoissonRecon::makeFromCloud( pointCloudf(finalP), pointCloudf(finalN), mesh, reconLevel );
+        auto cloudPoints = pointCloudf(finalP);
+        auto cloudNormals = pointCloudf(finalN);
+        PoissonRecon::makeFromCloud( cloudPoints, cloudNormals, mesh, reconLevel );
 		
 		reconMeshes[node->id] = new SurfaceMesh::Model;
 		SurfaceMesh::Model* nodeMesh = reconMeshes[node->id];

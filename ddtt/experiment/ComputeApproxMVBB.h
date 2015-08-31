@@ -12,6 +12,9 @@
 #include <Eigen/Geometry>
 #include <vector>
 
+#define _USE_MATH_DEFINES
+#include <cmath>
+
 namespace ApproxMVBB{
 
 	typedef Eigen::Vector3d Vector3;

@@ -48,6 +48,7 @@ void Graph::init()
 	property["showAABB"]	= false;
 	property["showMeshes"]	= true;
 	property["showEdges"]	= false;
+    property["showEdgeLines"] = true;
 	property["showTasks"]	= false;
 	property["showCtrlPts"] = false;
 	property["isSplatsHQ"]	= false;
