@@ -402,9 +402,11 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 			selected_path = &sorted_solutions[cost];
 		}
 
-		double ccost = EvaluateCorrespondence::compensate(shapeA.data(), shapeB.data(), selected_path);
 		// Keep track of least cost solution
-		minCostResult = std::min(minCostResult, cost + ccost);
+		minCostResult = std::min(minCostResult, cost);
+		//// added and commented by jjcao
+		//double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);
+		//minCostResult = std::min(minCostResult, cost + ccost);
 
 		auto shapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeA.data()));
 		auto shapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*selected_path->shapeB.data()));

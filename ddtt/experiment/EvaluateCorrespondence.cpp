@@ -534,7 +534,7 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	return total_cost;
 }
 
-double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
+double EvaluateCorrespondence::evaluate_compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
 	Energy::SearchNode * searchNode, Energy::GuidedDeformation * egd)
 {
 	QSharedPointer<Structure::ShapeGraph> origShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*shapeA));
@@ -585,27 +585,33 @@ double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Struct
 
 	Energy::SearchNode new_path(origShapeB, origShapeA, QSet<QString>(), new_assignments);
 
-	// option 1
+	// option 1: by assignment
 	//Energy::GuidedDeformation::applyAssignment(&new_path, false);
 	//return new_path.energy;
 
-	// option 2
+	// option 2: by matching constrained by the assignment
 	QVector<Energy::SearchNode> search_roots;
 	search_roots << new_path;
 	egd->searchDP(origShapeB.data(), origShapeA.data(), search_roots);
 	Energy::SearchNode * selected_path = &(search_roots.back());
 	return selected_path->energy;
 }
-double EvaluateCorrespondence::compensate(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, Energy::SearchNode * searchNode)
+double EvaluateCorrespondence::evaluate_top(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, Energy::SearchNode * searchNode)
 {
+	// option 4: simple top 5
+	double topCostSum = 0.0;
 	QVector<double> costs = searchNode->mappingCost.values().toVector();
+	topCostSum = std::accumulate(costs.begin(), costs.end(), 0.0);
 	for (QVector<double>::iterator it = costs.begin(); it != costs.end(); ++it)
 		*it = std::abs(*it);
 	sort(costs.begin(), costs.end());
 
 	int topCount = min(shapeA->nodes.size(), shapeB->nodes.size());
-	//--topCount;
-	topCount = min(5, topCount);
-	double topCostSum = std::accumulate(costs.begin(), costs.begin() + topCount, 0.0);
+	--topCount;
+	//topCount = min(5, topCount);
+	topCostSum = std::accumulate(costs.begin(), costs.begin() + topCount, 0.0);
 	return topCostSum;
+
+	// option 3: normalization by |parts|
+	//return searchNode->energy / shapeA->nodes.size();
 }

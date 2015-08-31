@@ -434,7 +434,7 @@ void experiment::doEnergySearch()
 		}
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
-		double ccost = EvaluateCorrespondence::compensate(shapeA.data(), shapeB.data(), selected_path);//, egd
+		double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);//, egd
 
 		mainWindow()->setStatusBarMessage(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 
