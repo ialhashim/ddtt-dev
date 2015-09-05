@@ -433,7 +433,7 @@ bool deform::mousePressEvent(QMouseEvent * event)
 			{
 				for (auto & h : handles)
 					h->isActive = false;
-				drawArea()->setManipulatedFrame(drawArea()->camera()->frame());
+                //drawArea()->setManipulatedFrame(drawArea()->camera()->frame());
 				return true;
 			}
 
