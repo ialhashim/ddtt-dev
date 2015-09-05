@@ -13,7 +13,7 @@
 #include <QGraphicsOpacityEffect>
 Q_DECLARE_METATYPE(QGraphicsOpacityEffect*)
 
-QtAwesome* awesome = new QtAwesome( qApp );
+//QtAwesome* awesome = new QtAwesome( qApp );
 
 // Styling
 QString style_ok = "color: rgb(81, 163, 81)";
@@ -23,7 +23,7 @@ QString style_info = "color: rgb(47, 150, 180)";
 
 Wizard::Wizard(topoblend *tobo_blend, QWidget * parentWidget) : QWidget(parentWidget), tb(tobo_blend), ui(new Ui::Wizard)
 {
-	awesome->initFontAwesome();
+    //awesome->initFontAwesome();
 
     ui->setupUi(this);
 
@@ -60,7 +60,7 @@ Wizard::Wizard(topoblend *tobo_blend, QWidget * parentWidget) : QWidget(parentWi
 	}
 
 	// Icons / check marks
-	{
+    /*{
 		icons.push_back(ui->checkLoad);
 		icons.push_back(ui->checkMatch);
 		icons.push_back(ui->checkOrder);
@@ -71,7 +71,7 @@ Wizard::Wizard(topoblend *tobo_blend, QWidget * parentWidget) : QWidget(parentWi
 			l->setFont( fnt );
 			l->setStyleSheet( style_wait ); 
 		}
-	}
+    }*/
 
 	// Fade window in
 	if(false){

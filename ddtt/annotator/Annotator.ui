@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1280</width>
-    <height>775</height>
+    <height>940</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -40,7 +40,7 @@
      </property>
      <property name="maximumSize">
       <size>
-       <width>200</width>
+       <width>300</width>
        <height>16777215</height>
       </size>
      </property>
@@ -55,13 +55,13 @@
        <widget class="QFrame" name="labelsFrame">
         <property name="minimumSize">
          <size>
-          <width>200</width>
+          <width>300</width>
           <height>0</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
-          <width>200</width>
+          <width>300</width>
           <height>16777215</height>
          </size>
         </property>

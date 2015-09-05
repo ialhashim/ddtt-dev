@@ -4,8 +4,8 @@
 #include <QLabel>
 namespace Ui { class Wizard; }
 
-#include "QtAwesome/QtAwesome.h"
-extern QtAwesome* awesome;
+//#include "QtAwesome/QtAwesome.h"
+//extern QtAwesome* awesome;
 
 #include "topo-blend.h"
 

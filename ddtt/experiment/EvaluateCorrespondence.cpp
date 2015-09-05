@@ -602,8 +602,8 @@ double EvaluateCorrespondence::evaluate_top(Structure::ShapeGraph * shapeA, Stru
 	double topCostSum = 0.0;
 	QVector<double> costs = searchNode->mappingCost.values().toVector();
 	topCostSum = std::accumulate(costs.begin(), costs.end(), 0.0);
-	for (QVector<double>::iterator it = costs.begin(); it != costs.end(); ++it)
-		*it = std::abs(*it);
+	//for (QVector<double>::iterator it = costs.begin(); it != costs.end(); ++it)
+	//	*it = std::abs(*it);
 	sort(costs.begin(), costs.end());
 
 	int topCount = min(shapeA->nodes.size(), shapeB->nodes.size());

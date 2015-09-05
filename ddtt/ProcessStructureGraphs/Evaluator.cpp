@@ -173,7 +173,7 @@ QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), 
     ui->setupUi(this);
 }
 
-void Evaluator::run()
+void Evaluator::run(bool bUseExe)
 {
 	//if (true) this->datasetPath = datasetPath = experiment;
 
@@ -184,21 +184,24 @@ void Evaluator::run()
 
 	QElapsedTimer ours_timer; ours_timer.start();
 
-	if (!QFileInfo(exeCorresponder).exists())
+	if (bUseExe)
 	{
-		exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
+		if (!QFileInfo(exeCorresponder).exists())
+		{
+			exeCorresponder = QFileDialog::getOpenFileName(0, "geoCorresponder", "", "*.exe");
+		}
+
+		QString extras = "";
+		for (auto option : otherOptions){
+			extras += QString(" %1").arg(option.toString());
+		}
+
+		QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3 %4").arg(exeCorresponder).arg(datasetPath).arg(datasetPath).arg(extras);
+
+		// Check first for cached results
+		if (!QFileInfo(resultsFile).exists() && !isSet)
+			system(qPrintable(cmd));
 	}
-
-	QString extras = "";
-	for (auto option : otherOptions){
-		extras += QString(" %1").arg(option.toString());
-	}
-
-	QString cmd = QString("%1 -o -q -k 4 -f %2 -z %3 %4").arg(exeCorresponder).arg(datasetPath).arg(datasetPath).arg(extras);
-
-	// Check first for cached results
-	if (!QFileInfo(resultsFile).exists() && !isSet)
-		system(qPrintable(cmd));
 
 	auto all_pair_wise_time = ours_timer.elapsed();
 

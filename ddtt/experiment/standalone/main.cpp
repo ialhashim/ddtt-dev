@@ -239,6 +239,11 @@ int main(int argc, char *argv[])
                     QFile saveFile( jsonFilename );
                     saveFile.open( QIODevice::WriteOnly );
                     saveFile.write( saveDoc.toJson() );
+
+					jsonFilename = d.absolutePath() + "/" + dir_name + "_corr.json";
+					QFile saveFile1(jsonFilename);
+					saveFile1.open(QIODevice::WriteOnly);
+					saveFile1.write(saveDoc.toJson());
 				}
 			}
 		}

@@ -5,7 +5,7 @@ include($$[NANOFLANN])
 StarlabTemplate(plugin)
 
 # UI related
-include(QtAwesome/QtAwesome.pri)
+#include(QtAwesome/QtAwesome.pri)
 
 QT += opengl xml svg
 
