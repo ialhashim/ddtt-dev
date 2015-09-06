@@ -223,7 +223,6 @@ void experiment::doEnergySearch()
 
 	QVector<Energy::SearchNode> search_roots;
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
-	search_roots << path;
 
 	// Partial search
 	int topParts = pw->ui->topParts->value();
@@ -257,9 +256,10 @@ void experiment::doEnergySearch()
 			}
 		}
 	}
+	search_roots << path;
+
 
 	double timeElapsed = 0;
-
 	qint64 timeUsed;
 	double leastCost;
 	if (!pw->ui->isUseDP->isChecked())

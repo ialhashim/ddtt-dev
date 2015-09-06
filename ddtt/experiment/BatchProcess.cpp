@@ -403,6 +403,8 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		}
 
 		// Keep track of least cost solution
+		//if (selected_path->shapeA->relations.size() > selected_path->shapeB->relations.size()) // select matching from simpe to complex one
+		//	cost += 2;
 		minCostResult = std::min(minCostResult, cost);
 		//// added and commented by jjcao
 		//double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);

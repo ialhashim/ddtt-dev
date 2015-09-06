@@ -1289,7 +1289,7 @@ Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energ
 	{
 		double cost = EvaluateCorrespondence::evaluate(&newPath);
 
-		QVector<Structure::Relation> remainRelations = path.shapeA->relations;
+		QVector<Structure::Relation> remainRelations = a.relations;
 		for (QVector<Structure::Relation>::iterator irel = remainRelations.begin(); irel != remainRelations.end(); irel++)
 		{
 			if (!irel->parts.empty() && partsToVolume.find(irel->parts.first()) == partsToVolume.end())
