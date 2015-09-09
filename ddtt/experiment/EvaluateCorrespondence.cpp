@@ -306,25 +306,6 @@ double EvaluateCorrespondence::RMSD(Structure::ShapeGraph * shapeA, Structure::S
 	return sqrt(a / b);
 }
 
-double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
-{
-	auto shape = searchNode->shapeA.data();
-	auto targetShape = searchNode->shapeB.data();
-
-	QVector<double> feature_vector;
-
-	feature_vector << 0;
-
-	Eigen::Map<Eigen::VectorXd> v(&feature_vector[0], feature_vector.size());
-	Eigen::VectorXd original_v = Eigen::VectorXd::Ones(v.size());
-	double v_norm = v.norm(), original_norm = original_v.norm();
-	double similarity = v_norm / original_norm;
-	double cost = 1.0 - similarity;
-	return cost;
-
-	return 0;
-}
-
 // Value of 1 means perfect matching to original shape, anything lower is bad
 double EvaluateCorrespondence::vectorSimilarity(QVector<double> & feature_vector)
 {
@@ -337,6 +318,89 @@ double EvaluateCorrespondence::vectorSimilarity(QVector<double> & feature_vector
 	return similarity;
 }
 
+double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
+{
+	double volumeRatio = 1.0;
+	double before_ratio = 1.0, after_ratio = 1.0;
+
+	// Skip split copies
+	if (n->id.contains("@")) return -1.0;
+
+	bool isApplicable = searchNode->mapping.contains(n->id) && n->property.contains("solidity");
+
+	if (isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/)
+	{
+		auto tn = targetShape->getNode(searchNode->mapping[n->id]);
+		before_ratio = n->property["solidity"].toDouble();
+		after_ratio = tn->property["solidity"].toDouble();
+
+		// Experimental: for reflectional symmetry minimize split factor
+		if (n->property["groupParts"].toStringList().size() == tn->property["groupParts"].toStringList().size() &&
+			n->property["groupParts"].toStringList().size() == 2)
+			before_ratio = after_ratio = 1.0;
+	}
+
+	volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
+
+	// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
+	if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
+		targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
+		volumeRatio = 0.2;
+	}
+
+	// Experimental: extra penalty from sheet to single curve
+	if (isApplicable &&
+		n->type() == Structure::SHEET &&
+		!n->property["isSplit"].toBool() &&
+		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
+		volumeRatio *= 0.8;
+	}
+
+	split_weights[n->id] = volumeRatio;
+
+	costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
+		.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
+
+	
+	return volumeRatio;
+}
+
+double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
+{
+	auto shape = searchNode->shapeA.data();
+	auto targetShape = searchNode->shapeB.data();
+
+	// Logging
+	QVariantMap costMap;
+
+	QVector<double> split_vector;
+
+	// Unary properties:
+	/// Splitting term:
+	QMap<QString, double> split_weights;
+	QMap<QString, bool> isSeen;
+	for (auto n : shape->nodes)
+	{
+		double volumeRatio = evaluateSolidity(n, targetShape, searchNode, costMap, split_weights);
+		if (volumeRatio < 0.0) continue;
+
+		// Avoid redundancy
+		if (isSeen[n->id]) continue;
+		for (auto pj : n->property["groupParts"].toStringList()) isSeen[pj] = true;
+
+		split_vector << volumeRatio;
+	}
+
+	//// Binary properties:
+	//for (auto l : shape->edges)
+	//{
+	//	auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
+	//	auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
+	//	l->property["orig_centroid_dir"].setValue(Vector3((l->n1->center() - l->n2->center()).normalized()));
+	//}
+
+	return 0;
+}
 double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
 	auto shape = searchNode->shapeA.data();
@@ -353,46 +417,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	QMap<QString, bool> isSeen;
 	for (auto n : shape->nodes)
 	{
-		double volumeRatio = 1.0;
-		double before_ratio = 1.0, after_ratio = 1.0;
-
-		// Skip split copies
-		if (n->id.contains("@")) continue;
-
-		bool isApplicable = searchNode->mapping.contains(n->id) && n->property.contains("solidity");
-
-		if ( isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/ )
-		{
-			auto tn = targetShape->getNode(searchNode->mapping[n->id]);
-			before_ratio = n->property["solidity"].toDouble();
-			after_ratio = tn->property["solidity"].toDouble();
-
-			// Experimental: for reflectional symmetry minimize split factor
-			if (n->property["groupParts"].toStringList().size() == tn->property["groupParts"].toStringList().size() &&
-				n->property["groupParts"].toStringList().size() == 2)
-				before_ratio = after_ratio = 1.0;
-		}
-
-		volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
-
-		// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
-		if (searchNode->mapping.contains(n->id) && ( n->property["isLoop"].toBool() != 
-			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
-			volumeRatio = 0.2;
-		}
-
-		// Experimental: extra penalty from sheet to single curve
-		if (isApplicable && 
-			n->type() == Structure::SHEET && 
-			!n->property["isSplit"].toBool() &&
-			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
-			volumeRatio *= 0.8;
-		}
-
-		split_weights[n->id] = volumeRatio;
-
-		costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
-			.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
+		double volumeRatio = evaluateSolidity(n, targetShape, searchNode, costMap, split_weights);
+		if (volumeRatio < 0.0) continue;
 
 		// Avoid redundancy
 		if (isSeen[n->id]) continue;
