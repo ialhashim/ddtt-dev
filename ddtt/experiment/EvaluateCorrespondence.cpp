@@ -364,7 +364,100 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 	
 	return volumeRatio;
 }
+double evaluateConnection(Structure::Link* l, Array1D_Vector3& original_spokes, Array1D_Vector3& current_spokes, Energy::SearchNode * searchNode)
+{
+	double connection_weight = 1.0;
 
+	// Sliding
+	auto spoke_coords = l->property["spoke_coords"].value< std::vector < Array1D_Vector4d > >();
+	auto spoke_closest_idx = l->property["spoke_closest_idx"].toInt();
+	auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
+	auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
+
+	auto minMaxDist = [](Array1D_Vector3& vectors){
+		double mn = DBL_MAX, mx = -DBL_MAX;
+		for (auto& p : vectors) { double d = p.norm(); mn = std::min(mn, d); mx = std::max(mx, d); }
+		return std::make_pair(mn, mx);
+	};
+
+	auto bounds_orig = minMaxDist(original_spokes);
+	auto bounds_curr = minMaxDist(current_spokes);
+
+	double connection_weight_near = 1.0, connection_weight_far = 1.0;
+
+	// Near point got further
+	if (bounds_curr.first > bounds_orig.first){
+		double ratio = std::min(1.0, bounds_curr.first / std::max(1e-6, bounds_orig.second));
+		connection_weight_near = 1.0 - ratio;
+	}
+
+	// Far point got closer
+	//if (bounds_curr.second < bounds_orig.second * 1.25){
+	//	connection_weight_far = bounds_curr.second / bounds_orig.second;
+	//}
+
+	connection_weight = std::min(connection_weight_near, connection_weight_far);
+
+	// Sliding penalty
+	if (false)
+	{
+		auto orig_closest1 = spoke_coords[spoke_closest_idx].front();
+		auto orig_closest2 = spoke_coords[spoke_closest_idx].back();
+
+		auto closestCoords = [&](const Vector3 & p, Structure::Node * n, Array2D_Vector4d coords){
+			double min_dist = DBL_MAX;
+			Eigen::Vector4d min_coord(0, 0, 0, 0);
+			for (auto row : coords){
+				for (auto c : row){
+					double d = (p - n->position(c)).norm();
+					if (d < min_dist){
+						min_dist = d;
+						min_coord = c;
+					}
+				}
+			}
+			return min_coord;
+		};
+
+		auto cur_closest1 = closestCoords(l->n1->position(orig_closest1), l->n2, samples2);
+		auto cur_closest2 = closestCoords(l->n2->position(orig_closest2), l->n1, samples1);
+
+		double psd1 = (cur_closest1 - orig_closest1).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
+		double psd2 = (cur_closest2 - orig_closest2).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
+		double parameter_space_dist = (psd1 + psd2) / 2.0;
+
+		connection_weight *= (1.0 - parameter_space_dist);
+	}
+
+	// Semantically broken (two parts correspond to single target)
+	if (true)
+	{
+		if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id)
+			&& searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
+			connection_weight = 0.5;
+	}
+
+	return connection_weight;
+}
+void evaluateAngleDistortion(Array1D_Vector3& original_spokes, Array1D_Vector3& current_spokes, QVector < double > &link_vector)
+{
+	// Deformation of structural rods
+	for (size_t i = 0; i < original_spokes.size(); i++)
+	{
+		double v = original_spokes[i].normalized().dot(current_spokes[i].normalized());
+
+		// Bad values e.g. nan are broken feature values
+		if (!std::isfinite(v)) v = 0;
+
+		// Bound: the original edge is broken beyond a certain point
+		v = std::max(0.0, v);
+
+		link_vector << v;
+	}
+
+	// Should not happen..
+	if (original_spokes.size() == 0) link_vector << 0;
+}
 double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
 {
 	auto shape = searchNode->shapeA.data();
@@ -373,7 +466,7 @@ double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
 	// Logging
 	QVariantMap costMap;
 
-	QVector<double> split_vector;
+	QVector<double> split_vector, connection_vector, distortion_vector;
 
 	// Unary properties:
 	/// Splitting term:
@@ -391,15 +484,54 @@ double EvaluateCorrespondence::evaluate2(Energy::SearchNode * searchNode)
 		split_vector << volumeRatio;
 	}
 
-	//// Binary properties:
-	//for (auto l : shape->edges)
-	//{
-	//	auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
-	//	auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
-	//	l->property["orig_centroid_dir"].setValue(Vector3((l->n1->center() - l->n2->center()).normalized()));
-	//}
+	// Binary properties:
+	auto eps = shape->bbox().diagonal()*0.01;
+	for (auto l : shape->edges)
+	{
+		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
+		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
+		// todo distortion vector
+		Vector3 original_centeroid_dir = l->property["orig_centroid_dir"].value<Vector3>();
+		Vector3 current_centroid_dir = Vector3((l->n1->center() - l->n2->center()).normalized());
+		for (int i = 0; i < 3; ++i)
+		{
+			if (abs(original_centeroid_dir[i]) < eps[i] || current_centroid_dir[i] < eps[i])
+			{
+				distortion_vector << 1.0;
+			}
+			else
+			{
+				if (original_centeroid_dir[i] * current_centroid_dir[i] > 0)
+					distortion_vector << 1.0;
+				else
+					distortion_vector << 0.0;
+			}
+		}
 
-	return 0;
+		double connection_weight = evaluateConnection(l, original_spokes, current_spokes, searchNode);
+		connection_vector << connection_weight;
+	}
+
+	double distortion_cost = 1.0 - vectorSimilarity(distortion_vector);
+	double split_cost = 1.0 - vectorSimilarity(split_vector);
+	double connection_cost = 1.0 - vectorSimilarity(connection_vector);
+
+	// Weights
+	double w_d = 1.1, w_s = 0.0, w_c = 0.0;
+
+	// Normalize weights
+	double total_weights = w_d + w_s + w_c;
+	w_d /= total_weights; w_s /= total_weights; w_c /= total_weights;
+
+	// Compute energy:
+	double total_cost = (w_d * distortion_cost) + (w_s * split_cost) + (w_c * connection_cost);
+
+	// Logging:
+	costMap["zzShapeCost"].setValue(QString("Total (%1) = Distortion (%2) + (w_s) Split (%3) + (w_c) Connection(%4)")
+		.arg(total_cost).arg(distortion_cost).arg(split_cost).arg(connection_cost));
+	shape->property["costs"].setValue(costMap);
+
+	return total_cost;
 }
 double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 {
@@ -433,104 +565,18 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 		auto original_spokes = l->property["orig_spokes"].value<Array1D_Vector3>();
 		auto current_spokes = EvaluateCorrespondence::spokesFromLink(shape, l);
 
-		// Sliding
-		auto spoke_coords = l->property["spoke_coords"].value< std::vector < Array1D_Vector4d > >();
-		auto spoke_closest_idx = l->property["spoke_closest_idx"].toInt();
-		auto samples1 = l->n1->property["samples_coords"].value<Array2D_Vector4d>();
-		auto samples2 = l->n2->property["samples_coords"].value<Array2D_Vector4d>();
 
-		/// (a) Connection: difference in closeness distance
-		double connection_weight = 1.0;
-		{
-			auto minMaxDist = [](Array1D_Vector3& vectors){
-				double mn = DBL_MAX, mx = -DBL_MAX;
-				for (auto& p : vectors) { double d = p.norm(); mn = std::min(mn, d); mx = std::max(mx, d); }
-				return std::make_pair(mn, mx);
-			};
+		double connection_weight = evaluateConnection(l, original_spokes, current_spokes, searchNode);
+		connection_vector << connection_weight;
 
-			auto bounds_orig = minMaxDist(original_spokes);
-			auto bounds_curr = minMaxDist(current_spokes);
-
-			double connection_weight_near = 1.0, connection_weight_far = 1.0;
-
-			// Near point got further
-			if (bounds_curr.first > bounds_orig.first){
-				double ratio = std::min(1.0, bounds_curr.first / std::max(1e-6, bounds_orig.second));
-				connection_weight_near = 1.0 - ratio;
-			}
-
-			// Far point got closer
-			//if (bounds_curr.second < bounds_orig.second * 1.25){
-			//	connection_weight_far = bounds_curr.second / bounds_orig.second;
-			//}
-
-			connection_weight = std::min(connection_weight_near, connection_weight_far);
-
-			// Sliding penalty
-			if (false)
-			{
-				auto orig_closest1 = spoke_coords[spoke_closest_idx].front();
-				auto orig_closest2 = spoke_coords[spoke_closest_idx].back();
-
-				auto closestCoords = [&](const Vector3 & p, Structure::Node * n, Array2D_Vector4d coords){
-					double min_dist = DBL_MAX;
-					Eigen::Vector4d min_coord(0, 0, 0, 0);
-					for (auto row : coords){
-						for (auto c : row){
-							double d = (p - n->position(c)).norm();
-							if (d < min_dist){
-								min_dist = d;
-								min_coord = c;
-							}
-						}
-					}
-					return min_coord;
-				};
-
-				auto cur_closest1 = closestCoords(l->n1->position(orig_closest1), l->n2, samples2);
-				auto cur_closest2 = closestCoords(l->n2->position(orig_closest2), l->n1, samples1);
-
-				double psd1 = (cur_closest1 - orig_closest1).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
-				double psd2 = (cur_closest2 - orig_closest2).norm() / Eigen::Vector4d(1, 1, 0, 0).norm();
-				double parameter_space_dist = (psd1 + psd2) / 2.0;
-
-				connection_weight *= (1.0 - parameter_space_dist);
-			}
-
-			// Semantically broken (two parts correspond to single target)
-			if (true)
-			{
-				if (searchNode->mapping.contains(l->n1->id) && searchNode->mapping.contains(l->n2->id)
-					&& searchNode->mapping[l->n1->id] == searchNode->mapping[l->n2->id])
-					connection_weight = 0.5;
-			}
-
-			connection_vector << connection_weight;
-		}
 
 		QVector < double > link_vector;
-
-		// Deformation of structural rods
-		for (size_t i = 0; i < original_spokes.size(); i++)
-		{
-			double v = original_spokes[i].normalized().dot(current_spokes[i].normalized());
-
-			// Bad values e.g. nan are broken feature values
-			if (!std::isfinite(v)) v = 0;
-
-			// Bound: the original edge is broken beyond a certain point
-			v = std::max(0.0, v);
-
-			link_vector << v;
-		}
-
-		// Should not happen..
-		if (original_spokes.size() == 0) link_vector << 0;
-
+		evaluateAngleDistortion(original_spokes, current_spokes, link_vector);
 		for (auto v : link_vector) distortion_vector << v;
 
-		double sum_link_vector = 0; for (auto v : link_vector) sum_link_vector += v;
-		double avg_link_vector = sum_link_vector / link_vector.size();
+		//double sum_link_vector = 0; for (auto v : link_vector) sum_link_vector += v;
+		//double avg_link_vector = sum_link_vector / link_vector.size();
+
 
 		// Logging:
 		qSort(link_vector);
