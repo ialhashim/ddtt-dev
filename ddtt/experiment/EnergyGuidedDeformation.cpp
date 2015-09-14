@@ -872,6 +872,7 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 {
 	double candidate_threshold = 0.7;//0.5;
 	double cost_threshold = 0.5;//0.3;
+	//double axis_threshold = 0.05;
 	int k_top_candidates = std::min(K_2, (int)mirrors.size());
 
 	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
@@ -977,7 +978,8 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 			/// Thresholding [2]: Skip really bad assignments
 			double cost = curEnergy - path.energy;
-			if (cost < cost_threshold)
+			double v = relationA.axis.normalized().dot(relationB.axis.normalized());
+			if (cost < cost_threshold && abs(v))// > axis_threshold)
 			{
 				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
 				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
@@ -1076,6 +1078,60 @@ void Energy::GuidedDeformation::buildConnectGraph(QSharedPointer<Structure::Shap
 	qRegisterMetaType<std::vector<int > >("StdVector<int>");
 	shape->property["relationConnectStrength"] = QVariant::fromValue(connectStrength);
 }
+int getMatchRelationByConnection(QMap<QString, int>& relationIds, std::vector<int >& connectStrength, std::vector<std::vector<bool> >& connectGraph,
+	std::vector<Structure::Relation>& visitedParts, std::vector<Structure::Relation> &unvisitedParts)
+{
+	int frontId = 0;
+	std::vector<int> frontPrior(unvisitedParts.size(), 0);
+
+	for (int i = 0; i < unvisitedParts.size(); i++){
+		for (auto & rel2 : visitedParts){
+			if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+			{
+				frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+				break;
+			}
+		}
+	}
+	frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+
+	if (frontId == 0 && frontPrior[frontId] == 0.0)
+	{
+		std::vector<int> frontPrior2(unvisitedParts.size());
+		for (int i = 0; i < unvisitedParts.size(); i++)
+			frontPrior2[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
+
+		frontId = std::max_element(frontPrior2.begin(), frontPrior2.end()) - frontPrior2.begin();
+	}
+	return frontId;
+}
+int getMatchRelationByVolume(QMap<QString, int>& relationIds, QMap<QString, double>& relationVolume, std::vector<std::vector<bool> >& connectGraph,
+	std::vector<Structure::Relation>& visitedParts, std::vector<Structure::Relation> &unvisitedParts)
+{
+	int frontId = 0;
+	std::vector<double> frontPrior(unvisitedParts.size(), 0.0);
+
+	for (int i = 0; i < unvisitedParts.size(); i++){
+		for (auto & rel2 : visitedParts){
+			if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+			{
+				frontPrior[i] = relationVolume[ unvisitedParts[i].parts.front() ];
+				break;
+			}
+		}
+	}
+	frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+
+	if (frontId == 0 && frontPrior[frontId] == 0.0)
+	{
+		for (int i = 0; i < unvisitedParts.size(); i++)
+			frontPrior[i] = relationVolume[unvisitedParts[i].parts.front()];
+
+		frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+	}
+	return frontId;
+}
+
 void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots)
 {
 	// Preprocessing
@@ -1137,26 +1193,14 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 	std::vector<std::vector<bool> > connectGraph(root.shapeA->relations.size(), std::vector<bool>(root.shapeA->relations.size(), false));
 	std::vector<int > connectStrength(root.shapeA->relations.size(), 0);
 	buildConnectGraph(root.shapeA, relationIds, connectGraph, connectStrength);
+	// added by jjcao for using relation volume to choose next part to match
+	QMap<QString, double> relationVolume;
+	for (auto & r : root.shapeA->relations)
+		relationVolume[r.parts.front()] = r.property["volume"].toDouble();
 
-	std::vector<int> frontPrior(unvisitedParts.size(), 0);
-	int firstfrontId = 0;
-	if (visitedParts.empty())
-	{
-		firstfrontId = std::max_element(connectStrength.begin(), connectStrength.end()) - connectStrength.begin();
-	}
-	else
-	{
-		for (int i = 0; i < unvisitedParts.size(); i++){
-			for (auto & rel2 : visitedParts){
-				if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
-				{
-					frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
-					break;
-				}
-			}
-		}
-		firstfrontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
-	}
+
+	int firstfrontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts,unvisitedParts); // original
+	//int firstfrontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts);// jjcao
 
 	//initial space; DP is order sensitive, different order of visiting returns different solution
 	std::vector<double> initCost(M);
@@ -1196,26 +1240,10 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 		else
 		{
 			//find neighbor
-			std::vector<int> frontPrior(unvisitedParts.size(), 0);
-			for (int i = 0; i < unvisitedParts.size(); i++){
-				for (auto & rel2 : visitedParts){
-					if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
-					{
-						frontPrior[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
-						break;
-					}
-				}
-			}
-			frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
-			if (frontId == 0)
-			{
-				std::vector<int> frontPrior2(unvisitedParts.size());
-				for (int i = 0; i < unvisitedParts.size(); i++)
-					frontPrior2[i] = connectStrength[relationIds[unvisitedParts[i].parts.front()]];
-
-				frontId = std::max_element(frontPrior2.begin(), frontPrior2.end()) - frontPrior2.begin();
-			}
+			frontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts, unvisitedParts); // original
+			//frontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts); // jjcao
 		}
+		
 		Structure::Relation frontParts = unvisitedParts[frontId];
 		visitedParts.push_back(frontParts);
 		unvisitedParts.erase(unvisitedParts.begin() + frontId);

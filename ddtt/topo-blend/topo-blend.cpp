@@ -94,6 +94,7 @@ void topoblend::create()
 
 	// Change camera type
 	drawArea()->camera()->setType(qglviewer::Camera::PERSPECTIVE);
+    drawArea()->setBackgroundColor(Qt::white);
 	setSceneBounds();
 
 	mainWindow()->showMaximized();
@@ -117,7 +118,7 @@ void topoblend::drawFancyBackground()
 
 void topoblend::decorate()
 {
-	drawFancyBackground();
+    //drawFancyBackground();
 
 	// Make sure we draw smooth objects
 	glEnable(GL_MULTISAMPLE);
