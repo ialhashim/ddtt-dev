@@ -14,11 +14,12 @@ struct EvaluateCorrespondence
 	static Array1D_Vector3 spokesFromLink(Structure::ShapeGraph * shape, Structure::Link * link, bool isFindCoordClosest = false);
 	static Array2D_Vector4d sampleNode(Structure::ShapeGraph * shape, Structure::Node * n, double resolution);
 	static QMap<QString, NanoKdTree*> kdTreesNodes(Structure::ShapeGraph * shape);
-	static QMap<QString, QMap<QString, double> > hausdroffDistance( Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB );
+	static QMap<QString, QMap<QString, double> > hausdroffDistance(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB);
 	static double RMSD(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB);
 	static double vectorSimilarity(QVector<double> & feature_vector);
 
 	static int numSamples;
+	static double weightDistortion, weightSolidity, weightConnection;
 };
 
 Q_DECLARE_METATYPE(Vector3);

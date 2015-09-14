@@ -802,6 +802,18 @@ BatchProcess::BatchProcess(QString sourceFilename, QString targetFilename, QVari
         isDPsearch = true;
         dpTopK_2 = options["k"].value<int>();
     }
+	if (options.contains("wd"))
+	{
+		EvaluateCorrespondence::weightDistortion = options["wd"].value<double>();
+	}
+	if (options.contains("ws"))
+	{
+		EvaluateCorrespondence::weightSolidity = options["ws"].value<double>();
+	}
+	if (options.contains("wc"))
+	{
+		EvaluateCorrespondence::weightConnection = options["wc"].value<double>();
+	}
 
 	isManyTypesJobs = options["isManyTypesJobs"].toBool();
 	isOutputMatching = options["isOutputMatching"].toBool();

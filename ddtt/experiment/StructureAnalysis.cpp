@@ -25,6 +25,33 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		if (g.size() == 1)
 		{
 			r.type = Structure::Relation::SELF;
+			auto part = shape->getNode(r.parts.front());
+			if ( part->type() == Structure::CURVE)
+			{ 
+				Structure::Curve * part_curve = (Structure::Curve *)part;			
+				if (abs(part->diagonal().norm() - part_curve->length()) < 0.01*part_curve->length())
+					r.axis = part->diagonal().normalized();
+				else
+				{
+					int num = part_curve->numCtrlPnts();
+					Vector3 s00 = part_curve->controlPoint(0);
+					Vector3 s01 = part_curve->controlPoint(num*0.3);
+					Vector3 s10 = part_curve->controlPoint(num*0.6);
+					r.axis = (s00 - s01).cross(s10 - s01).normalized();
+				}
+			}
+			else if (part->type() == Structure::SHEET)
+			{
+				Structure::Sheet * part_sheet = (Structure::Sheet *)part;
+				Array2D_Vector3 ctrlPoint = part_sheet->surface.mCtrlPoint;
+
+				// Get the extreme points.
+				Vector3 s00 = ctrlPoint.front().front();
+				Vector3 s01 = ctrlPoint.front().back();
+				Vector3 s10 = ctrlPoint.back().front();
+				r.axis = (s00 - s01).cross(s10 - s01).normalized();
+			}
+				
 			// TODO: figure out the plane, or select the most similar to global reflectional
 		}
 

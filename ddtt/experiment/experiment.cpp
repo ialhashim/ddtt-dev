@@ -164,6 +164,9 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 void experiment::doEnergySearch()
 {
 	QApplication::setOverrideCursor(QCursor(Qt::WaitCursor));
+	EvaluateCorrespondence::weightDistortion = pw->ui->wd->value();
+	EvaluateCorrespondence::weightSolidity = pw->ui->ws->value();
+	EvaluateCorrespondence::weightConnection = pw->ui->wc->value();
 
 	//for (auto g : graphs) g->property["showCtrlPts"].setValue(true);
 	for (auto g : graphs) g->property["showMeshes"].setValue(false);

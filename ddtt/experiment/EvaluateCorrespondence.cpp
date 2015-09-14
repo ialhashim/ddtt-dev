@@ -5,6 +5,9 @@
 #include "helpers/PhysicsHelper.h"
 
 int EvaluateCorrespondence::numSamples = 5;
+double EvaluateCorrespondence::weightDistortion = 1.1; // original 1.1
+double EvaluateCorrespondence::weightSolidity = 0.6; // original 0.4
+double EvaluateCorrespondence::weightConnection = 0.2; // original 0.6
 
 Q_DECLARE_METATYPE(Array1D_Vector4d);
 
@@ -210,6 +213,16 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			for (auto partID : r.parts)
 				shape->getNode(partID)->property["solidity"].setValue(solidity);
 		}
+		else if (r.parts.size() == 1)
+		{
+			auto part = shape->getNode(r.parts.front());
+			if (part->type() == Structure::CURVE)
+			{
+				Structure::Curve * part_curve = (Structure::Curve *)part;
+				if (part->property["isLoop"].toBool()) // jjcao for loop curve
+					part_curve->property["solidity"].setValue(0.01);
+			}
+		}
 	}
 }
 
@@ -345,7 +358,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 	// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
 	if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
 		targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
-		volumeRatio = 0.2;
+		volumeRatio = min(volumeRatio, 0.2);
 	}
 
 	// Experimental: extra penalty from sheet to single curve
@@ -589,7 +602,8 @@ double EvaluateCorrespondence::evaluate(Energy::SearchNode * searchNode)
 	double connection_cost = 1.0 - vectorSimilarity(connection_vector);
 
 	// Weights
-	double w_d = 1.1, w_s = 0.4, w_c = 0.6;
+	double w_d = EvaluateCorrespondence::weightDistortion, w_s = EvaluateCorrespondence::weightSolidity, 
+		         w_c = EvaluateCorrespondence::weightConnection; 
 
 	// Normalize weights
 	double total_weights = w_d + w_s + w_c;

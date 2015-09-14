@@ -48,6 +48,7 @@ int main(int argc, char *argv[])
     //w.show();
 
     QCommandLineParser parser;
+	parser.setSingleDashWordOptionMode(QCommandLineParser::ParseAsLongOptions);
     parser.addHelpOption();
     parser.addOptions({
             { "nogui", QString("Using command line arguments, do not show GUI.") },
@@ -66,6 +67,9 @@ int main(int argc, char *argv[])
             { { "k", "k" }, QString("(k) parameter for DP search."), QString("k") },
             { { "o", "roundtrip" }, QString("Compute least cost from source to target, and target to source.") },
             { { "c", "cut" }, QString("Allow part cuts/joins.") },
+			{ { "wd", "wd" }, QString("weight distortion, 1.1."), QString("wd") },
+			{ { "ws", "ws" }, QString("weight solidity, 0.6."), QString("ws") },
+			{ { "wc", "wc" }, QString("weight connection, 0.2."), QString("wc") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {
@@ -128,6 +132,10 @@ int main(int argc, char *argv[])
                 // Forward search options
                 if (parser.isSet("o")) pargs << "-o";
                 if (parser.isSet("k")) pargs << "-k" << parser.value("k");
+				if (parser.isSet("wd")) pargs << "-wd" << parser.value("wd");
+				if (parser.isSet("ws")) pargs << "-ws" << parser.value("ws");
+				if (parser.isSet("wc")) pargs << "-wc" << parser.value("wc");
+
 				if (parser.isSet("q")) pargs << "-q";
                 if (parser.isSet("c")) pargs << "-c";
                 if (parser.isSet("m")) pargs << "-m";
@@ -266,6 +274,9 @@ int main(int argc, char *argv[])
             if(parser.isSet("g")) options["align"].setValue(true);
             if(parser.isSet("o")) options["roundtrip"].setValue(true);
             if(parser.isSet("k")) options["k"].setValue(parser.value("k").toInt());
+			if(parser.isSet("wd")) options["wd"].setValue(parser.value("wd").toDouble());
+			if (parser.isSet("ws")) options["ws"].setValue(parser.value("ws").toDouble());
+			if (parser.isSet("wc")) options["wc"].setValue(parser.value("wc").toDouble());
 			if(parser.isSet("q")) options["isQuietMode"].setValue(true);
             if(parser.isSet("c")) options["isAllowCutsJoins"].setValue(true);
             if(parser.isSet("m")) options["isIgnoreSymmetryGroups"].setValue(true);
