@@ -46,8 +46,12 @@ namespace Structure
     typedef QVector<Landmark> Landmarks;
 
     struct ShapeGraph : public Graph{
-        ShapeGraph(QString path) : Graph(path), animation_index(0) {}
+        ShapeGraph(QString path) : Graph(path), animation_index(0) {
+			property["showRelationAxis"] = false;
+		}
+
         ShapeGraph(const ShapeGraph& other) : Graph(other){
+			property["showRelationAxis"] = false;
             this->landmarks = other.landmarks;
             this->relations = other.relations;
 
@@ -544,6 +548,7 @@ std::pair<Vector3, Vector3> best_plane_from_points(const std::vector<Vector3> & 
     //  http://math.stackexchange.com/questions/99299/best-fitting-plane-given-a-set-of-points
     auto svd = coord.jacobiSvd(Eigen::ComputeThinU | Eigen::ComputeThinV);
     Vector3 plane_normal = svd.matrixU().rightCols<1>();
+	plane_normal.normalize();
     return std::make_pair(centroid, plane_normal);
 }
 

@@ -26,6 +26,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 		{
 			r.type = Structure::Relation::SELF;
 			auto part = shape->getNode(r.parts.front());
+			r.point = part->center();
 			if ( part->type() == Structure::CURVE)
 			{ 
 				Structure::Curve * part_curve = (Structure::Curve *)part;			

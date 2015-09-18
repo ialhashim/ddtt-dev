@@ -418,6 +418,8 @@ void experiment::doEnergySearch()
 		egd->K = pw->ui->dpTopK->value();
 		egd->K_2 = pw->ui->dpTopK_2->value();
 		egd->isApplySYMH = pw->ui->isUseSYMH->isChecked();
+		egd->distThre = pw->ui->distThre->value();
+		egd->axisThre = pw->ui->axisThre->value();
 
 		egd->searchDP(shapeA.data(), shapeB.data(), search_roots);
 
@@ -928,6 +930,16 @@ void experiment::decorate()
 
 		for (auto debug : g->debug) debug->draw(*drawArea());
 
+		if (g->property["showRelationAxis"].toBool())
+		{
+			for (auto r : g->relations)
+			{
+				//auto n = g->getNode(r.parts.first());
+				starlab::LineSegments ls(4);
+				ls.addLine(r.point, Vector3(r.point + r.axis), starlab::qtJetColor(i, -0.5, 1.5));
+				ls.draw();
+			}
+		}
 		// Debug deformation:
 		if (g == graphs.front())
 		{
@@ -1057,6 +1069,11 @@ bool experiment::keyPressEvent(QKeyEvent * event)
 
 		for (auto g : graphs) g->property["showEdgeLines"].setValue(!g->property["showEdgeLines"].toBool());
 		for (auto g : graphs) g->property["showEdges"].setValue(!g->property["showEdges"].toBool());
+	}
+
+	if (event->key() == Qt::Key_R)
+	{
+		for (auto g : graphs) g->property["showRelationAxis"].setValue(!g->property["showRelationAxis"].toBool()); 
 	}
 
 	if (event->key() == Qt::Key_K)
