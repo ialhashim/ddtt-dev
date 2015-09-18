@@ -145,7 +145,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			{
 				auto line = best_line_from_points(centers);
 				r.point = line.first;
-				r.axis = line.second;
+				//r.axis = line.second;
 
 				// Sort parts in relation
 				{
@@ -165,6 +165,11 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 					for (auto idx : sorted) sortedParts << r.parts[idx];
 					r.parts = sortedParts;
 				}
+				
+				Vector3 s00 = shape->getNode(r.parts.front())->controlPoints().front();
+				Vector3 s01 = shape->getNode(r.parts.front())->controlPoints().back();
+				Vector3 s10 = shape->getNode(r.parts.back())->controlPoints().front();
+				r.axis = (s00 - s01).cross(s10 - s01).normalized();
 			}
 
 			if (r.type == Structure::Relation::ROTATIONAL)

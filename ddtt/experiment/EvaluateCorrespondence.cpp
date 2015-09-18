@@ -358,7 +358,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 	// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
 	if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
 		targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
-		volumeRatio = min(volumeRatio, 0.2);
+		volumeRatio = min(volumeRatio, 0.2); // jjcao from volumeRatio = 0.2;
 	}
 
 	// Experimental: extra penalty from sheet to single curve
@@ -366,7 +366,13 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 		n->type() == Structure::SHEET &&
 		!n->property["isSplit"].toBool() &&
 		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
-		volumeRatio *= 0.8;
+		volumeRatio *= 0.06; //jjcao from 0.8 
+	}
+	// jjcao : extra penalty from single curve to sheet
+	if (isApplicable &&
+		n->type() == Structure::CURVE &&
+		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::SHEET){
+		volumeRatio *= 0.06;
 	}
 
 	split_weights[n->id] = volumeRatio;

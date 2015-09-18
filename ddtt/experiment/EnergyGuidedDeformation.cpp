@@ -395,7 +395,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		}
 
 		// Remove from all relations
-		StructureAnalysis::removeFromGroups(shapeA, snode);
+		// StructureAnalysis::removeFromGroups(shapeA, snode); // jjcao commented, why remove its id, since snode_sheet has the same id
 
 		snode_sheet->property["isConverted"].setValue(true);
 
@@ -473,7 +473,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
-			StructureAnalysis::removeFromGroups(shapeA, snode);
+			//StructureAnalysis::removeFromGroups(shapeA, snode); // jjcao commented
 			snode->property["isMerged"].setValue(true);
 			// jjcao add begin
 			snode->property["solidity"] = snode->property["solidity"].toDouble()/la.size(); 
@@ -497,7 +497,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
-			StructureAnalysis::removeFromGroups(shapeA, snode);
+			//StructureAnalysis::removeFromGroups(shapeA, snode);// jjcao commented
 			if (partID != la.front()) snode->property["isMerged"].setValue(true);
 			lb << tnodeID;
 		}
@@ -515,7 +515,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		for (auto partID : la)
 		{
 			auto snode = shapeA->getNode(partID);
-			StructureAnalysis::removeFromGroups(shapeA, snode);
+			//StructureAnalysis::removeFromGroups(shapeA, snode);// jjcao commented
 			snode->property["isMerged"].setValue(true);
 			lb << tnodeID;
 		}
@@ -867,23 +867,12 @@ void Energy::GuidedDeformation::symhPruning(Energy::SearchNode & path, QVector <
 	for (int i = 0; i < pairAward.size(); i++)
 		pairAward[i] -= maxAward;
 }
-void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors,
+
+bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Relation, Structure::Relation> >& pairings, 
+	std::vector<int>& pairAward, Energy::SearchNode & path, bool isUseAxisThre,
 	std::vector<double>& costs, std::vector<Energy::SearchNode>& res)
 {
-	double candidate_threshold = 0.7;//0.5;
-	double cost_threshold = 0.5;//0.3;
-	//double axis_threshold = 0.05;
-	int k_top_candidates = std::min(K_2, (int)mirrors.size());
-
-	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
-	for (auto & mirror : mirrors)
-		pairings.push_back(qMakePair(frontParts, mirror));
-
-	// pruning pairs by SYMH
-	std::vector<int> pairAward(pairings.size(), 0);
-	if (isApplySYMH)
-		symhPruning(path, pairings, pairAward);
-
+	bool result = false;
 	auto boxA = path.shapeA->bbox(), boxB = path.shapeB->bbox();
 
 	for (int r = 0; r < pairings.size(); r++)
@@ -905,7 +894,12 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
-		if (dist < candidate_threshold)
+		auto angle = relationA.axis.dot(relationB.axis);
+		bool tmp1 = relationA.parts.size() == 1 && path.shapeA->getNode(relationA.parts.front())->type() == Structure::CURVE;
+		bool tmp2 = relationB.parts.size() == 1 && path.shapeB->getNode(relationB.parts.front())->type() == Structure::CURVE;
+		if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationB.parts.size() == 2)
+			angle = 1;
+		if (dist < this->distThre && abs(angle) > this->axisThre)
 		{
 			double curEnergy = 0;
 			QStringList la = relationA.parts, lb = relationB.parts;
@@ -978,9 +972,9 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 
 			/// Thresholding [2]: Skip really bad assignments
 			double cost = curEnergy - path.energy;
-			double v = relationA.axis.normalized().dot(relationB.axis.normalized());
-			if (cost < cost_threshold && abs(v))// > axis_threshold)
+			if (cost < this->costThre)
 			{
+				result = true;
 				auto modifiedShapeA = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeA));
 				auto modifiedShapeB = QSharedPointer<Structure::ShapeGraph>(new Structure::ShapeGraph(*path.shapeB));
 
@@ -998,12 +992,34 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 			}
 		}
 	}
+
+	return result;
+}
+void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors,
+	std::vector<double>& costs, std::vector<Energy::SearchNode>& res)
+{
+	int k_top_candidates = std::min(K_2, (int)mirrors.size());
+
+	QVector < QPair<Structure::Relation, Structure::Relation> > pairings;
+	for (auto & mirror : mirrors)
+		pairings.push_back(qMakePair(frontParts, mirror));
+
+	// pruning pairs by SYMH
+	std::vector<int> pairAward(pairings.size(), 0);
+	if (isApplySYMH)
+		symhPruning(path, pairings, pairAward);
+
+	if (!matchAllPossible(pairings, pairAward, path, true, costs, res))
+		matchAllPossible(pairings, pairAward, path, false, costs, res);
+
 	std::vector<double> tc = costs;
 	std::sort(tc.begin(), tc.end());
 	double thresbyK = tc[k_top_candidates - 1];
 	for (int i = 0; i < costs.size(); i++){
 		if (costs[i]>thresbyK)
+		{
 			costs[i] = DBL_MAX;
+		}
 	}
 }
 std::vector<std::pair<int, int> > TopKAlgorithm(std::vector < std::vector<double> >& vals, int K)
@@ -1199,8 +1215,8 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 		relationVolume[r.parts.front()] = r.property["volume"].toDouble();
 
 
-	int firstfrontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts,unvisitedParts); // original
-	//int firstfrontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts);// jjcao
+	//int firstfrontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts,unvisitedParts); // original
+	int firstfrontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts);// jjcao
 
 	//initial space; DP is order sensitive, different order of visiting returns different solution
 	std::vector<double> initCost(M);

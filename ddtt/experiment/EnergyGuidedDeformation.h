@@ -73,7 +73,7 @@ namespace Energy
 
 		//////////////////////////////////////////////////////////////////////////
 
-		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1){}
+		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1), distThre(0.7), axisThre(0.2), costThre(0.5){}
 
 		//SYMH
 		bool isInitTest, isApplySYMH;
@@ -84,8 +84,12 @@ namespace Energy
 
 		//Dynamic programming
 		int K, K_2;
+		double distThre, axisThre, costThre;
 
 		void symhPruning(Energy::SearchNode & path, QVector < QPair<Structure::Relation, Structure::Relation> > & pairings, std::vector<int>& pairAward);
+		bool matchAllPossible(QVector < QPair<Structure::Relation, Structure::Relation> >& pairings, std::vector<int>& pairAward, 
+			Energy::SearchNode & path, bool isUseAxisThre,
+			std::vector<double>& costs, std::vector<Energy::SearchNode>& res);
 		void propagateDP(Energy::SearchNode & path, Structure::Relation& frontParts, std::vector<Structure::Relation>& mirrors, std::vector<double>& costs, std::vector<Energy::SearchNode>& res);
 		void searchDP(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB, QVector<Energy::SearchNode> & roots);
 		void buildConnectGraph(QSharedPointer<Structure::ShapeGraph> shape, QMap<QString, int> &relationIds,

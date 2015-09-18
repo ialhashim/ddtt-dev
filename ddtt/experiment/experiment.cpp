@@ -420,6 +420,7 @@ void experiment::doEnergySearch()
 		egd->isApplySYMH = pw->ui->isUseSYMH->isChecked();
 		egd->distThre = pw->ui->distThre->value();
 		egd->axisThre = pw->ui->axisThre->value();
+		egd->costThre = pw->ui->costThre->value();
 
 		egd->searchDP(shapeA.data(), shapeB.data(), search_roots);
 
@@ -930,11 +931,20 @@ void experiment::decorate()
 
 		for (auto debug : g->debug) debug->draw(*drawArea());
 
+		// jjcao added
 		if (g->property["showRelationAxis"].toBool())
 		{
 			for (auto r : g->relations)
-			{
-				//auto n = g->getNode(r.parts.first());
+			{				
+				if (r.parts.size() == 2)
+					continue;
+				
+				if (r.parts.size() == 1)
+				{
+					auto n = g->getNode(r.parts.front());
+					if (n->type() == Structure::CURVE) continue;
+				}
+
 				starlab::LineSegments ls(4);
 				ls.addLine(r.point, Vector3(r.point + r.axis), starlab::qtJetColor(i, -0.5, 1.5));
 				ls.draw();
