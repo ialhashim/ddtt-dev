@@ -894,11 +894,14 @@ bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Rela
 
 		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
+		// jjcao angle filter
 		auto angle = relationA.axis.dot(relationB.axis);
 		bool tmp1 = relationA.parts.size() == 1 && path.shapeA->getNode(relationA.parts.front())->type() == Structure::CURVE;
 		bool tmp2 = relationB.parts.size() == 1 && path.shapeB->getNode(relationB.parts.front())->type() == Structure::CURVE;
 		if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationB.parts.size() == 2)
 			angle = 1;
+		if (isUseAxisThre && relationA.parts.size() == 2 && relationB.parts.size() == 2)
+			angle = relationA.axis.dot(relationB.axis);
 		if (dist < this->distThre && abs(angle) > this->axisThre)
 		{
 			double curEnergy = 0;
@@ -1127,16 +1130,16 @@ int getMatchRelationByVolume(QMap<QString, int>& relationIds, QMap<QString, doub
 	int frontId = 0;
 	std::vector<double> frontPrior(unvisitedParts.size(), 0.0);
 
-	for (int i = 0; i < unvisitedParts.size(); i++){
-		for (auto & rel2 : visitedParts){
-			if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
-			{
-				frontPrior[i] = relationVolume[ unvisitedParts[i].parts.front() ];
-				break;
-			}
-		}
-	}
-	frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
+	//for (int i = 0; i < unvisitedParts.size(); i++){
+	//	for (auto & rel2 : visitedParts){
+	//		if (connectGraph[relationIds[rel2.parts.front()]][relationIds[unvisitedParts[i].parts.front()]])
+	//		{
+	//			frontPrior[i] = relationVolume[ unvisitedParts[i].parts.front() ];
+	//			break;
+	//		}
+	//	}
+	//}
+	//frontId = std::max_element(frontPrior.begin(), frontPrior.end()) - frontPrior.begin();
 
 	if (frontId == 0 && frontPrior[frontId] == 0.0)
 	{
@@ -1256,8 +1259,8 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 		else
 		{
 			//find neighbor
-			frontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts, unvisitedParts); // original
-			//frontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts); // jjcao
+			//frontId = getMatchRelationByConnection(relationIds, connectStrength, connectGraph, visitedParts, unvisitedParts); // original
+			frontId = getMatchRelationByVolume(relationIds, relationVolume, connectGraph, visitedParts, unvisitedParts); // jjcao
 		}
 		
 		Structure::Relation frontParts = unvisitedParts[frontId];

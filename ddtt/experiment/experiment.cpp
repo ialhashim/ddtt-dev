@@ -296,19 +296,6 @@ void experiment::doEnergySearch()
 
 				pw->ui->pathsList->clear();
 				for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
-				
-				connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&](){
-					if (pw->ui->pathsList->selectedItems().isEmpty()) return;
-					auto line_selected = pw->ui->pathsList->selectedItems().front()->text().split(":");
-					for (auto & s : line_selected) s = s.simplified();
-					if (line_selected.front() != "L") return;
-					QString n1 = line_selected.at(1);
-					QString n2 = line_selected.at(2);
-					auto g = graphs.front();
-					auto link = g->getEdge(n1, n2);
-					g->property.insert("debugSelectedLink", link->id);
-					drawArea()->update();
-				});
 			}
 
 			timeElapsed = timer.elapsed();
@@ -447,8 +434,26 @@ void experiment::doEnergySearch()
 		QMessageBox tbox;
 		tbox.setText(QString("%1 ms - cost = %2 - tcost = %3").arg(timeElapsed).arg(cost).arg(ccost));
 		tbox.exec();
+
+		/////
+		QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
+
+		pw->ui->pathsList->clear();
+		for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
 	}
 
+	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&](){
+		if (pw->ui->pathsList->selectedItems().isEmpty()) return;
+		auto line_selected = pw->ui->pathsList->selectedItems().front()->text().split(":");
+		for (auto & s : line_selected) s = s.simplified();
+		if (line_selected.front() != "L") return;
+		QString n1 = line_selected.at(1);
+		QString n2 = line_selected.at(2);
+		auto g = graphs.front();
+		auto link = g->getEdge(n1, n2);
+		g->property.insert("debugSelectedLink", link->id);
+		drawArea()->update();
+	});
 	QApplication::restoreOverrideCursor();
 }
 
