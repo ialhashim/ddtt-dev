@@ -355,24 +355,31 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 
 	volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
 
-	// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
-	if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
-		targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
-		volumeRatio = min(volumeRatio, 0.2); // jjcao from volumeRatio = 0.2;
-	}
+	if (isApplicable)
+	{
+		// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
+		if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
+			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
+			volumeRatio = min(volumeRatio, 0.2); // jjcao from volumeRatio = 0.2;
+		}
 
-	// Experimental: extra penalty from sheet to single curve
-	if (isApplicable &&
-		n->type() == Structure::SHEET &&
-		!n->property["isSplit"].toBool() &&
-		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
-		volumeRatio *= 0.06; //jjcao from 0.8 
-	}
-	// jjcao : extra penalty from single curve to sheet
-	if (isApplicable &&
-		n->type() == Structure::CURVE &&
-		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::SHEET){
-		volumeRatio *= 0.06;
+		// Experimental: extra penalty from sheet to single curve
+		if (n->type() == Structure::SHEET &&
+			!n->property["isSplit"].toBool() &&
+			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
+			volumeRatio *= 0.06; //jjcao from 0.8 
+		}
+		// jjcao : extra penalty from single curve to sheet
+		bool isOrigCurve = false;
+		if (n->property.contains("orig_type"))
+		{
+			if (n->property["orig_type"].toString() == Structure::CURVE)
+				isOrigCurve = true;
+		}
+		if ((isOrigCurve || n->type() == Structure::CURVE) &&
+			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::SHEET){
+			volumeRatio *= 0.06;
+		}
 	}
 
 	split_weights[n->id] = volumeRatio;

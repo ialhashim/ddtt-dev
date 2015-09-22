@@ -941,17 +941,17 @@ void experiment::decorate()
 		{
 			for (auto r : g->relations)
 			{				
-				if (r.parts.size() == 2)
-					continue;
-				
-				if (r.parts.size() == 1)
-				{
-					auto n = g->getNode(r.parts.front());
-					if (n->type() == Structure::CURVE) continue;
-				}
+				//if (r.parts.size() == 2)
+				//	continue;
+				//
+				//if (r.parts.size() == 1)
+				//{
+				//	auto n = g->getNode(r.parts.front());
+				//	if (n->type() == Structure::CURVE) continue;
+				//}
 
 				starlab::LineSegments ls(4);
-				ls.addLine(r.point, Vector3(r.point + r.axis), starlab::qtJetColor(i, -0.5, 1.5));
+				ls.addLine(r.point, Vector3(r.point + r.direction), starlab::qtJetColor(i, -0.5, 1.5));
 				ls.draw();
 			}
 		}

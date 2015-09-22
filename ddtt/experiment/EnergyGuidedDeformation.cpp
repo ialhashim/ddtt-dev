@@ -365,6 +365,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 				partA->property["isManyMany"].setValue(true);
 			}
 		}
+		return; //jjcao
 	}
 
 	// CONVERT Case: curve to sheet (unrolling)
@@ -377,6 +378,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		auto snode_sheet = new Structure::Sheet(NURBS::NURBSRectangled::createSheetFromPoints(surface_cpts), snode->id);
 		snode_sheet->property["mesh"].setValue(snode->property["mesh"].value< QSharedPointer<SurfaceMeshModel> >());
 		snode_sheet->property["solidity"].setValue(1.0);
+		snode_sheet->property["orig_type"].setValue(Structure::CURVE);//jjcao
 
 		// Replace curve with a squashed sheet
 		shapeA->nodes.replace(shapeA->nodes.indexOf(snode), snode_sheet);
@@ -400,6 +402,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		snode_sheet->property["isConverted"].setValue(true);
 
 		delete snode;
+
+		return; // jjcao
 	}
 	
 	// CONVERT Case: sheet to curve (squeezing)
@@ -408,6 +412,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 		&& shapeB->getNode(lb.front())->type() == Structure::CURVE)
 	{
 		shapeA->getNode(la.front())->property["isConverted"].setValue(true);
+		return; //jjcao
 	}
 
 	// MERGE Case: many curves - one sheet
@@ -459,6 +464,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 		// Clean up
 		shapeA->removeNode(sheetid);
+
+		return; // jjcao
 	}
 
 	// MERGE Case: many curves - one curve
@@ -483,6 +490,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			// end
 			lb << tnodeID;
 		}
+		return; //jjcao
 	}
 
 	// MERGE Case: many sheets - one sheet
@@ -501,6 +509,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			if (partID != la.front()) snode->property["isMerged"].setValue(true);
 			lb << tnodeID;
 		}
+
+		return; //jjcao
 	}
 
 	// MERGE Case: many sheets - one curve
@@ -519,6 +529,7 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			snode->property["isMerged"].setValue(true);
 			lb << tnodeID;
 		}
+		return; //jjcao
 	}
 
 	// pseudo-SPLIT Case: one sheet - many curves
@@ -585,6 +596,8 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 
 		lb.clear();
 		lb << newtnode;
+
+		return; //jjcao
 	}
 
 	// SPLIT Case: one curve - many curves
@@ -895,13 +908,13 @@ bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Rela
 		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
 		// jjcao angle filter
-		auto angle = relationA.axis.dot(relationB.axis);
+		auto angle = relationA.direction.dot(relationB.direction);
 		bool tmp1 = relationA.parts.size() == 1 && path.shapeA->getNode(relationA.parts.front())->type() == Structure::CURVE;
 		bool tmp2 = relationB.parts.size() == 1 && path.shapeB->getNode(relationB.parts.front())->type() == Structure::CURVE;
-		if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationB.parts.size() == 2)
+		if (!isUseAxisThre || tmp1 || tmp2) // if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationA.parts.size() == 2)
 			angle = 1;
-		if (isUseAxisThre && relationA.parts.size() == 2 && relationB.parts.size() == 2)
-			angle = relationA.axis.dot(relationB.axis);
+		//if (isUseAxisThre && relationA.parts.size() >= 2 && relationB.parts.size() >= 2)
+		//	angle = relationA.direction.dot(relationB.direction);
 		if (dist < this->distThre && abs(angle) > this->axisThre)
 		{
 			double curEnergy = 0;

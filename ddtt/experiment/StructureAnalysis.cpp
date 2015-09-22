@@ -30,10 +30,11 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			if ( part->type() == Structure::CURVE)
 			{ 
 				Structure::Curve * part_curve = (Structure::Curve *)part;			
-				if (abs(part->diagonal().norm() - part_curve->length()) < 0.01*part_curve->length())
-					r.axis = part->diagonal().normalized();
+				if (part_curve->length() / part->diagonal().norm() < 2)
+					r.axis = part->diagonal().normalized(); //jjcao
 				else
 				{
+					//jjcao
 					int num = part_curve->numCtrlPnts();
 					Vector3 s00 = part_curve->controlPoint(0);
 					Vector3 s01 = part_curve->controlPoint(num*0.3);
@@ -46,13 +47,13 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				Structure::Sheet * part_sheet = (Structure::Sheet *)part;
 				Array2D_Vector3 ctrlPoint = part_sheet->surface.mCtrlPoint;
 
-				// Get the extreme points.
+				// jjcao
 				Vector3 s00 = ctrlPoint.front().front();
 				Vector3 s01 = ctrlPoint.front().back();
 				Vector3 s10 = ctrlPoint.back().front();
 				r.axis = (s00 - s01).cross(s10 - s01).normalized();
 			}
-				
+			r.direction = r.axis;
 			// TODO: figure out the plane, or select the most similar to global reflectional
 		}
 
@@ -81,6 +82,25 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			auto plane = getReflectionalPlane(partA, partB);
 			r.point = plane.first;
 			r.axis = plane.second;
+
+			// jjcao
+			if (partA->type() == Structure::CURVE)
+			{
+				Structure::Curve * part_curve = (Structure::Curve *)partA;
+				if (part_curve->length() / partA->diagonal().norm() < 2)
+					r.direction = partA->diagonal().normalized(); //jjcao
+				else
+				{
+					//jjcao
+					int num = part_curve->numCtrlPnts();
+					Vector3 s00 = part_curve->controlPoint(0);
+					Vector3 s01 = part_curve->controlPoint(num*0.3);
+					Vector3 s10 = part_curve->controlPoint(num*0.6);
+					r.direction = (s00 - s01).cross(s10 - s01).normalized();
+				}
+			}
+			else
+				r.direction = r.axis;
 		}
 
 		std::vector<Vector3> centers;			
@@ -145,7 +165,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 			{
 				auto line = best_line_from_points(centers);
 				r.point = line.first;
-				//r.axis = line.second;
+				r.axis = line.second;
 
 				// Sort parts in relation
 				{
@@ -166,10 +186,11 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 					r.parts = sortedParts;
 				}
 				
+				// jjcao
 				Vector3 s00 = shape->getNode(r.parts.front())->controlPoints().front();
 				Vector3 s01 = shape->getNode(r.parts.front())->controlPoints().back();
 				Vector3 s10 = shape->getNode(r.parts.back())->controlPoints().front();
-				r.axis = (s00 - s01).cross(s10 - s01).normalized();
+				r.direction = (s00 - s01).cross(s10 - s01).normalized();
 			}
 
 			if (r.type == Structure::Relation::ROTATIONAL)
@@ -177,6 +198,7 @@ void StructureAnalysis::analyzeGroups(Structure::ShapeGraph * shape, bool isDebu
 				auto plane = best_plane_from_points(centers);
 				r.point = plane.first;
 				r.axis = plane.second;
+				r.direction = r.axis; // jjcao
 
 				// Sort parts by angle around axis
 				QStringList sorted;

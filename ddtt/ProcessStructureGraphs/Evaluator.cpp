@@ -62,10 +62,10 @@ struct LabelOracle{
 		MultiStrings possible;
 
 		struct PrecisionRecall{
-			double precision, recall, G, M, R;
+			double precision, recall, G, M, R, ER;//jjcao add exactR
 			int i, j;
-			PrecisionRecall(double p = 0, double r = 0, double G = 0, double M = 0, double R = 0) 
-				: precision(p), recall(r), G(G), M(M), R(R) {}
+			PrecisionRecall(double p = 0, double r = 0, double G = 0, double M = 0, double R = 0, double ER=0) 
+				: precision(p), recall(r), G(G), M(M), R(R), ER(ER) {}
 		};
 
 		PrecisionRecall compute( MatchingRecords records ){
@@ -76,7 +76,7 @@ struct LabelOracle{
 			for (auto count : truth) G += count;
 
 			// Count of correct matches
-			int R = 0;
+			int aR = 0, eR = 0;
 			for (auto record : records)
 			{
 				bool isExactMatch = false, isAcceptableMatch = false;
@@ -89,19 +89,20 @@ struct LabelOracle{
 				auto coarse_t = possible.representative(record.T);
 
 				isExactMatch = (record.S == record.T);
+				if (isExactMatch)
+				{
+					++eR;
+					continue;
+				}
 
 				// Only if one side is coarse do we go up a level
 				bool isSourceCoarse = possible.representative(record.S) == record.S;
 				bool isTargetCoarse = possible.representative(record.T) == record.T;
 				if (isSourceCoarse || isTargetCoarse){
-					if (!isExactMatch)
-						isAcceptableMatch = (coarse_s == record.T || coarse_t == record.S);
+					isAcceptableMatch = (coarse_s == record.T || coarse_t == record.S);
 				}
-
-				if ( isExactMatch || isAcceptableMatch )
-				{
-					R++;
-				}
+				if (isAcceptableMatch) 
+					++aR;
 			}
 
 			// Count of returned matches
@@ -110,10 +111,11 @@ struct LabelOracle{
 			assert(M);
 			assert(G);
 
+			int R = eR + aR;
 			double p = double(R) / M;
 			double r = double(R) / G;
 
-			return PrecisionRecall(p, r, G, M, R);
+			return PrecisionRecall(p, r, G, M, R, eR);
 		}
 	};
 
@@ -302,7 +304,7 @@ void Evaluator::run(bool bUseExe)
 		}
 
 		// General stats
-		int numG = 0, numM = 0, numR = 0;
+		int numG = 0, numM = 0, numR = 0, numER=0;
 
 		// Sum results
 		double P = 0, R = 0;
@@ -314,6 +316,7 @@ void Evaluator::run(bool bUseExe)
 			numG += pr.G;
 			numM += pr.M;
 			numR += pr.R;
+			numER += pr.ER;
 		}
 
 		// Get average
@@ -325,7 +328,7 @@ void Evaluator::run(bool bUseExe)
 		QString report = QString("[%5] Avg. P = %1, R = %2, Pair-wise time (%3 ms) - post (%4 ms)").arg(P).arg(R)
 			.arg(all_pair_wise_time).arg(stats_timer.elapsed()).arg(dir.dirName());
 
-		report += QString("\nG_count %1 / M_count %2 / R_count %3").arg(numG).arg(numM).arg(numR);
+		report += QString("\nG_count %1 / M_count %2 / R_count %3 / ER_count %4").arg(numG).arg(numM).arg(numR).arg(numER);
 		debugBox(report);
 
 		// sort according to precision or recall
@@ -333,13 +336,15 @@ void Evaluator::run(bool bUseExe)
 		report += QString("\n\n sorting according to precision");
 		for (auto pr : oracle.pr_results)
 		{
-			report += QString("\n i=%1, j=%2, precision=%3, recall=%4").arg(pr.i).arg(pr.j).arg(pr.precision).arg(pr.recall);
+			report += QString("\n i=%1, j=%2, precision=%3, recall=%4, G=%5, M=%6, R=%7, ER=%8").
+				arg(pr.i).arg(pr.j).arg(pr.precision).arg(pr.recall).arg(pr.G).arg(pr.M).arg(pr.R).arg(pr.ER);
 		}
 		std::sort(oracle.pr_results.begin(), oracle.pr_results.end(), recallLessThan);
 		report += QString("\n\n\n\n sorting according to recall");
 		for (auto pr : oracle.pr_results)
 		{
-			report += QString("\n i=%1, j=%2, recall=%3, precision=%4").arg(pr.i).arg(pr.j).arg(pr.recall).arg(pr.precision);
+			report += QString("\n i=%1, j=%2, recall=%3, precision=%4, G=%5, M=%6, R=%7, ER=%8").
+				arg(pr.i).arg(pr.j).arg(pr.precision).arg(pr.recall).arg(pr.G).arg(pr.M).arg(pr.R).arg(pr.ER);
 		}
 
 		// Save log of P/R measures
