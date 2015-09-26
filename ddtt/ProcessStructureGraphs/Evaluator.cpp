@@ -121,7 +121,7 @@ struct LabelOracle{
 
 	GroundTruth gt;
 
-	void makeGroundTruth(QStringList source, QStringList target)
+	void makeGroundTruth(QStringList source, QStringList target, bool isRound=true)
 	{
 		/// Remove labels with no equivalent whatsoever:
 		auto removeIrrelevant = [](QStringList me, QStringList other, MultiStrings possible){
@@ -146,13 +146,15 @@ struct LabelOracle{
 
 		// (b) find the only labels that should be considered
 		source = removeIrrelevant(source, target, gt.possible);
-		target = removeIrrelevant(target, source, gt.possible);
+		if (isRound)
+			target = removeIrrelevant(target, source, gt.possible);
 
 		// (c) each label will have the maximum number of appearance between two graphs
 		QMap<QString, int> source_labels_counter, target_labels_counter;
 		
 		for (auto l : source) source_labels_counter[gt.possible.representative(l)]++;
-		for (auto l : target) target_labels_counter[gt.possible.representative(l)]++;
+		if (isRound) 
+			for (auto l : target) target_labels_counter[gt.possible.representative(l)]++;
 
 		auto all_labels = source_labels_counter.keys().toSet() + target_labels_counter.keys().toSet();
 
@@ -175,7 +177,7 @@ QWidget(parent), ui(new Ui::Evaluator), datasetPath(datasetPath), isSet(isSet), 
     ui->setupUi(this);
 }
 
-void Evaluator::run(bool bUseExe)
+void Evaluator::run(bool bUseExe, bool isRound)
 {
 	//if (true) this->datasetPath = datasetPath = experiment;
 
@@ -280,7 +282,7 @@ void Evaluator::run(bool bUseExe)
 			for (auto n : target.nodes) if (n->meta.contains("label")) targetLabels << n->meta["label"].toString();
 
 			// Build expected ground truth
-			oracle.makeGroundTruth(sourceLabels, targetLabels);
+			oracle.makeGroundTruth(sourceLabels, targetLabels, isRound);
 
 			MatchingRecords M;
 

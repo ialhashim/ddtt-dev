@@ -915,6 +915,8 @@ bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Rela
 			angle = 1;
 		//if (isUseAxisThre && relationA.parts.size() >= 2 && relationB.parts.size() >= 2)
 		//	angle = relationA.direction.dot(relationB.direction);
+		if (!isUseAxisThre)
+			this->distThre = max(this->distThre, 0.7);
 		if (dist < this->distThre && abs(angle) > this->axisThre)
 		{
 			double curEnergy = 0;

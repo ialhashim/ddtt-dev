@@ -7,7 +7,7 @@
 int EvaluateCorrespondence::numSamples = 5;
 double EvaluateCorrespondence::weightDistortion = 1.1; // original 1.1
 double EvaluateCorrespondence::weightSolidity = 0.6; // original 0.4
-double EvaluateCorrespondence::weightConnection = 0.2; // original 0.6
+double EvaluateCorrespondence::weightConnection = 0.4; // original 0.6
 
 Q_DECLARE_METATYPE(Array1D_Vector4d);
 

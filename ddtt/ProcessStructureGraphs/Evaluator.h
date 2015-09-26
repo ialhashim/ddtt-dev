@@ -22,7 +22,7 @@ public:
         compareWithGreedyOBB(allMaps, allMapsLabel, isSet);
 	}
 
-	void run(bool bUseExe = true);
+	void run(bool bUseExe = true, bool isRound = true);
 
     void compareWithGreedyOBB(std::vector<std::vector<std::pair<QString, QString>>> &allMaps,
                               std::vector<std::vector<std::pair<QString, QString>>> &allMapsLabel, bool isSet = false);

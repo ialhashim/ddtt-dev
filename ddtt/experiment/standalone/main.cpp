@@ -85,21 +85,34 @@ int main(int argc, char *argv[])
 
 
     /// Process shape sets:
-    if(parser.isSet("folder"))
-    {
+	if (parser.isSet("folder"))
+	{
 		QElapsedTimer timer; timer.start();
 
-        QString dataset = parser.value("folder");
-        QDir d("");
-        QString dir_name = QDir(dataset).dirName();
+		QString dataset = parser.value("folder");
+		QDir d("");
+		QString dir_name = QDir(dataset).dirName();
 
 		// 1) get sorted set of pairs to compare
-        QVector< QPair<int, int> > shapePairs;
+		QVector< QPair<int, int> > shapePairs;
 		auto folders = shapesInDataset(dataset);
 		auto folderKeys = folders.keys();
-		for (int i = 0; i < folderKeys.size(); i++)
-			for (int j = i + 1; j < folderKeys.size(); j++)
-                shapePairs << qMakePair(i,j);
+		if (parser.isSet("roundtrip"))
+		{
+			for (int i = 0; i < folderKeys.size(); i++)
+				for (int j = i + 1; j < folderKeys.size(); j++)
+					shapePairs << qMakePair(i, j);
+		}
+		else
+		{
+			for (int i = 0; i < folderKeys.size(); i++)
+			{
+				for (int j = 0; j < i; j++)
+					shapePairs << qMakePair(i, j);
+				for (int j = i+1; j < folderKeys.size(); j++)
+					shapePairs << qMakePair(i, j);
+			}
+		}
 		int shapePairsCount = shapePairs.size();
 		int curShapePair = 0;
 
@@ -281,7 +294,7 @@ int main(int argc, char *argv[])
             if(parser.isSet("c")) options["isAllowCutsJoins"].setValue(true);
             if(parser.isSet("m")) options["isIgnoreSymmetryGroups"].setValue(true);
 
-            if(options["roundtrip"].toBool() || options["align"].toBool())
+            //if(options["roundtrip"].toBool() || options["align"].toBool())
 			{
 				options["isManyTypesJobs"].setValue(true);
 				options["isOutputMatching"].setValue(true);
@@ -357,13 +370,13 @@ int main(int argc, char *argv[])
                     }
                 }); // end of QTimer::singleShot
             }
-            else
-            {
-                auto bp = new BatchProcess(sourceShape, targetShape, options);
-                QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
-                QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
-                bp->start();
-            }
+            //else
+            //{
+            //    auto bp = new BatchProcess(sourceShape, targetShape, options);
+            //    QObject::connect(bp, SIGNAL(allJobsFinished()), &w, SLOT(close()));
+            //    QObject::connect(bp, SIGNAL(finished()), bp, SLOT(deleteLater()));
+            //    bp->start();
+            //}
 
 			return a.exec();
 		}
