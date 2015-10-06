@@ -73,7 +73,7 @@ namespace Energy
 
 		//////////////////////////////////////////////////////////////////////////
 
-		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1), distThre(0.5), axisThre(0.2), costThre(0.5){}
+		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1), distThre(0.5), axisThre(0.0), costThre(0.5){}
 
 		//SYMH
 		bool isInitTest, isApplySYMH;
@@ -96,6 +96,8 @@ namespace Energy
 			std::vector<std::vector<bool> >& connectGraph, std::vector<int > &connectStrength);
 
 		Energy::SearchNode partialSelectionGreedy(const Energy::SearchNode &initpath, const Energy::SearchNode &path, int bestK = 0);
+		Energy::SearchNode Energy::GuidedDeformation::partialSelectionVoting(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
+			QVector<Energy::SearchNode> & roots, double lowThld = 0.5);
 		//////////////////////////////////////////////////////////////////////////
 
 	};

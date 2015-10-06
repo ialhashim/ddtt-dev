@@ -1317,9 +1317,55 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 			applyAssignment(&topK[i], false);
 		}
 	}
-	roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);
+	// add by jjcao
+	QList < QPair<double, Energy::SearchNode> > solutions;
+	for (auto s : topK) solutions << qMakePair(s.energy, s);
+	qSort(solutions.begin(), solutions.end());
+	for (auto s : solutions) roots.push_front(s.second);
+	//roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);
+
 }
 
+// add by jjcao
+Energy::SearchNode Energy::GuidedDeformation::partialSelectionVoting(Structure::ShapeGraph * shapeA, Structure::ShapeGraph * shapeB,
+	QVector<Energy::SearchNode> & roots, double lowThld)
+{
+	QMap<QString, QVector<int> > mapCounter;
+	for (auto n : shapeA->nodes)
+	{
+		mapCounter[n->id] = QVector<int>(shapeB->nodes.size(), 0);
+	}
+	for (auto s : roots)
+	{
+		for (auto key : s.mapping.keys())
+		{
+			if (key.contains("@")){
+				key = key.split("@").front();
+			}
+			QString value = s.mapping.value(key);
+			if (value.contains("@")){
+				value = value.split("@").front();
+			}
+			
+			++mapCounter[key][shapeB->indexOfNode(shapeB->getNode(value))];
+		}
+	}
+	Energy::Assignments new_assignments;
+	for (auto key : mapCounter.keys())
+	{
+		QVector<int> values = mapCounter[key];
+		int maxIdx = std::max_element(values.begin(), values.end()) - values.begin();
+		double sum = std::accumulate(values.begin(), values.end(), 0);
+		if (values[maxIdx]/sum > lowThld)
+			new_assignments << qMakePair(key, shapeB->nodes[maxIdx]->id);
+	}
+
+	Energy::SearchNode new_path(origShapeA, origShapeB, QSet<QString>(), new_assignments);
+
+	// option 1: by assignment
+	Energy::GuidedDeformation::applyAssignment(&new_path, false);
+	return new_path;
+}
 Energy::SearchNode Energy::GuidedDeformation::partialSelectionGreedy(const Energy::SearchNode &initpath, const Energy::SearchNode &path, int bestK)
 {
 	//get volume size.

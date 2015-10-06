@@ -416,15 +416,12 @@ void experiment::doEnergySearch()
 		if (pw->ui->topParts->value())
 		{
 			//partial correspondence
-			search_roots.back() = egd->partialSelectionGreedy(path, search_roots.back(), pw->ui->topParts->value());
-			selected_path = &(search_roots.back());
-			setSearchPath(selected_path);
+			search_roots.back() = egd->partialSelectionGreedy(path, search_roots.back(), pw->ui->topParts->value());	
 		}
-		else
-		{
-			selected_path = &(search_roots.back());
-			setSearchPath(selected_path);
-		}
+		// jjcao
+		//search_roots.back() = egd->partialSelectionVoting(shapeA.data(), shapeB.data(), search_roots);
+		selected_path = &(search_roots.back());
+		setSearchPath(selected_path);
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
 		double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);//, egd
@@ -821,7 +818,7 @@ void experiment::create()
 		drawArea()->update();
 	});
 	
-	pw->ui->searchBest->setVisible(false);
+	//pw->ui->searchBest->setVisible(false);
 
 	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&]{
 		if (mysearch){

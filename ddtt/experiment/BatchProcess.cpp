@@ -334,6 +334,8 @@ double BatchProcess::executeJob(QString sourceFile, QString targetFile, QJsonObj
 		//egd.isApplySYMH = pw->ui->isUseSYMH->isChecked();
 		egd.searchDP(sourceShape.data(), targetShape.data(), search_roots);
 
+		// jjcao
+		//search_roots.back() = egd.partialSelectionVoting(shapeA.data(), shapeB.data(), search_roots);
 		if (search_roots.back().shapeA.isNull()) search_roots.pop_back();
 
 		sorted_solutions[EvaluateCorrespondence::evaluate(&search_roots.back())] = search_roots.back();
