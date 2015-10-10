@@ -114,6 +114,7 @@ void Energy::GuidedDeformation::applyAssignment(Energy::SearchNode * path, bool 
 		{
 			auto targetPartID = lb[i].split(",").front();
 			path->mapping[la[i]] = targetPartID;
+			path->mappingOrder.push_back(la[i]);
 			mappedParts << la[i];
 		}
 	}
@@ -1004,7 +1005,7 @@ bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Rela
 				assert(la.size() && lb.size());
 
 				costs[r] = curEnergy;
-				res[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy);
+				res[r] = SearchNode(modifiedShapeA, modifiedShapeB, path.fixed + path.current, assignment, unassigned, path.mapping, cost, path.energy, path.mappingOrder);
 
 				res[r].mappingCost = path.mappingCost;
 			}

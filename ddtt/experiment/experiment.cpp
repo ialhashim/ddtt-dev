@@ -40,6 +40,8 @@ Q_DECLARE_METATYPE(Structure::ShapeGraph*);
 Q_DECLARE_METATYPE(Energy::SearchNode*);
 experiment * exprmnt = NULL;
 Energy::SearchNode * selected_path;
+QVector<Energy::SearchNode> search_roots;
+int currentLevel;
 
 QString pathToHtml(Energy::SearchNode & p)
 {
@@ -65,7 +67,7 @@ QString pathToHtml(Energy::SearchNode & p)
 	return html.join("");
 };
 
-void experiment::setSearchPath(Energy::SearchNode * path)
+void experiment::setSearchPath(Energy::SearchNode * path, int currentLevel)
 {
 	// Show deformed
 	graphs.clear();
@@ -85,8 +87,9 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 
 	// Matched target nodes
 	QSet<QString> matchedTargetNodes;
-	for (auto spart : selected_path->mapping.keys())
+	for (int i = 0; i < currentLevel; ++i)//
 	{
+		auto spart = selected_path->mappingOrder[i];
 		auto tpart = selected_path->mapping[spart];
 		for (auto group : graphs.back()->groupsOf(tpart))
 			for (auto part : group)
@@ -124,8 +127,9 @@ void experiment::setSearchPath(Energy::SearchNode * path)
 	}
 
 	// Color matching source
-	for (auto spart : selected_path->mapping.keys())
+	for (int i = 0; i < currentLevel; ++i)//for (auto spart : selected_path->mapping.keys())
 	{
+		auto spart = selected_path->mappingOrder[i];
 		auto tpart = graphs.back()->getNode(selected_path->mapping[spart]);
 		if (tpart == nullptr) continue;
 
@@ -224,7 +228,8 @@ void experiment::doEnergySearch()
 	if (landmarks_front.size() == landmarks_back.size())
 		for (size_t i = 0; i < landmarks_front.size(); i++) assignments << qMakePair(landmarks_front[i], landmarks_back[i]);
 
-	QVector<Energy::SearchNode> search_roots;
+	//QVector<Energy::SearchNode> search_roots;
+	search_roots.clear();
 	Energy::SearchNode path(shapeA, shapeB, QSet<QString>(), assignments);
 
 	// Partial search
@@ -294,8 +299,8 @@ void experiment::doEnergySearch()
 				double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
 				QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 
-				pw->ui->pathsList->clear();
-				for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
+				pw->ui->resultsList->clear();
+				for (auto key : details.keys()) pw->ui->resultsList->addItem(key + " : " + details[key].toString());
 			}
 
 			timeElapsed = timer.elapsed();
@@ -331,7 +336,7 @@ void experiment::doEnergySearch()
 						egd->applySearchPath(egd->getEntirePath(node));
 
 						selected_path = node;
-						exprmnt->setSearchPath(selected_path);
+						exprmnt->setSearchPath(selected_path, selected_path->mappingCost.size()-1);
 
 						// Details of evaluation
 						double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
@@ -398,7 +403,7 @@ void experiment::doEnergySearch()
 		}
 		mainWindow()->setStatusBarMessage(QString("%1 ms - cost %2").arg(timeElapsed).arg(leastCost));
 
-		setSearchPath(selected_path);
+		setSearchPath(selected_path, selected_path->mappingCost.size() - 1);
 	}
 	else
 	{
@@ -421,7 +426,7 @@ void experiment::doEnergySearch()
 		// jjcao
 		//search_roots.back() = egd->partialSelectionVoting(shapeA.data(), shapeB.data(), search_roots);
 		selected_path = &(search_roots.back());
-		setSearchPath(selected_path);
+		setSearchPath(selected_path, selected_path->mappingCost.size() - 1);
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
 		double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);//, egd
@@ -435,13 +440,32 @@ void experiment::doEnergySearch()
 		/////
 		QVariantMap details = selected_path->shapeA->property["costs"].value<QVariantMap>();
 
+		pw->ui->resultsList->clear();
+		for (auto key : details.keys()) pw->ui->resultsList->addItem(key + " : " + details[key].toString());
+
+		pw->ui->levelsList->clear();
+		for (int i = 0; i < selected_path->mappingOrder.size(); ++i) pw->ui->levelsList->addItem(QString::number(i));
+		currentLevel = selected_path->mappingOrder.size() - 1;
 		pw->ui->pathsList->clear();
-		for (auto key : details.keys()) pw->ui->pathsList->addItem(key + " : " + details[key].toString());
+		for (auto path : search_roots) pw->ui->pathsList->addItem(QString::number(path.energy));
 	}
 
-	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&](){
-		if (pw->ui->pathsList->selectedItems().isEmpty()) return;
-		auto line_selected = pw->ui->pathsList->selectedItems().front()->text().split(":");
+	connect(pw->ui->levelsList, &QListWidget::currentRowChanged, [&](int currentRow){
+		if (0 >currentRow || selected_path->mappingOrder.size() <= currentRow) return;
+		currentLevel = currentRow;
+		setSearchPath(selected_path, currentLevel);
+		drawArea()->update();
+	});
+	connect(pw->ui->pathsList, &QListWidget::currentRowChanged, [&](int currentRow){
+		if (0 >currentRow || search_roots.size() <= currentRow) return;
+		selected_path = &(search_roots[currentRow]);
+		setSearchPath(selected_path, currentLevel);
+		drawArea()->update();
+	});
+
+	connect(pw->ui->resultsList, &QListWidget::itemSelectionChanged, [&](){
+		if (pw->ui->resultsList->selectedItems().isEmpty()) return;
+		auto line_selected = pw->ui->resultsList->selectedItems().front()->text().split(":");
 		for (auto & s : line_selected) s = s.simplified();
 		if (line_selected.front() != "L") return;
 		QString n1 = line_selected.at(1);
@@ -570,7 +594,7 @@ void experiment::postCorrespond()
 	if (pw->ui->isShowParts->isChecked())
 		showCorrespond(mysearch->bestCorrespondence);
 
-	pw->ui->pathsList->clear();
+	pw->ui->resultsList->clear();
 
 	// List scores
 	{
@@ -589,7 +613,7 @@ void experiment::postCorrespond()
 
 			auto item = new QListWidgetItem(number);
 			item->setData(Qt::UserRole, pi);
-			pw->ui->pathsList->addItem(item);
+			pw->ui->resultsList->addItem(item);
 		}
 	}
 
@@ -658,7 +682,7 @@ void experiment::doCorrespond()
 
 	// Display score
 	{
-		pw->ui->pathsList->clear();
+		pw->ui->resultsList->clear();
 		QSet<double> scoreSet;
 
 		QString number;
@@ -667,7 +691,7 @@ void experiment::doCorrespond()
 
 		auto item = new QListWidgetItem(number);
 		item->setData(Qt::UserRole, 0);
-		pw->ui->pathsList->addItem(item);
+		pw->ui->resultsList->addItem(item);
 	}
 
 	mainWindow()->setStatusBarMessage(QString("%1 ms").arg(timer.elapsed()));
@@ -764,6 +788,9 @@ void experiment::create()
 	connect(pw->ui->clearShapes, &QPushButton::released, [&]{
 		graphs.clear();
 		drawArea()->clear();
+		search_roots.clear();
+		pw->ui->resultsList->clear();
+		pw->ui->levelsList->clear();
 		pw->ui->pathsList->clear();
 		drawArea()->update();
 	});
@@ -803,6 +830,11 @@ void experiment::create()
 		}
 	});
 	connect(pw->ui->resetShapes, &QPushButton::released, [&]{
+		search_roots.clear();
+		pw->ui->resultsList->clear();
+		pw->ui->levelsList->clear();
+		pw->ui->pathsList->clear();
+
 		drawArea()->clear();
 		graphs.clear();
 		QSettings settingsFile(QSettings::IniFormat, QSettings::UserScope, "GrUVi", "experiment");
@@ -820,9 +852,9 @@ void experiment::create()
 	
 	//pw->ui->searchBest->setVisible(false);
 
-	connect(pw->ui->pathsList, &QListWidget::itemSelectionChanged, [&]{
+	connect(pw->ui->resultsList, &QListWidget::itemSelectionChanged, [&]{
 		if (mysearch){
-			int pid = pw->ui->pathsList->currentItem()->data(Qt::UserRole).toInt();
+			int pid = pw->ui->resultsList->currentItem()->data(Qt::UserRole).toInt();
 			showCorrespond(pid);
 		}
 		drawArea()->update();
