@@ -226,6 +226,21 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 	}
 }
 
+// jjcao
+NanoKdTree* EvaluateCorrespondence::kdTreeShape(Structure::ShapeGraph* shape)
+{
+	auto t = new NanoKdTree;
+	Array2D_Vector4d coordsShape;
+	for (auto n : shape->nodes)
+	{
+		auto coords = n->property["samples_coords"].value<Array2D_Vector4d>();
+		if (coords.empty()) coords = EvaluateCorrespondence::sampleNode(shape, n, 0);
+		for (auto row : coords) for (auto coord : row) t->addPoint(n->position(coord));
+	}
+	t->build();
+	return t;
+}
+
 QMap<QString, NanoKdTree*> EvaluateCorrespondence::kdTreesNodes(Structure::ShapeGraph * shape)
 {
 	QMap < QString, NanoKdTree* > result;

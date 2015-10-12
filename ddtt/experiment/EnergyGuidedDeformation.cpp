@@ -1028,7 +1028,7 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 	if (isApplySYMH)
 		symhPruning(path, pairings, pairAward);
 
-	if (!matchAllPossible(pairings, pairAward, path, true, costs, res))
+	//if (!matchAllPossible(pairings, pairAward, path, true, costs, res))
 		matchAllPossible(pairings, pairAward, path, false, costs, res);
 
 	std::vector<double> tc = costs;
@@ -1318,9 +1318,20 @@ void Energy::GuidedDeformation::searchDP(Structure::ShapeGraph * shapeA, Structu
 			applyAssignment(&topK[i], false);
 		}
 	}
+
 	// add by jjcao
+	auto tree_b = EvaluateCorrespondence::kdTreeShape(topK[0].shapeB.data());
+	for (int i = 0; i < topK.size(); ++i)
+	{
+		auto tree_a = EvaluateCorrespondence::kdTreeShape(topK[i].shapeA.data());
+		topK[i].hausdroffDistance = hausdroff::distance(tree_a, tree_b);
+		delete tree_a;
+	}
+	delete tree_b;
+
 	QList < QPair<double, Energy::SearchNode> > solutions;
-	for (auto s : topK) solutions << qMakePair(s.energy, s);
+	//for (auto s : topK) solutions << qMakePair(s.energy, s);
+	for (auto s : topK) solutions << qMakePair(s.hausdroffDistance, s);
 	qSort(solutions.begin(), solutions.end());
 	for (auto s : solutions) roots.push_front(s.second);
 	//roots.push_back(topK[std::min_element(topKScore.begin(), topKScore.end()) - topKScore.begin()]);

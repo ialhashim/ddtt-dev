@@ -68,8 +68,8 @@ int main(int argc, char *argv[])
             { { "o", "roundtrip" }, QString("Compute least cost from source to target, and target to source.") },
             { { "c", "cut" }, QString("Allow part cuts/joins.") },
 			{ { "wd", "wd" }, QString("weight distortion, 1.1."), QString("wd") },
-			{ { "ws", "ws" }, QString("weight solidity, 0.6."), QString("ws") },
-			{ { "wc", "wc" }, QString("weight connection, 0.2."), QString("wc") },
+			{ { "ws", "ws" }, QString("weight solidity, 0.4."), QString("ws") },
+			{ { "wc", "wc" }, QString("weight connection, 0.6."), QString("wc") },
 	});
 
     if (!parser.parse(QCoreApplication::arguments())) {

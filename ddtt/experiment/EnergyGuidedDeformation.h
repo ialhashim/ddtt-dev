@@ -20,6 +20,7 @@ namespace Energy
 		Assignments assignments;
 		QMap<QString, QString> mapping;
 		QVector<QString> mappingOrder; //jjcao
+		double hausdroffDistance; //jcao
 		QMap<QString, double> mappingCost;
 		QSharedPointer<Structure::ShapeGraph> shapeA, shapeB;
 		QMap<QString, QVariant> property;
