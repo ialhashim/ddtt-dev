@@ -76,7 +76,7 @@ namespace Energy
 
 		//////////////////////////////////////////////////////////////////////////
 
-		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1), distThre(0.5), axisThre(0.0), costThre(0.5){}
+		GuidedDeformation() :isInitTest(false), isApplySYMH(false), K(20), K_2(1), distThre(0.5), axisThre(0.4), costThre(0.5){}
 
 		//SYMH
 		bool isInitTest, isApplySYMH;

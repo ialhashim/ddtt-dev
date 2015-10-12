@@ -357,7 +357,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 	bool isApplicable = searchNode->mapping.contains(n->id) && n->property.contains("solidity");
 
 	if (isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/)
-	{
+	{	
 		auto tn = targetShape->getNode(searchNode->mapping[n->id]);
 		before_ratio = n->property["solidity"].toDouble();
 		after_ratio = tn->property["solidity"].toDouble();
@@ -372,16 +372,16 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 
 	if (isApplicable)
 	{
+		auto tn = targetShape->getNode(searchNode->mapping[n->id]);
 		// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
-		if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
-			targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
+		if ((n->property["isLoop"].toBool() != tn->property["isLoop"].toBool())){
 			volumeRatio = min(volumeRatio, 0.2); // jjcao from volumeRatio = 0.2;
 		}
 
 		// Experimental: extra penalty from sheet to single curve
 		if (n->type() == Structure::SHEET &&
 			!n->property["isSplit"].toBool() &&
-			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
+			tn->type() == Structure::CURVE){
 			volumeRatio *= 0.06; //jjcao from 0.8 
 		}
 		// jjcao : extra penalty from single curve to sheet
@@ -392,7 +392,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 				isOrigCurve = true;
 		}
 		if ((isOrigCurve || n->type() == Structure::CURVE) &&
-			targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::SHEET){
+			tn->type() == Structure::SHEET){
 			volumeRatio *= 0.06;
 		}
 	}

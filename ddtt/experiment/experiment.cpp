@@ -445,7 +445,7 @@ void experiment::doEnergySearch()
 
 		pw->ui->levelsList->clear();
 		for (int i = 0; i < selected_path->mappingOrder.size(); ++i) pw->ui->levelsList->addItem(QString::number(i));
-		currentLevel = selected_path->mappingOrder.size() - 1;
+		currentLevel = selected_path->mappingOrder.size();
 		pw->ui->pathsList->clear();
 		for (auto path : search_roots) pw->ui->pathsList->addItem(QString::number(path.hausdroffDistance) + " : " + QString::number(path.energy));
 	}

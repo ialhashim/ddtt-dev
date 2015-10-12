@@ -908,17 +908,27 @@ bool Energy::GuidedDeformation::matchAllPossible(QVector < QPair<Structure::Rela
 
 		/// Thresholding [1]: Skip assignment if spatially too far
 		auto dist = (rboxCenterA - rboxCenterB).norm();
-		// jjcao angle filter
-		auto angle = relationA.direction.dot(relationB.direction);
-		bool tmp1 = relationA.parts.size() == 1 && path.shapeA->getNode(relationA.parts.front())->type() == Structure::CURVE;
-		bool tmp2 = relationB.parts.size() == 1 && path.shapeB->getNode(relationB.parts.front())->type() == Structure::CURVE;
-		if (!isUseAxisThre || tmp1 || tmp2) // if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationA.parts.size() == 2)
-			angle = 1;
-		//if (isUseAxisThre && relationA.parts.size() >= 2 && relationB.parts.size() >= 2)
-		//	angle = relationA.direction.dot(relationB.direction);
+
+		// jjcao intersection filter
+		
+		double volA = rboxA.volume(), volB = rboxB.volume(); double volMin = std::min(volA, volB);
+		auto boxIntersection = rboxB.translate(rboxA.center() - rboxB.center()).intersection(rboxA);
+		double volIntersection = boxIntersection.volume() / volMin;
+		//// jjcao angle filter
+		//auto angle = relationA.direction.dot(relationB.direction);
+		//bool tmp1 = relationA.parts.size() == 1 && path.shapeA->getNode(relationA.parts.front())->type() == Structure::CURVE;
+		//bool tmp2 = relationB.parts.size() == 1 && path.shapeB->getNode(relationB.parts.front())->type() == Structure::CURVE;
+		//if (!isUseAxisThre || tmp1 || tmp2) // if (!isUseAxisThre || tmp1 || tmp2 || relationA.parts.size() == 2 || relationA.parts.size() == 2)
+		//	angle = 1;
+		////if (isUseAxisThre && relationA.parts.size() >= 2 && relationB.parts.size() >= 2)
+		////	angle = relationA.direction.dot(relationB.direction);
 		if (!isUseAxisThre)
+		{
 			this->distThre = max(this->distThre, 0.7);
-		if (dist < this->distThre && abs(angle) > this->axisThre)
+			volIntersection = 1.0;
+		}
+		//if (dist < this->distThre && abs(angle) > this->axisThre)
+		if (dist < this->distThre && abs(volIntersection) > this->axisThre)
 		{
 			double curEnergy = 0;
 			QStringList la = relationA.parts, lb = relationB.parts;
@@ -1028,7 +1038,7 @@ void Energy::GuidedDeformation::propagateDP(Energy::SearchNode & path, Structure
 	if (isApplySYMH)
 		symhPruning(path, pairings, pairAward);
 
-	//if (!matchAllPossible(pairings, pairAward, path, true, costs, res))
+	if (!matchAllPossible(pairings, pairAward, path, true, costs, res))
 		matchAllPossible(pairings, pairAward, path, false, costs, res);
 
 	std::vector<double> tc = costs;
