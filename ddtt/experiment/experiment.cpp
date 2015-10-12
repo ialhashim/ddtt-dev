@@ -336,7 +336,7 @@ void experiment::doEnergySearch()
 						egd->applySearchPath(egd->getEntirePath(node));
 
 						selected_path = node;
-						exprmnt->setSearchPath(selected_path, selected_path->mappingCost.size()-1);
+						exprmnt->setSearchPath(selected_path, selected_path->mappingOrder.size());
 
 						// Details of evaluation
 						double curEnergy = EvaluateCorrespondence::evaluate(selected_path);
@@ -403,7 +403,7 @@ void experiment::doEnergySearch()
 		}
 		mainWindow()->setStatusBarMessage(QString("%1 ms - cost %2").arg(timeElapsed).arg(leastCost));
 
-		setSearchPath(selected_path, selected_path->mappingCost.size() - 1);
+		setSearchPath(selected_path, selected_path->mappingOrder.size());
 	}
 	else
 	{
@@ -426,7 +426,7 @@ void experiment::doEnergySearch()
 		// jjcao
 		//search_roots.back() = egd->partialSelectionVoting(shapeA.data(), shapeB.data(), search_roots);
 		selected_path = &(search_roots.back());
-		setSearchPath(selected_path, selected_path->mappingCost.size() - 1);
+		setSearchPath(selected_path, selected_path->mappingOrder.size());
 
 		double cost = EvaluateCorrespondence::evaluate(selected_path);
 		double ccost = EvaluateCorrespondence::evaluate_top(shapeA.data(), shapeB.data(), selected_path);//, egd
@@ -452,7 +452,7 @@ void experiment::doEnergySearch()
 
 	connect(pw->ui->levelsList, &QListWidget::currentRowChanged, [&](int currentRow){
 		if (0 >currentRow || selected_path->mappingOrder.size() <= currentRow) return;
-		currentLevel = currentRow;
+		currentLevel = currentRow+1;
 		setSearchPath(selected_path, currentLevel);
 		drawArea()->update();
 	});
