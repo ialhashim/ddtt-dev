@@ -483,12 +483,12 @@ void Energy::GuidedDeformation::topologicalOpeartions(Structure::ShapeGraph *sha
 			auto snode = shapeA->getNode(partID);
 			//StructureAnalysis::removeFromGroups(shapeA, snode); // jjcao commented
 			snode->property["isMerged"].setValue(true);
-			// jjcao add begin
-			snode->property["solidity"] = snode->property["solidity"].toDouble()/la.size(); 
-			QStringList tmpStr;
-			tmpStr << snode->id;
-			snode->property["groupParts"] = tmpStr;
-			// end
+			//// jjcao add begin
+			//snode->property["solidity"] = snode->property["solidity"].toDouble()/la.size(); 
+			//QStringList tmpStr;
+			//tmpStr << snode->id;
+			//snode->property["groupParts"] = tmpStr;
+			//// end
 			lb << tnodeID;
 		}
 		return; //jjcao

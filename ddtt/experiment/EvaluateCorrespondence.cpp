@@ -213,16 +213,16 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			for (auto partID : r.parts)
 				shape->getNode(partID)->property["solidity"].setValue(solidity);
 		}
-		else if (r.parts.size() == 1)// jjcao for loop curve
-		{
-			auto part = shape->getNode(r.parts.front());
-			if (part->type() == Structure::CURVE)
-			{
-				Structure::Curve * part_curve = (Structure::Curve *)part;
-				if (part->property["isLoop"].toBool()) 
-					part_curve->property["solidity"].setValue(0.01);
-			}
-		}
+		//else if (r.parts.size() == 1)// jjcao for loop curve
+		//{
+		//	auto part = shape->getNode(r.parts.front());
+		//	if (part->type() == Structure::CURVE)
+		//	{
+		//		Structure::Curve * part_curve = (Structure::Curve *)part;
+		//		if (part->property["isLoop"].toBool()) 
+		//			part_curve->property["solidity"].setValue(0.01);
+		//	}
+		//}
 	}
 }
 
@@ -345,8 +345,8 @@ double EvaluateCorrespondence::vectorSimilarity(QVector<double> & feature_vector
 	double similarity = v_norm / original_norm;
 	return similarity;
 }
-//
-double evaluateSolidity_original(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
+//_original
+double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
 {
 	double volumeRatio = 1.0;
 	double before_ratio = 1.0, after_ratio = 1.0;
@@ -392,8 +392,8 @@ double evaluateSolidity_original(Structure::Node* n, Structure::ShapeGraph* targ
 
 	return volumeRatio;
 }
-// _jjcao
-double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
+// 
+double evaluateSolidity_jjcao(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
 {
 	double volumeRatio = 1.0;
 	double before_ratio = 1.0, after_ratio = 1.0;
