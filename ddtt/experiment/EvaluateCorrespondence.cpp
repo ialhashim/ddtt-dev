@@ -213,13 +213,13 @@ void EvaluateCorrespondence::prepare(Structure::ShapeGraph * shape)
 			for (auto partID : r.parts)
 				shape->getNode(partID)->property["solidity"].setValue(solidity);
 		}
-		else if (r.parts.size() == 1)
+		else if (r.parts.size() == 1)// jjcao for loop curve
 		{
 			auto part = shape->getNode(r.parts.front());
 			if (part->type() == Structure::CURVE)
 			{
 				Structure::Curve * part_curve = (Structure::Curve *)part;
-				if (part->property["isLoop"].toBool()) // jjcao for loop curve
+				if (part->property["isLoop"].toBool()) 
 					part_curve->property["solidity"].setValue(0.01);
 			}
 		}
@@ -345,7 +345,54 @@ double EvaluateCorrespondence::vectorSimilarity(QVector<double> & feature_vector
 	double similarity = v_norm / original_norm;
 	return similarity;
 }
+//
+double evaluateSolidity_original(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
+{
+	double volumeRatio = 1.0;
+	double before_ratio = 1.0, after_ratio = 1.0;
 
+	// Skip split copies
+	if (n->id.contains("@")) return -1.0;
+
+	bool isApplicable = searchNode->mapping.contains(n->id) && n->property.contains("solidity");
+
+	if (isApplicable /*&& (n->property["isSplit"].toBool() || n->property["isMerged"].toBool() || n->property["isManyMany"].toBool())*/)
+	{
+		auto tn = targetShape->getNode(searchNode->mapping[n->id]);
+		before_ratio = n->property["solidity"].toDouble();
+		after_ratio = tn->property["solidity"].toDouble();
+
+		// Experimental: for reflectional symmetry minimize split factor
+		if (n->property["groupParts"].toStringList().size() == tn->property["groupParts"].toStringList().size() &&
+			n->property["groupParts"].toStringList().size() == 2)
+			before_ratio = after_ratio = 1.0;
+	}
+
+	volumeRatio = std::min(before_ratio, after_ratio) / std::max(before_ratio, after_ratio);
+
+	// Experimental: disconnection of loop has fixed penalty, StructureGraphLib does not handle loops well
+	if (searchNode->mapping.contains(n->id) && (n->property["isLoop"].toBool() !=
+		targetShape->getNode(searchNode->mapping[n->id])->property["isLoop"].toBool())){
+		volumeRatio = 0.2;
+	}
+
+	// Experimental: extra penalty from sheet to single curve
+	if (isApplicable &&
+		n->type() == Structure::SHEET &&
+		!n->property["isSplit"].toBool() &&
+		targetShape->getNode(searchNode->mapping[n->id])->type() == Structure::CURVE){
+		volumeRatio *= 0.8;
+	}
+
+	split_weights[n->id] = volumeRatio;
+
+	costMap[QString("N:") + n->id].setValue(QString(" weight = %1 / before %2 / after %3 ")
+		.arg(split_weights[n->id]).arg(before_ratio).arg(after_ratio));
+
+
+	return volumeRatio;
+}
+// _jjcao
 double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, Energy::SearchNode * searchNode, QVariantMap& costMap, QMap<QString, double>& split_weights)
 {
 	double volumeRatio = 1.0;
@@ -382,7 +429,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 		if (n->type() == Structure::SHEET &&
 			!n->property["isSplit"].toBool() &&
 			tn->type() == Structure::CURVE){
-			volumeRatio *= 0.06; //jjcao from 0.8 
+			volumeRatio *= 0.6; //jjcao from 0.8 
 		}
 		// jjcao : extra penalty from single curve to sheet
 		bool isOrigCurve = false;
@@ -393,7 +440,7 @@ double evaluateSolidity(Structure::Node* n, Structure::ShapeGraph* targetShape, 
 		}
 		if ((isOrigCurve || n->type() == Structure::CURVE) &&
 			tn->type() == Structure::SHEET){
-			volumeRatio *= 0.06;
+			volumeRatio *= 0.6;
 		}
 	}
 

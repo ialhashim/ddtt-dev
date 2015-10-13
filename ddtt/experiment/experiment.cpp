@@ -402,7 +402,7 @@ void experiment::doEnergySearch()
 			mainWindow()->setStatusBarMessage(QString("cost = %2 - solutions %3").arg(cost).arg(solutions.size()));
 		}
 		mainWindow()->setStatusBarMessage(QString("%1 ms - cost %2").arg(timeElapsed).arg(leastCost));
-
+		selected_path->mappingOrder = selected_path->mapping.keys().toVector();
 		setSearchPath(selected_path, selected_path->mappingOrder.size());
 	}
 	else
